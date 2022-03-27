@@ -17,10 +17,16 @@
 
 package org.apache.doris.statistics;
 
+import com.clearspring.analytics.util.Lists;
+import java.util.Date;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.doris.catalog.Catalog;
 
 import java.util.List;
 import java.util.concurrent.Callable;
+import org.apache.doris.common.DdlException;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * The StatisticsTask belongs to one StatisticsJob.
@@ -33,23 +39,111 @@ import java.util.concurrent.Callable;
  * @granularityDesc: StatsGranularity=partition
  */
 public class StatisticsTask implements Callable<StatisticsTaskResult> {
-    protected long id = Catalog.getCurrentCatalog().getNextId();;
+    protected static final Logger LOG = LogManager.getLogger(StatisticsTask.class);
+
+    public enum TaskState {
+        CREATED,
+        RUNNING,
+        FINISHED,
+        FAILED
+    }
+
+    protected long id;
     protected long jobId;
     protected StatsGranularityDesc granularityDesc;
     protected StatsCategoryDesc categoryDesc;
     protected List<StatsType> statsTypeList;
+    protected TaskState taskState;
+    protected final Date createTime;
+    protected Date scheduleTime;
+    protected Date finishTime;
 
     public StatisticsTask(long jobId, StatsGranularityDesc granularityDesc,
                           StatsCategoryDesc categoryDesc, List<StatsType> statsTypeList) {
+        this.id = Catalog.getCurrentCatalog().getNextId();
         this.jobId = jobId;
         this.granularityDesc = granularityDesc;
         this.categoryDesc = categoryDesc;
         this.statsTypeList = statsTypeList;
+        this.taskState = TaskState.CREATED;
+        this.createTime = new Date(System.currentTimeMillis());
+    }
+
+    public long getId() {
+        return id;
+    }
+
+    public long getJobId() {
+        return jobId;
+    }
+
+    public StatsGranularityDesc getGranularityDesc() {
+        return granularityDesc;
+    }
+
+    public StatsCategoryDesc getCategoryDesc() {
+        return categoryDesc;
+    }
+
+    public List<StatsType> getStatsTypeList() {
+        return statsTypeList;
+    }
+
+    public TaskState getTaskState() {
+        return taskState;
+    }
+
+    public void setTaskState(TaskState taskState) {
+        this.taskState = taskState;
+    }
+
+    public Date getCreateTime() {
+        return createTime;
+    }
+
+    public Date getScheduleTime() {
+        return scheduleTime;
+    }
+
+    public void setScheduleTime(Date scheduleTime) {
+        this.scheduleTime = scheduleTime;
+    }
+
+    public Date getFinishTime() {
+        return finishTime;
+    }
+
+    public void setFinishTime(Date finishTime) {
+        this.finishTime = finishTime;
     }
 
     @Override
     public StatisticsTaskResult call() throws Exception {
-        // TODO
+        LOG.warn("execute invalid statistics task.");
         return null;
+    }
+
+    public List<String> getShowInfo() throws DdlException {
+        List<String> result = Lists.newArrayList();
+        result.add(Long.toString(jobId));
+        result.add(Long.toString(id));
+        result.add(taskState.toString());
+        result.add(createTime.toString());
+        result.add(scheduleTime.toString());
+        result.add(finishTime.toString());
+
+        List<String> statsName = Lists.newArrayList();
+        for (StatsType statsType : statsTypeList) {
+            statsName.add(statsType.getValue());
+        }
+        result.add(StringUtils.join(statsName.toArray(), ","));
+
+        StatsGranularityDesc.StatsGranularity granularity = granularityDesc.getGranularity();
+        result.add(granularity.toString());
+
+        String columnName = categoryDesc.getColumnName();
+        result.add(columnName);
+
+        return result;
     }
 }

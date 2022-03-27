@@ -17,6 +17,7 @@
 
 package org.apache.doris.statistics;
 
+import java.util.Date;
 import org.apache.doris.analysis.AnalyzeStmt;
 import org.apache.doris.analysis.TableName;
 import org.apache.doris.catalog.Catalog;
@@ -80,12 +81,17 @@ public class StatisticsJob {
     private int progress = 0;
     private JobState jobState = JobState.PENDING;
 
+    private final Date createTime;
+    private Date scheduleTime;
+    private Date finishTime;
+
     public StatisticsJob(Long dbId, List<Long> tableIdList, Map<Long, List<String>> tableIdToColumnName) {
         this.id = Catalog.getCurrentCatalog().getNextId();
         this.dbId = dbId;
         this.tableIds = tableIdList;
         this.tableIdToColumnName = tableIdToColumnName;
         this.tasks = Lists.newArrayList();
+        this.createTime = new Date(System.currentTimeMillis());
     }
 
     public long getId() {
@@ -122,6 +128,26 @@ public class StatisticsJob {
 
     public void setJobState(JobState jobState) {
         this.jobState = jobState;
+    }
+
+    public Date getCreateTime() {
+        return createTime;
+    }
+
+    public Date getScheduleTime() {
+        return scheduleTime;
+    }
+
+    public void setScheduleTime(Date scheduleTime) {
+        this.scheduleTime = scheduleTime;
+    }
+
+    public Date getFinishTime() {
+        return finishTime;
+    }
+
+    public void setFinishTime(Date finishTime) {
+        this.finishTime = finishTime;
     }
 
     /**
@@ -204,10 +230,62 @@ public class StatisticsJob {
         return relatedTableId;
     }
 
-    public String showProgress() {
-        if (this.tasks.isEmpty()) {
-            return "0";
+    public List<String> getShowInfo() throws DdlException {
+        List<String> result = Lists.newArrayList();
+        result.add(Long.toString(id));
+        result.add(jobState.toString());
+        result.add(createTime.toString());
+        result.add(scheduleTime.toString());
+        result.add(finishTime.toString());
+
+        Map<Long, Set<String>> tblIdToCols = Maps.newHashMap();
+        for (StatisticsTask task : tasks) {
+            long tableId = task.getCategoryDesc().getTableId();
+            String col = task.getCategoryDesc().getColumnName();
+            if (StringUtils.isNotBlank(col)){
+                if (tblIdToCols.containsKey(tableId)) {
+                    tblIdToCols.get(tableId).add(col);
+                } else {
+                    Set<String> cols = Sets.newHashSet();
+                    cols.add(col);
+                    tblIdToCols.put(tableId, cols);
+                }
+            }
         }
-        return this.progress + "/" + this.tasks.size();
+
+        // get scope
+        List<String> scope = Lists.newArrayList();
+        Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbId);
+        for (Long tableId : tableIds) {
+            Table table = db.getTableOrDdlException(tableId);
+            List<Column> baseSchema = table.getBaseSchema();
+            Set<String> cols = tblIdToCols.get(tableId);
+            if (baseSchema.size() == cols.size()){
+                scope.add(table.getName() + "(*)") ;
+            } else {
+                scope.add(table.getName() + "(" + StringUtils.join(cols.toArray(), ",") + ")");
+            }
+        }
+        result.add(StringUtils.join(scope.toArray(), ","));
+
+        // get progress
+        if (this.tasks.isEmpty()) {
+            result.add("0");
+        } else {
+            result.add(this.progress + "/" + this.tasks.size());
+        }
+
+        return result;
+    }
+
+    public List<List<String>> getShowInfo(Long tableId) throws DdlException {
+        List<List<String>> result = Lists.newArrayList();
+        for (StatisticsTask task : tasks) {
+            if (tableId == task.getGranularityDesc().getTableId()){
+                List<String> taskInfo = task.getShowInfo();
+                result.add(taskInfo);
+            }
+        }
+        return result;
     }
 }
