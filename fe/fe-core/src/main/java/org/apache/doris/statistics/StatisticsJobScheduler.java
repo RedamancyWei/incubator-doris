@@ -33,7 +33,6 @@ import com.google.common.collect.Queues;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -120,19 +119,19 @@ public class StatisticsJobScheduler extends MasterDaemon {
      * @see SQLStatisticsTask
      */
     private List<StatisticsTask> divide(StatisticsJob statisticsJob) throws DdlException {
-        final long jobId = statisticsJob.getId();
-        final long dbId = statisticsJob.getDbId();
-        final Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbId);
-        final Set<Long> tableIds = statisticsJob.relatedTableId();
-        final Map<Long, List<String>> tableIdToColumnName = statisticsJob.getTableIdToColumnName();
-        final List<StatisticsTask> tasks = statisticsJob.getTasks();
-        final List<Long> backendIds = Catalog.getCurrentSystemInfo().getBackendIds(true);
+        long jobId = statisticsJob.getId();
+        long dbId = statisticsJob.getDbId();
+        Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbId);
+        Set<Long> tableIds = statisticsJob.relatedTableId();
+        Map<Long, List<String>> tableIdToColumnName = statisticsJob.getTableIdToColumnName();
+        List<StatisticsTask> tasks = statisticsJob.getTasks();
+        List<Long> backendIds = Catalog.getCurrentSystemInfo().getBackendIds(true);
 
         for (Long tableId : tableIds) {
-            final Table tbl = db.getTableOrDdlException(tableId);
-            final long rowCount = tbl.getRowCount();
-            final List<Long> partitionIds = ((OlapTable) tbl).getPartitionIds();
-            final List<String> columnNameList = tableIdToColumnName.get(tableId);
+            Table tbl = db.getTableOrDdlException(tableId);
+            long rowCount = tbl.getRowCount();
+            List<Long> partitionIds = ((OlapTable) tbl).getPartitionIds();
+            List<String> columnNameList = tableIdToColumnName.get(tableId);
 
             // step 0: generate data_size task
             StatsCategoryDesc dataSizeCategory = this.getTblStatsCategoryDesc(dbId, tableId);

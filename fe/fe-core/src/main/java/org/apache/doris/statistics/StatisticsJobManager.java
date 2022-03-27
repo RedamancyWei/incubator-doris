@@ -141,4 +141,25 @@ public class StatisticsJobManager {
             }
         }
     }
+
+    public void alterStatisticsJobInfo(Long jobId, Long taskId, Exception exception) {
+        StatisticsJob statisticsJob = idToStatisticsJob.get(jobId);
+        List<StatisticsTask> tasks = statisticsJob.getTasks();
+
+        for (StatisticsTask task : tasks) {
+            if (taskId == task.getId()) {
+                if (exception == null) {
+                    int progress = statisticsJob.getProgress() + 1;
+                    statisticsJob.setProgress(progress);
+                    if (progress == statisticsJob.getTasks().size()) {
+                        statisticsJob.setJobState(StatisticsJob.JobState.FINISHED);
+                    }
+                    task.setTaskState(StatisticsTask.TaskState.FINISHED);
+                } else {
+                    task.setTaskState(StatisticsTask.TaskState.FAILED);
+                }
+                return;
+            }
+        }
+    }
 }
