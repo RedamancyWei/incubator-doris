@@ -24,6 +24,7 @@ import org.apache.doris.catalog.Catalog;
 import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.Table;
+import org.apache.doris.catalog.Type;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.ErrorReport;
@@ -34,9 +35,13 @@ import java.util.List;
 import java.util.Map;
 
 import com.clearspring.analytics.util.Lists;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class StatisticsManager {
-    private Statistics statistics;
+    private final static Logger LOG = LogManager.getLogger(StatisticsTaskScheduler.class);
+
+    private final Statistics statistics;
 
     public StatisticsManager() {
         statistics = new Statistics();
@@ -133,7 +138,25 @@ public class StatisticsManager {
         String tableName = dbTableName.getTbl();
 
         Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(dbName);
-        Table table = db.getTableOrAnalysisException(tableName);
-        return table;
+        return db.getTableOrAnalysisException(tableName);
+    }
+
+    public void alterTableStatistics(StatisticsTaskResult taskResult) throws AnalysisException {
+        StatsGranularityDesc desc = taskResult.getGranularityDesc();
+        long tableId = desc.getTableId();
+        Map<String, String> statsNameToValue = taskResult.getStatsNameToValue();
+        statistics.updateTableStats(tableId, statsNameToValue);
+    }
+
+    public void alterColumnStatistics(StatisticsTaskResult taskResult) throws AnalysisException {
+        StatsCategoryDesc categoryDesc = taskResult.getCategoryDesc();
+        long dbId = categoryDesc.getDbId();
+        long tableId = categoryDesc.getTableId();
+        Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(dbId);
+        Table table = db.getTableOrAnalysisException(tableId);
+        String columnName = categoryDesc.getColumnName();
+        Type columnType = table.getColumn(columnName).getType();
+        Map<String, String> statsNameToValue = taskResult.getStatsNameToValue();
+        statistics.updateColumnStats(tableId, columnName, columnType, statsNameToValue);
     }
 }
