@@ -1403,6 +1403,10 @@ public class Catalog {
         partitionInMemoryInfoCollector.start();
         streamLoadRecordMgr.start();
         icebergTableCreationRecordMgr.start();
+
+        // start collect statistics
+        this.statisticsJobScheduler.start();
+        this.statisticsTaskScheduler.start();
     }
 
     // start threads that should running on all FE

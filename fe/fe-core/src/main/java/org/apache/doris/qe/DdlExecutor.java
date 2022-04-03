@@ -35,6 +35,7 @@ import org.apache.doris.analysis.AlterSystemStmt;
 import org.apache.doris.analysis.AlterTableStatsStmt;
 import org.apache.doris.analysis.AlterTableStmt;
 import org.apache.doris.analysis.AlterViewStmt;
+import org.apache.doris.analysis.AnalyzeStmt;
 import org.apache.doris.analysis.BackupStmt;
 import org.apache.doris.analysis.CancelAlterSystemStmt;
 import org.apache.doris.analysis.CancelAlterTableStmt;
@@ -293,6 +294,8 @@ public class DdlExecutor {
             catalog.getRefreshManager().handleRefreshTable((RefreshTableStmt) ddlStmt);
         } else if (ddlStmt instanceof RefreshDbStmt) {
             catalog.getRefreshManager().handleRefreshDb((RefreshDbStmt) ddlStmt);
+        } else if (ddlStmt instanceof AnalyzeStmt) {
+            catalog.getStatisticsJobManager().createStatisticsJob((AnalyzeStmt) ddlStmt);
         } else {
             throw new DdlException("Unknown statement.");
         }
