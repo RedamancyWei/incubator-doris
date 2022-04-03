@@ -22,7 +22,10 @@ import org.apache.doris.catalog.Catalog;
 import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.Table;
+import org.apache.doris.cluster.ClusterNamespace;
 import org.apache.doris.common.AnalysisException;
+import org.apache.doris.common.ErrorCode;
+import org.apache.doris.common.ErrorReport;
 import org.apache.doris.common.UserException;
 import org.apache.doris.mysql.privilege.PaloAuth;
 import org.apache.doris.mysql.privilege.PrivPredicate;
@@ -78,9 +81,10 @@ public class AnalyzeStmt extends DdlStmt {
 
         // step1: analyze database and table
         if (dbTableName != null) {
+            // check database
             String dbName = dbTableName.getDb();
             if (StringUtils.isNotBlank(dbName)) {
-                dbName = analyzer.getClusterName() + ":" + dbName;
+                dbName = ClusterNamespace.getFullName(analyzer.getClusterName(), dbName);
             } else {
                 dbName = analyzer.getDefaultDb();
             }
@@ -88,7 +92,7 @@ public class AnalyzeStmt extends DdlStmt {
             // check database
             Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(dbName);
             if (db == null) {
-                throw new AnalysisException("The database(" + dbName + ") does not exist.");
+                ErrorReport.reportAnalysisException(ErrorCode.ERR_NO_DB_ERROR);
             }
 
             // check table
@@ -96,19 +100,19 @@ public class AnalyzeStmt extends DdlStmt {
             if (StringUtils.isNotBlank(tblName)) {
                 Table table = db.getOlapTableOrAnalysisException(tblName);
                 if (table == null) {
-                    throw new AnalysisException("The table(" + dbTableName.getTbl() + ") does not exist.");
+                    ErrorReport.reportAnalysisException(ErrorCode.ERR_NO_SUCH_TABLE);
                 }
                 // check the table permission
                 boolean isPermission = auth.checkTblPriv(userInfo, dbName, table.getName(), PrivPredicate.SELECT);
                 if (!isPermission) {
-                    throw new AnalysisException("You do not have permissions to analyze the table(" + table.getName() + ").");
+                    ErrorReport.reportAnalysisException(ErrorCode.ERR_DBACCESS_DENIED_ERROR);
                 }
             } else {
                 // check the db permission
                 String dbFullName = db.getFullName();
                 boolean isPermission = auth.checkDbPriv(userInfo, dbFullName, PrivPredicate.SELECT);
                 if (!isPermission) {
-                    throw new AnalysisException("You do not have permissions to analyze the database(" + dbFullName + ").");
+                    ErrorReport.reportAnalysisException(ErrorCode.ERR_TABLEACCESS_DENIED_ERROR);
                 }
             }
 
@@ -118,7 +122,7 @@ public class AnalyzeStmt extends DdlStmt {
                 for (String columnName : columnNames) {
                     Column column = table.getColumn(columnName);
                     if (column == null) {
-                        throw new AnalysisException("The column(" + columnName + ") does not exist.");
+                        ErrorReport.reportAnalysisException(ErrorCode.ERR_WRONG_COLUMN_NAME);
                     }
                 }
             } else {
@@ -136,7 +140,7 @@ public class AnalyzeStmt extends DdlStmt {
             String dbFullName = db.getFullName();
             boolean isPermission = auth.checkDbPriv(userInfo, dbFullName, PrivPredicate.SELECT);
             if (!isPermission) {
-                throw new AnalysisException("You do not have permissions to analyze the database(" + dbFullName + ").");
+                ErrorReport.reportAnalysisException(ErrorCode.ERR_DBACCESS_DENIED_ERROR);
             }
             dbTableName = new TableName(dbName, "");
         }
