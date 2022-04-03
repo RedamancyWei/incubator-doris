@@ -34,6 +34,7 @@ import org.apache.doris.common.jmockit.Deencapsulation;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -49,15 +50,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import mockit.Expectations;
 import mockit.Mocked;
 
-import static org.junit.Assert.assertEquals;
-
 public class StatisticsJobTest {
 
     private StatisticsJob statisticsJobUnderTest;
 
     @Before
     public void setUp() throws Exception {
-        statisticsJobUnderTest = new StatisticsJob(0L, Arrays.asList(0L, 1L, 1L), new HashMap<>());
+        statisticsJobUnderTest = new StatisticsJob(0L, Arrays.asList(0L, 1L, 1L), new HashMap<>(), null);
     }
 
     @Test
@@ -65,7 +64,7 @@ public class StatisticsJobTest {
         // Run the test
         final Set<Long> result = statisticsJobUnderTest.relatedTableId();
         // Verify the results
-        assertEquals(new HashSet<>(Arrays.asList(0L, 1L)), result);
+        Assert.assertEquals(new HashSet<>(Arrays.asList(0L, 1L)), result);
     }
 
     @Test
@@ -95,12 +94,12 @@ public class StatisticsJobTest {
 
         // Run the test
         final StatisticsJob result = StatisticsJob.fromAnalyzeStmt(analyzeStmt);
-        assertEquals(1L, result.getDbId());
-        assertEquals(Collections.singletonList(1L), result.getTableIds());
-        assertEquals(tableIdToColumnName, result.getTableIdToColumnName());
-        assertEquals(0, result.getProgress());
-        assertEquals(StatisticsJob.JobState.PENDING, result.getJobState());
-        assertEquals(new HashSet<>(Collections.singletonList(1L)), result.relatedTableId());
+        Assert.assertEquals(1L, result.getDbId());
+        Assert.assertEquals(Collections.singletonList(1L), result.getTableIds());
+        Assert.assertEquals(tableIdToColumnName, result.getTableIdToColumnName());
+        Assert.assertEquals(0, result.getProgress());
+        Assert.assertEquals(StatisticsJob.JobState.PENDING, result.getJobState());
+        Assert.assertEquals(new HashSet<>(Collections.singletonList(1L)), result.relatedTableId());
     }
 
     @Test
@@ -158,12 +157,12 @@ public class StatisticsJobTest {
 
         // Run the test
         final StatisticsJob result = StatisticsJob.fromAnalyzeStmt(analyzeStmt);
-        assertEquals(0L, result.getDbId());
-        assertEquals(Collections.singletonList(0L), result.getTableIds());
-        assertEquals(tableIdToColumnName, result.getTableIdToColumnName());
-        assertEquals(0, result.getProgress());
-        assertEquals(StatisticsJob.JobState.PENDING, result.getJobState());
-        assertEquals(new HashSet<>(Collections.singletonList(0L)), result.relatedTableId());
+        Assert.assertEquals(0L, result.getDbId());
+        Assert.assertEquals(Collections.singletonList(0L), result.getTableIds());
+        Assert.assertEquals(tableIdToColumnName, result.getTableIdToColumnName());
+        Assert.assertEquals(0, result.getProgress());
+        Assert.assertEquals(StatisticsJob.JobState.PENDING, result.getJobState());
+        Assert.assertEquals(new HashSet<>(Collections.singletonList(0L)), result.relatedTableId());
     }
 
     @Test(expected = DdlException.class)

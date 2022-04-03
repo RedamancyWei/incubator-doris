@@ -18,14 +18,12 @@
 package org.apache.doris.statistics;
 
 import org.apache.doris.analysis.AnalyzeStmt;
-import org.apache.doris.analysis.UserIdentity;
 import org.apache.doris.catalog.Catalog;
 import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.Table;
 import org.apache.doris.common.Config;
 import org.apache.doris.common.DdlException;
-import org.apache.doris.mysql.privilege.PaloAuth;
-import org.apache.doris.mysql.privilege.PrivPredicate;
+import org.apache.doris.common.UserException;
 
 import com.google.common.collect.Maps;
 
@@ -34,7 +32,6 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
 import java.util.Set;
 
 /*
@@ -53,40 +50,37 @@ public class StatisticsJobManager {
         return idToStatisticsJob;
     }
 
-    public void createStatisticsJob(AnalyzeStmt analyzeStmt) throws DdlException {
-        // step0: init statistics job by analyzeStmt
+    public void createStatisticsJob(AnalyzeStmt analyzeStmt) throws UserException {
+        // step1: init statistics job by analyzeStmt
         StatisticsJob statisticsJob = StatisticsJob.fromAnalyzeStmt(analyzeStmt);
 
-        // step1: get statistical db&tbl to be analyzed
+        // step2: get statistical db&tbl to be analyzed
         long dbId = statisticsJob.getDbId();
         Set<Long> tableIds = statisticsJob.relatedTableId();
 
-        // step2: check restrict
+        // step3: check restrict
         this.checkRestrict(dbId, tableIds);
-
-        // step3: check permission
-        UserIdentity userInfo = analyzeStmt.getUserInfo();
-        this.checkPermission(dbId, tableIds, userInfo);
 
         // step4: create it
         this.createStatisticsJob(statisticsJob);
     }
 
-    public void createStatisticsJob(StatisticsJob statisticsJob) {
+    public void createStatisticsJob(StatisticsJob statisticsJob) throws DdlException {
         idToStatisticsJob.put(statisticsJob.getId(), statisticsJob);
         try {
             Catalog.getCurrentCatalog().getStatisticsJobScheduler().addPendingJob(statisticsJob);
         } catch (IllegalStateException e) {
-            LOG.warn("The pending statistics job is full. Please submit it again later.");
+            throw new DdlException("The pending statistics job is full, Please submit it again later.");
         }
     }
 
     /**
-     * Rule1: The same table cannot have two unfinished statistics jobs
-     * Rule2: The unfinished statistics job could not more then Config.max_statistics_job_num
-     * Rule3: The job for external table is not supported
+     * The statistical job has the following restrict:
+     * - Rule1: The same table cannot have two unfinished statistics jobs
+     * - Rule2: The unfinished statistics job could not more then Config.max_statistics_job_num
+     * - Rule3: The job for external table is not supported
      */
-    private void checkRestrict(long dbId, Set<Long> tableIds) throws DdlException {
+    private synchronized void checkRestrict(long dbId, Set<Long> tableIds) throws DdlException {
         Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbId);
 
         // check table type
@@ -98,17 +92,18 @@ public class StatisticsJobManager {
         }
 
         int unfinishedJobs = 0;
-        StatisticsJobScheduler jobScheduler = Catalog.getCurrentCatalog().getStatisticsJobScheduler();
-        Queue<StatisticsJob> statisticsJobs = jobScheduler.pendingJobQueue;
 
         // check table unfinished job
-        for (StatisticsJob statisticsJob : statisticsJobs) {
+        for (Map.Entry<Long, StatisticsJob> jobEntry : idToStatisticsJob.entrySet()) {
+            StatisticsJob statisticsJob = jobEntry.getValue();
             StatisticsJob.JobState jobState = statisticsJob.getJobState();
             List<Long> tableIdList = statisticsJob.getTableIds();
-            if (jobState == StatisticsJob.JobState.PENDING || jobState == StatisticsJob.JobState.SCHEDULING || jobState == StatisticsJob.JobState.RUNNING) {
+            if (jobState == StatisticsJob.JobState.PENDING
+                    || jobState == StatisticsJob.JobState.SCHEDULING
+                    || jobState == StatisticsJob.JobState.RUNNING) {
                 for (Long tableId : tableIds) {
                     if (tableIdList.contains(tableId)) {
-                        throw new DdlException("The same table(id=" + tableId + ") cannot have two unfinished statistics jobs.");
+                        throw new DdlException("The table(id=" + tableId + ") have two unfinished statistics jobs.");
                     }
                 }
                 unfinishedJobs++;
@@ -117,28 +112,7 @@ public class StatisticsJobManager {
 
         // check the number of unfinished tasks
         if (unfinishedJobs > Config.cbo_max_statistics_job_num) {
-            throw new DdlException("The unfinished statistics job could not more then Config.cbo_max_statistics_job_num.");
-        }
-    }
-
-    private void checkPermission(long dbId, Set<Long> tableIds, UserIdentity userInfo) throws DdlException {
-        PaloAuth auth = Catalog.getCurrentCatalog().getAuth();
-        Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbId);
-
-        // check the db permission
-        String dbName = db.getFullName();
-        boolean dbPermission = auth.checkDbPriv(userInfo, dbName, PrivPredicate.SELECT);
-        if (!dbPermission) {
-            throw new DdlException("You do not have permissions to analyze the database(" + dbName + ").");
-        }
-
-        // check the tables permission
-        for (Long tableId : tableIds) {
-            Table tbl = db.getTableOrDdlException(tableId);
-            boolean tblPermission = auth.checkTblPriv(userInfo, dbName, tbl.getName(), PrivPredicate.SELECT);
-            if (!tblPermission) {
-                throw new DdlException("You do not have permissions to analyze the table(" + tbl.getName() + ").");
-            }
+            throw new DdlException("The unfinished statistics job could not more then cbo_max_statistics_job_num.");
         }
     }
 

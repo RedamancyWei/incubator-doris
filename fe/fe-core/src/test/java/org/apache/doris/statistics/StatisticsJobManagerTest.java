@@ -17,9 +17,6 @@
 
 package org.apache.doris.statistics;
 
-import mockit.Expectations;
-import mockit.Mocked;
-
 import org.apache.doris.analysis.AnalyzeStmt;
 import org.apache.doris.analysis.Analyzer;
 import org.apache.doris.analysis.TableName;
@@ -33,6 +30,7 @@ import org.apache.doris.catalog.OlapTable;
 import org.apache.doris.catalog.PartitionInfo;
 import org.apache.doris.catalog.PrimitiveType;
 import org.apache.doris.common.DdlException;
+import org.apache.doris.common.UserException;
 import org.apache.doris.common.jmockit.Deencapsulation;
 import org.apache.doris.mysql.privilege.PaloAuth;
 import org.apache.doris.mysql.privilege.PrivPredicate;
@@ -44,10 +42,12 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+
+import mockit.Expectations;
+import mockit.Mocked;
 
 public class StatisticsJobManagerTest {
 
@@ -119,7 +119,7 @@ public class StatisticsJobManagerTest {
         // Run the test and verify the results
         try {
             statisticsJobManagerUnderTest.createStatisticsJob(analyzeStmt);
-        } catch (DdlException e) {
+        } catch (UserException e) {
             Assert.fail("DdlException throws.");
         }
     }
@@ -140,7 +140,7 @@ public class StatisticsJobManagerTest {
         Map<Long, List<String>> tableIdToColumnName = Maps.newHashMap();
         tableIdToColumnName.put(0L, Arrays.asList("c1", "c2"));
         tableIdToColumnName.put(1L, Arrays.asList("c1", "c2"));
-        StatisticsJob statisticsJob = new StatisticsJob(0L, Arrays.asList(0L, 1L), tableIdToColumnName);
+        StatisticsJob statisticsJob = new StatisticsJob(0L, Arrays.asList(0L, 1L), tableIdToColumnName, null);
         StatisticsJobScheduler statisticsJobScheduler = new StatisticsJobScheduler();
         statisticsJobScheduler.addPendingJob(statisticsJob);
 

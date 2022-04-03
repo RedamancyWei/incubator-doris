@@ -29,6 +29,7 @@ import org.apache.doris.common.jmockit.Deencapsulation;
 
 import com.google.common.collect.Maps;
 
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -36,8 +37,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
-import static org.junit.Assert.assertEquals;
 
 public class StatisticsJobSchedulerTest {
 
@@ -50,7 +49,7 @@ public class StatisticsJobSchedulerTest {
         Map<Long, List<String>> tableIdToColumnName = Maps.newHashMap();
         tableIdToColumnName.put(0L, Arrays.asList("c1", "c2"));
         tableIdToColumnName.put(1L, Arrays.asList("c1", "c2"));
-        statisticsJob = new StatisticsJob(0L, Arrays.asList(0L, 1L), tableIdToColumnName);
+        statisticsJob = new StatisticsJob(0L, Arrays.asList(0L, 1L), tableIdToColumnName, null);
         statisticsJobSchedulerUnderTest.addPendingJob(statisticsJob);
     }
 
@@ -94,7 +93,7 @@ public class StatisticsJobSchedulerTest {
          * sampleTask(1):
          *  - col1[max_size、avg_size]
          */
-        assertEquals(2 * 8, statisticsJob.getTasks().size());
+        Assert.assertEquals(2 * 8, statisticsJob.getTasks().size());
     }
 
     @Test
