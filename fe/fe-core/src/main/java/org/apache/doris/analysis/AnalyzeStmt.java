@@ -29,11 +29,13 @@ import org.apache.doris.common.ErrorReport;
 import org.apache.doris.common.UserException;
 import org.apache.doris.mysql.privilege.PaloAuth;
 import org.apache.doris.mysql.privilege.PrivPredicate;
+import org.apache.doris.qe.ConnectContext;
 
 import com.clearspring.analytics.util.Lists;
 import com.google.common.collect.Maps;
 
-import org.apache.commons.lang3.StringUtils;
+import org.apache.parquet.Preconditions;
+import org.apache.parquet.Strings;
 
 import java.util.List;
 import java.util.Map;
@@ -55,18 +57,30 @@ public class AnalyzeStmt extends DdlStmt {
     private List<String> columnNames;
     private Map<String, String> properties;
 
+    // after analyzed
+    private String dbName;
+    private String tblName;
+
     public AnalyzeStmt(TableName dbTableName, List<String> columns, Map<String, String> properties) {
         this.dbTableName = dbTableName;
         this.columnNames = columns;
         this.properties = properties;
     }
 
-    public List<String> getColumnNames() {
-        return this.columnNames;
+    public String getDbName() {
+        Preconditions.checkArgument(isAnalyzed(),
+                "The db name must be obtained after the parsing is complete");
+        return this.dbName;
     }
 
-    public TableName getTableName() {
-        return this.dbTableName;
+    public String getTblName() {
+        Preconditions.checkArgument(isAnalyzed(),
+                "The tbl name must be obtained after the parsing is complete");
+        return this.tblName;
+    }
+
+    public List<String> getColumnNames() {
+        return this.columnNames;
     }
 
     public Map<String, String> getProperties() {
@@ -74,83 +88,72 @@ public class AnalyzeStmt extends DdlStmt {
     }
 
     @Override
-    public void analyze(Analyzer analyzer) throws AnalysisException, UserException {
+    public void analyze(Analyzer analyzer) throws UserException {
         super.analyze(analyzer);
-        PaloAuth auth = analyzer.getCatalog().getAuth();
-        UserIdentity userInfo = this.getUserInfo();
 
         // step1: analyze database and table
-        if (dbTableName != null) {
-            // check database
-            String dbName = dbTableName.getDb();
-            if (StringUtils.isNotBlank(dbName)) {
-                dbName = ClusterNamespace.getFullName(analyzer.getClusterName(), dbName);
+        if (this.dbTableName != null) {
+            this.dbName = this.dbTableName.getDb();
+            if (Strings.isNullOrEmpty(this.dbName)) {
+                this.dbName = analyzer.getDefaultDb();
             } else {
-                dbName = analyzer.getDefaultDb();
+                this.dbName = ClusterNamespace.getFullName(analyzer.getClusterName(), this.dbName);
             }
 
             // check database
-            Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(dbName);
+            Database db = analyzer.getCatalog().getDbOrAnalysisException(this.dbName);
             if (db == null) {
                 ErrorReport.reportAnalysisException(ErrorCode.ERR_NO_DB_ERROR);
             }
 
             // check table
-            String tblName = dbTableName.getTbl();
-            if (StringUtils.isNotBlank(tblName)) {
-                Table table = db.getOlapTableOrAnalysisException(tblName);
+            this.tblName = this.dbTableName.getTbl();
+            if (Strings.isNullOrEmpty(this.tblName)) {
+                List<Table> tables = db.getTables();
+                for (Table table : tables) {
+                    checkAnalyzePriv(this.dbName, table.getName());
+                }
+            } else {
+                Table table = db.getTableOrAnalysisException(this.tblName);
                 if (table == null) {
                     ErrorReport.reportAnalysisException(ErrorCode.ERR_NO_SUCH_TABLE);
                 }
-                // check the table permission
-                boolean isPermission = auth.checkTblPriv(userInfo, dbName, table.getName(), PrivPredicate.SELECT);
-                if (!isPermission) {
-                    ErrorReport.reportAnalysisException(ErrorCode.ERR_DBACCESS_DENIED_ERROR);
-                }
-            } else {
-                // check the db permission
-                String dbFullName = db.getFullName();
-                boolean isPermission = auth.checkDbPriv(userInfo, dbFullName, PrivPredicate.SELECT);
-                if (!isPermission) {
-                    ErrorReport.reportAnalysisException(ErrorCode.ERR_TABLEACCESS_DENIED_ERROR);
-                }
+                checkAnalyzePriv(this.dbName, this.tblName);
             }
 
             // check column
-            if (columnNames != null) {
-                Table table = db.getOlapTableOrAnalysisException(tblName);
-                for (String columnName : columnNames) {
+            if (this.columnNames != null) {
+                Table table = db.getOlapTableOrAnalysisException(this.tblName);
+                for (String columnName : this.columnNames) {
                     Column column = table.getColumn(columnName);
                     if (column == null) {
-                        ErrorReport.reportAnalysisException(ErrorCode.ERR_WRONG_COLUMN_NAME);
+                        ErrorReport.reportAnalysisException(ErrorCode.ERR_WRONG_COLUMN_NAME, columnName);
                     }
                 }
             } else {
-                columnNames = Lists.newArrayList();
-                if (StringUtils.isNotBlank(tblName)) {
-                    Table table = db.getOlapTableOrAnalysisException(tblName);
+                this.columnNames = Lists.newArrayList();
+                if (Strings.isNullOrEmpty(this.tblName)) {
+                    Table table = db.getOlapTableOrAnalysisException(this.tblName);
                     List<Column> baseSchema = table.getBaseSchema();
-                    baseSchema.stream().map(Column::getName).forEach(name -> columnNames.add(name));
+                    baseSchema.stream().map(Column::getName).forEach(name -> this.columnNames.add(name));
                 }
             }
         } else {
             // analyze the default db
-            String dbName = analyzer.getDefaultDb();
-            Database db = analyzer.getCatalog().getDbOrAnalysisException(dbName);
-            String dbFullName = db.getFullName();
-            boolean isPermission = auth.checkDbPriv(userInfo, dbFullName, PrivPredicate.SELECT);
-            if (!isPermission) {
-                ErrorReport.reportAnalysisException(ErrorCode.ERR_DBACCESS_DENIED_ERROR);
+            this.dbName = analyzer.getDefaultDb();
+            Database db = analyzer.getCatalog().getDbOrAnalysisException(this.dbName);
+            List<Table> tables = db.getTables();
+            for (Table table : tables) {
+                checkAnalyzePriv(this.dbName, table.getName());
             }
-            dbTableName = new TableName(dbName, "");
         }
 
         // step2: analyze properties
-        if (properties == null){
+        if (this.properties == null) {
             // TODO set default properties
-            properties = Maps.newHashMap();
+            this.properties = Maps.newHashMap();
         } else {
-            for (Map.Entry<String, String> pros : properties.entrySet()) {
+            for (Map.Entry<String, String> pros : this.properties.entrySet()) {
                 // TODO check key & value
                 String key = pros.getKey();
                 String value = pros.getValue();
@@ -161,6 +164,18 @@ public class AnalyzeStmt extends DdlStmt {
     @Override
     public RedirectStatus getRedirectStatus() {
         return RedirectStatus.FORWARD_NO_SYNC;
+    }
+
+    public void checkAnalyzePriv(String dbName, String tblName) throws AnalysisException {
+        PaloAuth auth = Catalog.getCurrentCatalog().getAuth();
+        if (!auth.checkTblPriv(ConnectContext.get(), dbName, tblName, PrivPredicate.SELECT)) {
+            ErrorReport.reportAnalysisException(
+                    ErrorCode.ERR_TABLEACCESS_DENIED_ERROR,
+                    "ANALYZE",
+                    ConnectContext.get().getQualifiedUser(),
+                    ConnectContext.get().getRemoteIP(),
+                    dbName + ": " + tblName);
+        }
     }
 }
 
