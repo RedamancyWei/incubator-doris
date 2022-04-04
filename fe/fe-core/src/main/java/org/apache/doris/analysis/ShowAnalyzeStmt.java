@@ -17,6 +17,7 @@
 
 package org.apache.doris.analysis;
 
+import org.apache.doris.catalog.Catalog;
 import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.ScalarType;
@@ -28,6 +29,7 @@ import org.apache.doris.common.ErrorReport;
 import org.apache.doris.common.UserException;
 import org.apache.doris.mysql.privilege.PaloAuth;
 import org.apache.doris.mysql.privilege.PrivPredicate;
+import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.qe.ShowResultSetMetaData;
 
 import com.google.common.base.Strings;
@@ -35,16 +37,18 @@ import com.google.common.collect.ImmutableList;
 
 import org.apache.parquet.Preconditions;
 
+import java.util.List;
+
 public class ShowAnalyzeStmt extends ShowStmt {
     private static final ImmutableList<String> TITLE_NAMES = new ImmutableList.Builder<String>()
-                    .add("id")
-                    .add("scope")
-                    .add("create_time")
-                    .add("running_time")
-                    .add("finish_time")
-                    .add("state")
-                    .add("progress")
-                    .build();
+            .add("id")
+            .add("scope")
+            .add("create_time")
+            .add("running_time")
+            .add("finish_time")
+            .add("state")
+            .add("progress")
+            .build();
 
     private long jobId = -1L;
     private TableName dbTableName;
@@ -84,34 +88,35 @@ public class ShowAnalyzeStmt extends ShowStmt {
     public void analyze(Analyzer analyzer) throws AnalysisException, UserException {
         super.analyze(analyzer);
 
-        if (Strings.isNullOrEmpty(this.dbTableName.getDb())) {
+        if (this.dbTableName != null) {
+            this.dbName = this.dbTableName.getDb();
+            this.tblName = this.dbTableName.getTbl();
+        }
+
+        if (Strings.isNullOrEmpty(this.dbName)) {
             this.dbName = analyzer.getDefaultDb();
         } else {
             this.dbName = ClusterNamespace.getFullName(analyzer.getClusterName(), this.dbName);
         }
 
-        PaloAuth auth = analyzer.getCatalog().getAuth();
-        UserIdentity userInfo = this.getUserInfo();
         Database database = analyzer.getCatalog().getDbOrAnalysisException(this.dbName);
 
-        if (Strings.isNullOrEmpty(this.dbTableName.getTbl())) {
+        if (Strings.isNullOrEmpty(this.tblName)) {
             if (database == null) {
                 ErrorReport.reportAnalysisException(ErrorCode.ERR_NO_DB_ERROR);
             }
-            boolean dbPermission = auth.checkDbPriv(userInfo, this.dbName, PrivPredicate.SHOW);
-            if (!dbPermission) {
-                ErrorReport.reportAnalysisException(ErrorCode.ERR_TABLEACCESS_DENIED_ERROR);
+            List<Table> tables = database.getTables();
+            for (Table table : tables) {
+                checkShowAnalyzePriv(this.dbName, table.getName());
             }
         } else {
             Table table = database.getTableOrAnalysisException(this.tblName);
             if (table == null) {
                 ErrorReport.reportAnalysisException(ErrorCode.ERR_NO_SUCH_TABLE);
             }
-            boolean tblPermission = auth.checkTblPriv(userInfo, this.dbName, table.getName(), PrivPredicate.SHOW);
-            if (!tblPermission) {
-                ErrorReport.reportAnalysisException(ErrorCode.ERR_DBACCESS_DENIED_ERROR);
-            }
+            checkShowAnalyzePriv(this.dbName, this.tblName);
         }
+
     }
 
     @Override
@@ -126,5 +131,17 @@ public class ShowAnalyzeStmt extends ShowStmt {
     @Override
     public RedirectStatus getRedirectStatus() {
         return RedirectStatus.FORWARD_NO_SYNC;
+    }
+
+    public void checkShowAnalyzePriv(String dbName, String tblName) throws AnalysisException {
+        PaloAuth auth = Catalog.getCurrentCatalog().getAuth();
+        if (!auth.checkTblPriv(ConnectContext.get(), dbName, tblName, PrivPredicate.SHOW)) {
+            ErrorReport.reportAnalysisException(
+                    ErrorCode.ERR_TABLEACCESS_DENIED_ERROR,
+                    "SHOW ANALYZE",
+                    ConnectContext.get().getQualifiedUser(),
+                    ConnectContext.get().getRemoteIP(),
+                    dbName + ": " + tblName);
+        }
     }
 }
