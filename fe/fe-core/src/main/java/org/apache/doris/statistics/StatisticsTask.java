@@ -17,16 +17,14 @@
 
 package org.apache.doris.statistics;
 
-import com.clearspring.analytics.util.Lists;
-import java.util.Date;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.doris.catalog.Catalog;
 
-import java.util.List;
-import java.util.concurrent.Callable;
-import org.apache.doris.common.DdlException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
+import java.util.Date;
+import java.util.List;
+import java.util.concurrent.Callable;
 
 /**
  * The StatisticsTask belongs to one StatisticsJob.
@@ -70,27 +68,27 @@ public class StatisticsTask implements Callable<StatisticsTaskResult> {
     }
 
     public long getId() {
-        return id;
+        return this.id;
     }
 
     public long getJobId() {
-        return jobId;
+        return this.jobId;
     }
 
     public StatsGranularityDesc getGranularityDesc() {
-        return granularityDesc;
+        return this.granularityDesc;
     }
 
     public StatsCategoryDesc getCategoryDesc() {
-        return categoryDesc;
+        return this.categoryDesc;
     }
 
     public List<StatsType> getStatsTypeList() {
-        return statsTypeList;
+        return this.statsTypeList;
     }
 
     public TaskState getTaskState() {
-        return taskState;
+        return this.taskState;
     }
 
     public void setTaskState(TaskState taskState) {
@@ -98,11 +96,11 @@ public class StatisticsTask implements Callable<StatisticsTaskResult> {
     }
 
     public Date getCreateTime() {
-        return createTime;
+        return this.createTime;
     }
 
     public Date getScheduleTime() {
-        return scheduleTime;
+        return this.scheduleTime;
     }
 
     public void setScheduleTime(Date scheduleTime) {
@@ -110,7 +108,7 @@ public class StatisticsTask implements Callable<StatisticsTaskResult> {
     }
 
     public Date getFinishTime() {
-        return finishTime;
+        return this.finishTime;
     }
 
     public void setFinishTime(Date finishTime) {
@@ -121,29 +119,5 @@ public class StatisticsTask implements Callable<StatisticsTaskResult> {
     public StatisticsTaskResult call() throws Exception {
         LOG.warn("execute invalid statistics task.");
         return null;
-    }
-
-    public List<String> getShowInfo() throws DdlException {
-        List<String> result = Lists.newArrayList();
-        result.add(Long.toString(jobId));
-        result.add(Long.toString(id));
-        result.add(taskState.toString());
-        result.add(createTime.toString());
-        result.add(scheduleTime.toString());
-        result.add(finishTime.toString());
-
-        List<String> statsName = Lists.newArrayList();
-        for (StatsType statsType : statsTypeList) {
-            statsName.add(statsType.getValue());
-        }
-        result.add(StringUtils.join(statsName.toArray(), ","));
-
-        StatsGranularityDesc.StatsGranularity granularity = granularityDesc.getGranularity();
-        result.add(granularity.toString());
-
-        String columnName = categoryDesc.getColumnName();
-        result.add(columnName);
-
-        return result;
     }
 }

@@ -18,24 +18,26 @@
 package org.apache.doris.statistics;
 
 import org.apache.doris.analysis.AnalyzeStmt;
-import org.apache.doris.analysis.TableName;
 import org.apache.doris.catalog.Catalog;
 import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.Table;
-import org.apache.doris.common.DdlException;
+import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.UserException;
 
 import com.clearspring.analytics.util.Lists;
 import com.google.common.collect.Maps;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.parquet.Strings;
 import org.glassfish.jersey.internal.guava.Sets;
 
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import javax.annotation.Nullable;
 
 /*
 Used to store statistics job info,
@@ -69,17 +71,13 @@ public class StatisticsJob {
      */
     private final Map<Long, List<String>> tableIdToColumnName;
 
-    private Map<String, String> properties;
+    private final Map<String, String> properties;
 
     /**
      * to be executed tasks.
      */
     private final List<StatisticsTask> tasks = Lists.newArrayList();
 
-    /**
-     * The progress of the job, it's equal to the number of completed tasks.
-     */
-    private int progress = 0;
     private JobState jobState = JobState.PENDING;
 
     private final Date createTime = new Date(System.currentTimeMillis());
@@ -97,35 +95,31 @@ public class StatisticsJob {
     }
 
     public long getId() {
-        return id;
+        return this.id;
     }
 
     public long getDbId() {
-        return dbId;
+        return this.dbId;
     }
 
     public List<Long> getTableIds() {
-        return tableIds;
+        return this.tableIds;
     }
 
     public Map<Long, List<String>> getTableIdToColumnName() {
-        return tableIdToColumnName;
+        return this.tableIdToColumnName;
+    }
+
+    public Map<String, String> getProperties() {
+        return this.properties;
     }
 
     public List<StatisticsTask> getTasks() {
-        return tasks;
-    }
-
-    public int getProgress() {
-        return progress;
-    }
-
-    public void setProgress(int progress) {
-        this.progress = progress;
+        return this.tasks;
     }
 
     public JobState getJobState() {
-        return jobState;
+        return this.jobState;
     }
 
     public void setJobState(JobState jobState) {
@@ -133,11 +127,11 @@ public class StatisticsJob {
     }
 
     public Date getCreateTime() {
-        return createTime;
+        return this.createTime;
     }
 
     public Date getScheduleTime() {
-        return scheduleTime;
+        return this.scheduleTime;
     }
 
     public void setScheduleTime(Date scheduleTime) {
@@ -145,7 +139,7 @@ public class StatisticsJob {
     }
 
     public Date getFinishTime() {
-        return finishTime;
+        return this.finishTime;
     }
 
     public void setFinishTime(Date finishTime) {
@@ -159,29 +153,16 @@ public class StatisticsJob {
      * tableIdToColumnName <t1, [c1,c2,c3]>
      */
     public static StatisticsJob fromAnalyzeStmt(AnalyzeStmt analyzeStmt) throws UserException {
-        analyzeStmt.analyze(analyzeStmt.getAnalyzer());
-
         List<Long> tableIdList = Lists.newArrayList();
         Map<Long, List<String>> tableIdToColumnName = Maps.newHashMap();
-
-        TableName dbTableName = analyzeStmt.getTableName();
-        Map<String, String> properties = analyzeStmt.getProperties();
         List<String> columnNames = analyzeStmt.getColumnNames();
 
-        String dbName = dbTableName.getDb();
-        if (StringUtils.isNotBlank(dbName)) {
-            dbName = analyzeStmt.getClusterName() + ":" + dbName;
-        } else {
-            dbName = analyzeStmt.getAnalyzer().getDefaultDb();
-        }
+        analyzeStmt.analyze(analyzeStmt.getAnalyzer());
+        String dbName = analyzeStmt.getDbName();
+        String tblName = analyzeStmt.getTblName();
         Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbName);
 
-        String tblName = dbTableName.getTbl();
-        if (StringUtils.isNotBlank(tblName)) {
-            Table table = db.getOlapTableOrDdlException(tblName);
-            tableIdList.add(table.getId());
-            tableIdToColumnName.put(table.getId(), columnNames);
-        } else {
+        if (Strings.isNullOrEmpty(tblName)) {
             List<Table> tables = db.getTables();
             for (Table table : tables) {
                 long tableId = table.getId();
@@ -191,48 +172,64 @@ public class StatisticsJob {
                 baseSchema.stream().map(Column::getName).forEach(colNames::add);
                 tableIdToColumnName.put(tableId, colNames);
             }
+        } else {
+            Table table = db.getOlapTableOrDdlException(tblName);
+            tableIdList.add(table.getId());
+            tableIdToColumnName.put(table.getId(), columnNames);
         }
 
-        return new StatisticsJob(db.getId(), tableIdList, tableIdToColumnName, properties);
+        return new StatisticsJob(db.getId(),
+                tableIdList,
+                tableIdToColumnName,
+                analyzeStmt.getProperties());
     }
 
     public Set<Long> relatedTableId() {
         Set<Long> relatedTableId = Sets.newHashSet();
-        relatedTableId.addAll(tableIds);
-        relatedTableId.addAll(tableIdToColumnName.keySet());
+        relatedTableId.addAll(this.tableIds);
+        relatedTableId.addAll(this.tableIdToColumnName.keySet());
         return relatedTableId;
     }
 
-    public List<String> getShowInfo() throws DdlException {
+    public List<String> getShowInfo(@Nullable Long tableId) throws AnalysisException {
         List<String> result = Lists.newArrayList();
-        result.add(Long.toString(id));
-        result.add(jobState.toString());
-        result.add(createTime.toString());
-        result.add(scheduleTime.toString());
-        result.add(finishTime.toString());
+        result.add(Long.toString(this.id));
+        result.add(this.jobState.toString());
+        result.add(this.createTime.toString());
+        result.add(this.scheduleTime.toString());
+        result.add(this.finishTime.toString());
 
+        int totalTaskNum = 0;
+        int finishedTaskNum = 0;
         Map<Long, Set<String>> tblIdToCols = Maps.newHashMap();
-        for (StatisticsTask task : tasks) {
-            long tableId = task.getCategoryDesc().getTableId();
-            String col = task.getCategoryDesc().getColumnName();
-            if (StringUtils.isNotBlank(col)) {
-                if (tblIdToCols.containsKey(tableId)) {
-                    tblIdToCols.get(tableId).add(col);
-                } else {
-                    Set<String> cols = Sets.newHashSet();
-                    cols.add(col);
-                    tblIdToCols.put(tableId, cols);
+
+        for (StatisticsTask task : this.tasks) {
+            long tblId = task.getCategoryDesc().getTableId();
+            if (tableId == null || tableId == tblId){
+                totalTaskNum++;
+                if (task.getTaskState() == StatisticsTask.TaskState.FINISHED) {
+                    finishedTaskNum++;
+                }
+                String col = task.getCategoryDesc().getColumnName();
+                if (StringUtils.isNotBlank(col)) {
+                    if (tblIdToCols.containsKey(tableId)) {
+                        tblIdToCols.get(tableId).add(col);
+                    } else {
+                        Set<String> cols = Sets.newHashSet();
+                        cols.add(col);
+                        tblIdToCols.put(tableId, cols);
+                    }
                 }
             }
         }
 
         // get scope
         List<String> scope = Lists.newArrayList();
-        Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbId);
-        for (Long tableId : tableIds) {
-            Table table = db.getTableOrDdlException(tableId);
+        Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(this.dbId);
+        for (Long tblId : this.tableIds) {
+            Table table = db.getTableOrAnalysisException(tblId);
             List<Column> baseSchema = table.getBaseSchema();
-            Set<String> cols = tblIdToCols.get(tableId);
+            Set<String> cols = tblIdToCols.get(tblId);
             if (baseSchema.size() == cols.size()) {
                 scope.add(table.getName() + "(*)");
             } else {
@@ -242,23 +239,12 @@ public class StatisticsJob {
         result.add(StringUtils.join(scope.toArray(), ","));
 
         // get progress
-        if (this.tasks.isEmpty()) {
+        if (totalTaskNum == 0) {
             result.add("0");
         } else {
-            result.add(this.progress + "/" + this.tasks.size());
+            result.add(finishedTaskNum + "/" + totalTaskNum);
         }
 
-        return result;
-    }
-
-    public List<List<String>> getShowInfo(Long tableId) throws DdlException {
-        List<List<String>> result = Lists.newArrayList();
-        for (StatisticsTask task : tasks) {
-            if (tableId == task.getGranularityDesc().getTableId()) {
-                List<String> taskInfo = task.getShowInfo();
-                result.add(taskInfo);
-            }
-        }
         return result;
     }
 }

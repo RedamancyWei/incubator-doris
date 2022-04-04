@@ -24,6 +24,7 @@ import org.apache.doris.analysis.DescribeStmt;
 import org.apache.doris.analysis.HelpStmt;
 import org.apache.doris.analysis.PartitionNames;
 import org.apache.doris.analysis.ShowAlterStmt;
+import org.apache.doris.analysis.ShowAnalyzeStmt;
 import org.apache.doris.analysis.ShowAuthorStmt;
 import org.apache.doris.analysis.ShowBackendsStmt;
 import org.apache.doris.analysis.ShowBackupStmt;
@@ -154,6 +155,7 @@ import org.apache.doris.load.LoadJob;
 import org.apache.doris.load.LoadJob.JobState;
 import org.apache.doris.load.routineload.RoutineLoadJob;
 import org.apache.doris.mysql.privilege.PrivPredicate;
+import org.apache.doris.statistics.StatisticsJob;
 import org.apache.doris.system.Backend;
 import org.apache.doris.system.SystemInfoService;
 import org.apache.doris.thrift.TUnit;
@@ -333,7 +335,9 @@ public class ShowExecutor {
             handleShowTableCreation();
         } else if (stmt instanceof ShowLastInsertStmt) {
             handleShowLastInsert();
-        } else {
+        } else if (stmt instanceof ShowAnalyzeStmt) {
+            handleShowAnalyze();
+        }else {
             handleEmtpy();
         }
 
@@ -2128,4 +2132,46 @@ public class ShowExecutor {
         resultSet = new ShowResultSet(showMetaData, resultRowSet);
     }
 
+    private void handleShowAnalyze() throws AnalysisException {
+        ShowAnalyzeStmt showStmt = (ShowAnalyzeStmt) stmt;
+        Map<Long, StatisticsJob> idToStatisticsJob = Catalog.getCurrentCatalog()
+                .getStatisticsJobManager().getIdToStatisticsJob();
+        long jobId = showStmt.getJobId();
+        List<List<String>> results = Lists.newArrayList();
+
+        if (jobId == -1L){
+            StatisticsJob statisticsJob = idToStatisticsJob.get(jobId);
+            List<String> showInfo = statisticsJob.getShowInfo(null);
+            results.add(showInfo);
+        } else {
+            Set<Map.Entry<Long, StatisticsJob>> entries = idToStatisticsJob.entrySet();
+            String dbName = showStmt.getDbName();
+            String tblName = showStmt.getTblName();
+            Database db = ctx.getCatalog().getDbOrAnalysisException(dbName);
+            if (Strings.isNullOrEmpty(tblName)) {
+                for (Map.Entry<Long, StatisticsJob> entry : entries) {
+                    StatisticsJob statisticsJob = entry.getValue();
+                    long dbId = statisticsJob.getDbId();
+                    if (dbId == db.getId()) {
+                        List<String> showInfo = statisticsJob.getShowInfo(null);
+                        results.add(showInfo);
+                    }
+                }
+            } else {
+                for (Map.Entry<Long, StatisticsJob> entry : entries) {
+                    StatisticsJob statisticsJob = entry.getValue();
+                    long dbId = statisticsJob.getDbId();
+                    Table table = db.getTableOrAnalysisException(tblName);
+                    long tableId = table.getId();
+                    List<Long> tableIds = statisticsJob.getTableIds();
+                    if (dbId == db.getId() && tableIds.contains(tableId)) {
+                        List<String> showInfo = statisticsJob.getShowInfo(tableId);
+                        results.add(showInfo);
+                    }
+                }
+            }
+        }
+
+        resultSet = new ShowResultSet(showStmt.getMetaData(), results);
+    }
 }
