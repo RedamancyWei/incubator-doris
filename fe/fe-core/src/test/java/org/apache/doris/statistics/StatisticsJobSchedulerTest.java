@@ -93,7 +93,14 @@ public class StatisticsJobSchedulerTest {
          * sampleTask(1):
          *  - col1[max_size、avg_size]
          */
-        Assert.assertEquals(2 * 8, statisticsJob.getTasks().size());
+        // Assert.assertEquals(2 * 8, statisticsJob.getTasks().size());
+
+        /* now only support meta task:
+         * mateTask(5):
+         *  - col2[avg_len、max_len] --->2
+         *  - data_size --->1
+         */
+        Assert.assertEquals(5, statisticsJob.getTasks().size());
     }
 
     @Test
