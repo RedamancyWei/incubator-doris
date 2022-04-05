@@ -21,8 +21,11 @@ import org.apache.doris.analysis.AnalyzeStmt;
 import org.apache.doris.catalog.Catalog;
 import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.Table;
+import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.Config;
 import org.apache.doris.common.DdlException;
+import org.apache.doris.common.ErrorCode;
+import org.apache.doris.common.ErrorReport;
 import org.apache.doris.common.UserException;
 
 import com.google.common.collect.Maps;
@@ -54,14 +57,10 @@ public class StatisticsJobManager {
         // step1: init statistics job by analyzeStmt
         StatisticsJob statisticsJob = StatisticsJob.fromAnalyzeStmt(analyzeStmt);
 
-        // step2: get statistical db&tbl to be analyzed
-        long dbId = statisticsJob.getDbId();
-        Set<Long> tableIds = statisticsJob.relatedTableId();
+        // step2: check restrict
+        this.checkRestrict(statisticsJob.getDbId(), statisticsJob.relatedTableId());
 
-        // step3: check restrict
-        this.checkRestrict(dbId, tableIds);
-
-        // step4: create it
+        // step3: create it
         this.createStatisticsJob(statisticsJob);
     }
 
@@ -80,14 +79,14 @@ public class StatisticsJobManager {
      * - Rule2: The unfinished statistics job could not more then Config.max_statistics_job_num
      * - Rule3: The job for external table is not supported
      */
-    private synchronized void checkRestrict(long dbId, Set<Long> tableIds) throws DdlException {
-        Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbId);
+    private synchronized void checkRestrict(long dbId, Set<Long> tableIds) throws AnalysisException {
+        Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(dbId);
 
         // check table type
         for (Long tableId : tableIds) {
-            Table table = db.getTableOrDdlException(tableId);
+            Table table = db.getTableOrAnalysisException(tableId);
             if (table.getType() != Table.TableType.OLAP) {
-                throw new DdlException("The external table(" + table.getName() + ") is not supported.");
+                ErrorReport.reportAnalysisException(ErrorCode.ERR_NOT_OLAP_TABLE, db.getFullName(),table.getName(), "ANALYZE");
             }
         }
 
@@ -103,7 +102,7 @@ public class StatisticsJobManager {
                     || jobState == StatisticsJob.JobState.RUNNING) {
                 for (Long tableId : tableIds) {
                     if (tableIdList.contains(tableId)) {
-                        throw new DdlException("The table(id=" + tableId + ") have two unfinished statistics jobs.");
+                        throw new AnalysisException("The table(id=" + tableId + ") have two unfinished statistics jobs");
                     }
                 }
                 unfinishedJobs++;
@@ -112,7 +111,7 @@ public class StatisticsJobManager {
 
         // check the number of unfinished tasks
         if (unfinishedJobs > Config.cbo_max_statistics_job_num) {
-            throw new DdlException("The unfinished statistics job could not more then cbo_max_statistics_job_num.");
+            throw new AnalysisException("The unfinished statistics job could not more then cbo_max_statistics_job_num");
         }
     }
 
@@ -126,11 +125,14 @@ public class StatisticsJobManager {
                     int progress = statisticsJob.getProgress() + 1;
                     statisticsJob.setProgress(progress);
                     if (progress == statisticsJob.getTasks().size()) {
+                        statisticsJob.setFinishTime(System.currentTimeMillis());
                         statisticsJob.setJobState(StatisticsJob.JobState.FINISHED);
                     }
+                    task.setFinishTime(System.currentTimeMillis());
                     task.setTaskState(StatisticsTask.TaskState.FINISHED);
                 } else {
                     task.setTaskState(StatisticsTask.TaskState.FAILED);
+                    statisticsJob.setJobState(StatisticsJob.JobState.FAILED);
                 }
                 return;
             }

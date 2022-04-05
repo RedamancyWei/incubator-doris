@@ -32,25 +32,24 @@ import org.apache.doris.mysql.privilege.PrivPredicate;
 import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.qe.ShowResultSetMetaData;
 
+import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
-
-import org.apache.parquet.Preconditions;
 
 import java.util.List;
 
 public class ShowAnalyzeStmt extends ShowStmt {
     private static final ImmutableList<String> TITLE_NAMES = new ImmutableList.Builder<String>()
             .add("id")
-            .add("scope")
             .add("create_time")
             .add("running_time")
             .add("finish_time")
-            .add("state")
+            .add("scope")
             .add("progress")
+            .add("state")
             .build();
 
-    private long jobId = -1L;
+    private List<Long> jobIds;
     private TableName dbTableName;
 
     // after analyzed
@@ -60,8 +59,8 @@ public class ShowAnalyzeStmt extends ShowStmt {
     public ShowAnalyzeStmt() {
     }
 
-    public ShowAnalyzeStmt(long jobId) {
-        this.jobId = jobId;
+    public ShowAnalyzeStmt(List<Long> jobIds) {
+        this.jobIds = jobIds;
     }
 
     public ShowAnalyzeStmt(TableName dbTableName) {
@@ -80,8 +79,8 @@ public class ShowAnalyzeStmt extends ShowStmt {
         return this.tblName;
     }
 
-    public long getJobId() {
-        return this.jobId;
+    public List<Long> getJobIds() {
+        return jobIds;
     }
 
     @Override
@@ -99,19 +98,19 @@ public class ShowAnalyzeStmt extends ShowStmt {
             this.dbName = ClusterNamespace.getFullName(analyzer.getClusterName(), this.dbName);
         }
 
-        Database database = analyzer.getCatalog().getDbOrAnalysisException(this.dbName);
+        if (Strings.isNullOrEmpty(this.dbName)) {
+            ErrorReport.reportAnalysisException(ErrorCode.ERR_NO_DB_ERROR);
+        }
+        Database db = analyzer.getCatalog().getDbOrAnalysisException(this.dbName);
 
         if (Strings.isNullOrEmpty(this.tblName)) {
-            if (database == null) {
-                ErrorReport.reportAnalysisException(ErrorCode.ERR_NO_DB_ERROR);
-            }
-            List<Table> tables = database.getTables();
-            for (Table table : tables) {
-                checkShowAnalyzePriv(this.dbName, table.getName());
+            List<Table> tables = db.getTables();
+            for (Table tbl : tables) {
+                checkShowAnalyzePriv(this.dbName, tbl.getName());
             }
         } else {
-            Table table = database.getTableOrAnalysisException(this.tblName);
-            if (table == null) {
+            Table tbl = db.getTableOrAnalysisException(this.tblName);
+            if (tbl == null) {
                 ErrorReport.reportAnalysisException(ErrorCode.ERR_NO_SUCH_TABLE);
             }
             checkShowAnalyzePriv(this.dbName, this.tblName);
@@ -123,7 +122,7 @@ public class ShowAnalyzeStmt extends ShowStmt {
     public ShowResultSetMetaData getMetaData() {
         ShowResultSetMetaData.Builder builder = ShowResultSetMetaData.builder();
         for (String title : TITLE_NAMES) {
-            builder.addColumn(new Column(title, ScalarType.createVarchar(30)));
+            builder.addColumn(new Column(title, ScalarType.createVarchar(128)));
         }
         return builder.build();
     }

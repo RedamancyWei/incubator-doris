@@ -28,11 +28,13 @@ import org.apache.doris.common.Config;
 import org.apache.doris.common.DdlException;
 import org.apache.doris.common.util.MasterDaemon;
 
+import com.google.common.collect.Lists;
 import com.google.common.collect.Queues;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -65,19 +67,28 @@ public class StatisticsJobScheduler extends MasterDaemon {
     protected void runAfterCatalogReady() {
         StatisticsJob pendingJob = this.pendingJobQueue.peek();
         if (pendingJob != null) {
+            this.pendingJobQueue.remove();
             StatisticsJob.JobState jobState = pendingJob.getJobState();
             // job scheduler is only responsible for moving the job from pending -> scheduler
             if (jobState == StatisticsJob.JobState.PENDING) {
+                pendingJob.setScheduleTime(System.currentTimeMillis());
                 try {
                     List<StatisticsTask> tasks = this.divide(pendingJob);
-                    Catalog.getCurrentCatalog().getStatisticsTaskScheduler().addTasks(tasks);
+                    ArrayList<StatisticsTask> list = Lists.newArrayList();
+                    for (StatisticsTask task : tasks) {
+                        // TODO now only support meta task
+                        if (task instanceof MetaStatisticsTask){
+                            list.add(task);
+                        }
+                    }
+                    pendingJob.setTasks(list);
+                    Catalog.getCurrentCatalog().getStatisticsTaskScheduler().addTasks(list);
                     pendingJob.setJobState(StatisticsJob.JobState.SCHEDULING);
                 } catch (DdlException e) {
                     pendingJob.setJobState(StatisticsJob.JobState.FAILED);
                     LOG.info("Failed to schedule the statistical job. " + e.getMessage());
                 }
             }
-            this.pendingJobQueue.remove();
         }
     }
 

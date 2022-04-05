@@ -17,9 +17,6 @@
 
 package org.apache.doris.statistics;
 
-import com.google.common.collect.Maps;
-import java.util.List;
-import java.util.Map;
 import org.apache.doris.catalog.Catalog;
 import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.Database;
@@ -31,13 +28,20 @@ import org.apache.doris.catalog.Table;
 import org.apache.doris.catalog.Tablet;
 import org.apache.doris.common.DdlException;
 
+import com.google.common.collect.Maps;
+
+import java.util.List;
+import java.util.Map;
+
 /*
 A statistics task that directly collects statistics by reading FE meta.
  */
 public class MetaStatisticsTask extends StatisticsTask {
 
-    public MetaStatisticsTask(long jobId, StatsGranularityDesc granularityDesc,
-                              StatsCategoryDesc categoryDesc, List<StatsType> statsTypeList) {
+    public MetaStatisticsTask(long jobId,
+                              StatsGranularityDesc granularityDesc,
+                              StatsCategoryDesc categoryDesc,
+                              List<StatsType> statsTypeList) {
         super(jobId, granularityDesc, categoryDesc, statsTypeList);
     }
 

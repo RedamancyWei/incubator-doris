@@ -37,8 +37,6 @@ public class ShowColumnStatsStmt extends ShowStmt {
                     .add(ColumnStats.NUM_NULLS)
                     .add(ColumnStats.MIN_VALUE)
                     .add(ColumnStats.MAX_VALUE)
-                    .add(ColumnStats.AVG_SIZE)
-                    .add(ColumnStats.MAX_SIZE)
                     .build();
 
     private TableName tableName;
