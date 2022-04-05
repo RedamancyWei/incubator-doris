@@ -2136,13 +2136,18 @@ public class ShowExecutor {
         ShowAnalyzeStmt showStmt = (ShowAnalyzeStmt) stmt;
         Map<Long, StatisticsJob> idToStatisticsJob = Catalog.getCurrentCatalog()
                 .getStatisticsJobManager().getIdToStatisticsJob();
-        long jobId = showStmt.getJobId();
+        List<Long> jobIds = showStmt.getJobIds();
         List<List<String>> results = Lists.newArrayList();
 
-        if (jobId == -1L){
-            StatisticsJob statisticsJob = idToStatisticsJob.get(jobId);
-            List<String> showInfo = statisticsJob.getShowInfo(null);
-            results.add(showInfo);
+        if (jobIds != null && !jobIds.isEmpty()){
+            for (Long jobId : jobIds) {
+                StatisticsJob statisticsJob = idToStatisticsJob.get(jobId);
+                if (statisticsJob == null) {
+                    throw new AnalysisException("No such job id: " + jobId);
+                }
+                List<String> showInfo = statisticsJob.getShowInfo(null);
+                results.add(showInfo);
+            }
         } else {
             Set<Map.Entry<Long, StatisticsJob>> entries = idToStatisticsJob.entrySet();
             String dbName = showStmt.getDbName();

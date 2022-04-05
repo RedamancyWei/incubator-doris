@@ -24,15 +24,18 @@ import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.Table;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.UserException;
+import org.apache.doris.common.util.TimeUtils;
 
 import com.clearspring.analytics.util.Lists;
+import com.google.common.base.Strings;
 import com.google.common.collect.Maps;
 
 import org.apache.commons.lang3.StringUtils;
-import org.apache.parquet.Strings;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.glassfish.jersey.internal.guava.Sets;
 
-import java.util.Date;
+import java.text.SimpleDateFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -44,6 +47,7 @@ Used to store statistics job info,
 including job status, progress, etc.
  */
 public class StatisticsJob {
+    private static final Logger LOG = LogManager.getLogger(StatisticsJob.class);
 
     public enum JobState {
         PENDING,
@@ -76,13 +80,14 @@ public class StatisticsJob {
     /**
      * to be executed tasks.
      */
-    private final List<StatisticsTask> tasks = Lists.newArrayList();
+    private List<StatisticsTask> tasks = Lists.newArrayList();
 
     private JobState jobState = JobState.PENDING;
 
-    private final Date createTime = new Date(System.currentTimeMillis());
-    private Date scheduleTime;
-    private Date finishTime;
+    private final long createTime = System.currentTimeMillis();
+    private long scheduleTime = -1L;
+    private long finishTime = -1L;
+    private int progress = 0;
 
     public StatisticsJob(Long dbId,
                          List<Long> tableIdList,
@@ -118,6 +123,10 @@ public class StatisticsJob {
         return this.tasks;
     }
 
+    public void setTasks(List<StatisticsTask> tasks) {
+        this.tasks = tasks;
+    }
+
     public JobState getJobState() {
         return this.jobState;
     }
@@ -126,24 +135,32 @@ public class StatisticsJob {
         this.jobState = jobState;
     }
 
-    public Date getCreateTime() {
-        return this.createTime;
+    public long getCreateTime() {
+        return createTime;
     }
 
-    public Date getScheduleTime() {
-        return this.scheduleTime;
+    public long getScheduleTime() {
+        return scheduleTime;
     }
 
-    public void setScheduleTime(Date scheduleTime) {
+    public void setScheduleTime(long scheduleTime) {
         this.scheduleTime = scheduleTime;
     }
 
-    public Date getFinishTime() {
-        return this.finishTime;
+    public long getFinishTime() {
+        return finishTime;
     }
 
-    public void setFinishTime(Date finishTime) {
+    public void setFinishTime(long finishTime) {
         this.finishTime = finishTime;
+    }
+
+    public int getProgress() {
+        return this.progress;
+    }
+
+    public void setProgress(int progress) {
+        this.progress = progress;
     }
 
     /**
@@ -157,7 +174,6 @@ public class StatisticsJob {
         Map<Long, List<String>> tableIdToColumnName = Maps.newHashMap();
         List<String> columnNames = analyzeStmt.getColumnNames();
 
-        analyzeStmt.analyze(analyzeStmt.getAnalyzer());
         String dbName = analyzeStmt.getDbName();
         String tblName = analyzeStmt.getTblName();
         Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbName);
@@ -193,11 +209,12 @@ public class StatisticsJob {
 
     public List<String> getShowInfo(@Nullable Long tableId) throws AnalysisException {
         List<String> result = Lists.newArrayList();
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+
         result.add(Long.toString(this.id));
-        result.add(this.jobState.toString());
-        result.add(this.createTime.toString());
-        result.add(this.scheduleTime.toString());
-        result.add(this.finishTime.toString());
+        result.add(TimeUtils.longToTimeString(this.createTime, dateFormat));
+        result.add(this.scheduleTime != -1L ? TimeUtils.longToTimeString(this.scheduleTime, dateFormat) : "N/A");
+        result.add(this.finishTime != -1L ? TimeUtils.longToTimeString(this.finishTime, dateFormat) : "N/A");
 
         int totalTaskNum = 0;
         int finishedTaskNum = 0;
@@ -205,44 +222,51 @@ public class StatisticsJob {
 
         for (StatisticsTask task : this.tasks) {
             long tblId = task.getCategoryDesc().getTableId();
-            if (tableId == null || tableId == tblId){
+            if (tableId == null || tableId == tblId) {
                 totalTaskNum++;
                 if (task.getTaskState() == StatisticsTask.TaskState.FINISHED) {
                     finishedTaskNum++;
                 }
                 String col = task.getCategoryDesc().getColumnName();
-                if (StringUtils.isNotBlank(col)) {
-                    if (tblIdToCols.containsKey(tableId)) {
-                        tblIdToCols.get(tableId).add(col);
+                if (!Strings.isNullOrEmpty(col)) {
+                    if (tblIdToCols.containsKey(tblId)) {
+                        tblIdToCols.get(tblId).add(col);
                     } else {
                         Set<String> cols = Sets.newHashSet();
                         cols.add(col);
-                        tblIdToCols.put(tableId, cols);
+                        tblIdToCols.put(tblId, cols);
                     }
                 }
             }
         }
 
-        // get scope
         List<String> scope = Lists.newArrayList();
         Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(this.dbId);
         for (Long tblId : this.tableIds) {
-            Table table = db.getTableOrAnalysisException(tblId);
-            List<Column> baseSchema = table.getBaseSchema();
-            Set<String> cols = tblIdToCols.get(tblId);
-            if (baseSchema.size() == cols.size()) {
-                scope.add(table.getName() + "(*)");
-            } else {
-                scope.add(table.getName() + "(" + StringUtils.join(cols.toArray(), ",") + ")");
+            try {
+                Table table = db.getTableOrAnalysisException(tblId);
+                List<Column> baseSchema = table.getBaseSchema();
+                Set<String> cols = tblIdToCols.get(tblId);
+                if (cols != null) {
+                    if (baseSchema.size() == cols.size()) {
+                        scope.add(table.getName() + "(*)");
+                    } else {
+                        scope.add(table.getName() + "(" + StringUtils.join(cols.toArray(), ",") + ")");
+                    }
+                }
+            } catch (AnalysisException e) {
+                // catch this exception when table is dropped
+                LOG.info("get table failed, tableId: " + tblId, e);
             }
         }
-        result.add(StringUtils.join(scope.toArray(), ","));
 
-        // get progress
-        if (totalTaskNum == 0) {
-            result.add("0");
+        result.add(StringUtils.join(scope.toArray(), ","));
+        result.add(finishedTaskNum + "/" + totalTaskNum);
+
+        if (totalTaskNum == finishedTaskNum) {
+            result.add("finished");
         } else {
-            result.add(finishedTaskNum + "/" + totalTaskNum);
+            result.add(this.jobState.toString());
         }
 
         return result;

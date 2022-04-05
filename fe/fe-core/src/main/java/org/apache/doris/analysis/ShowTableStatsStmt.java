@@ -25,10 +25,9 @@ import org.apache.doris.common.UserException;
 import org.apache.doris.qe.ShowResultSetMetaData;
 import org.apache.doris.statistics.TableStats;
 
+import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
-
-import org.apache.parquet.Preconditions;
-import org.apache.parquet.Strings;
 
 public class ShowTableStatsStmt extends ShowStmt {
 

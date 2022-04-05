@@ -17,13 +17,6 @@
 
 package org.apache.doris.statistics;
 
-import com.google.common.collect.Maps;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import org.apache.doris.catalog.Catalog;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.Config;
@@ -32,16 +25,21 @@ import org.apache.doris.common.util.MasterDaemon;
 import org.apache.doris.statistics.StatisticsJob.JobState;
 import org.apache.doris.statistics.StatsCategoryDesc.StatsCategory;
 
+import com.clearspring.analytics.util.Lists;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Queues;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-
-import com.clearspring.analytics.util.Lists;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /*
 Schedule statistics task
@@ -57,55 +55,52 @@ public class StatisticsTaskScheduler extends MasterDaemon {
 
     @Override
     protected void runAfterCatalogReady() {
-        // step1: task n concurrent tasks from the queue
+        // task n concurrent tasks from the queue
         List<StatisticsTask> tasks = peek();
 
         if (!tasks.isEmpty()) {
             ThreadPoolExecutor executor = ThreadPoolManager.newDaemonCacheThreadPool(tasks.size(),
-                    "statistic-pool", true);
+                    "statistic-pool", false);
             StatisticsJobManager jobManager = Catalog.getCurrentCatalog().getStatisticsJobManager();
             Map<Long, StatisticsJob> statisticsJobs = jobManager.getIdToStatisticsJob();
+            Map<Long, Future<StatisticsTaskResult>> taskMap = Maps.newLinkedHashMap();
 
             long jobId = -1;
             int taskSize = 0;
-            Map<Long, Future<StatisticsTaskResult>> taskMap = Maps.newLinkedHashMap();
-
             for (StatisticsTask task : tasks) {
-                if (taskSize > 0 && jobId != task.getJobId()){
-                    // step3: update job and statistics
+                this.queue.remove();
+                if (taskSize > 0 && jobId != task.getJobId()) {
                     handleTaskResult(jobId, taskMap);
-                    // step4: remove task from queue
-                    remove(taskSize);
                     taskMap.clear();
                     taskSize = 0;
                 }
-                // step2: to execute tasks
                 Future<StatisticsTaskResult> future = executor.submit(task);
+                task.setScheduleTime(System.currentTimeMillis());
                 long taskId = task.getId();
                 taskMap.put(taskId, future);
+                jobId = task.getJobId();
                 StatisticsJob statisticsJob = statisticsJobs.get(jobId);
                 if (statisticsJob.getJobState() == JobState.SCHEDULING) {
                     statisticsJob.setJobState(JobState.RUNNING);
                 }
-                taskSize ++;
-                jobId = task.getJobId();
+                taskSize++;
             }
-            if (taskSize > 0){
+
+            if (taskSize > 0) {
                 handleTaskResult(jobId, taskMap);
-                remove(taskSize);
             }
         }
     }
 
     public void addTasks(List<StatisticsTask> statisticsTaskList) {
-        queue.addAll(statisticsTaskList);
+        this.queue.addAll(statisticsTaskList);
     }
 
     private List<StatisticsTask> peek() {
         List<StatisticsTask> tasks = Lists.newArrayList();
         int i = Config.cbo_concurrency_statistics_task_num;
         while (i > 0) {
-            StatisticsTask task = queue.peek();
+            StatisticsTask task = this.queue.peek();
             if (task == null) {
                 break;
             }
@@ -115,23 +110,19 @@ public class StatisticsTaskScheduler extends MasterDaemon {
         return tasks;
     }
 
-    private void remove(int size) {
-        for (int i = 0; i < size; i++) {
-            queue.poll();
-        }
-    }
-
     private void handleTaskResult(Long jobId, Map<Long, Future<StatisticsTaskResult>> taskMap) {
         StatisticsManager statsManager = Catalog.getCurrentCatalog().getStatisticsManager();
         StatisticsJobManager jobManager = Catalog.getCurrentCatalog().getStatisticsJobManager();
 
-        Set<Map.Entry<Long, Future<StatisticsTaskResult>>> entries = taskMap.entrySet();
-        for (Map.Entry<Long, Future<StatisticsTaskResult>> entry : entries) {
+        Map<String, String> properties = jobManager.getIdToStatisticsJob().get(jobId).getProperties();
+        int timeout = Integer.parseInt(properties.get("cbo_statistics_task_timeout"));
+
+        for (Map.Entry<Long, Future<StatisticsTaskResult>> entry : taskMap.entrySet()) {
             Exception exception = null;
             long taskId = entry.getKey();
             Future<StatisticsTaskResult> future = entry.getValue();
             try {
-                StatisticsTaskResult taskResult = future.get(30, TimeUnit.MINUTES);
+                StatisticsTaskResult taskResult = future.get(timeout, TimeUnit.SECONDS);
                 StatsCategoryDesc categoryDesc = taskResult.getCategoryDesc();
                 StatsCategory category = categoryDesc.getCategory();
                 if (category == StatsCategory.TABLE) {
@@ -143,7 +134,7 @@ public class StatisticsTaskScheduler extends MasterDaemon {
                 }
             } catch (InterruptedException | ExecutionException | TimeoutException | AnalysisException e) {
                 exception = e;
-                LOG.warn("Failed to execute this turn of statistics tasks", exception);
+                LOG.info("Failed to execute this turn of statistics tasks");
             }
             // update the job info
             jobManager.alterStatisticsJobInfo(jobId, taskId, exception);

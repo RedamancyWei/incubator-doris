@@ -24,6 +24,7 @@ import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.Table;
 import org.apache.doris.cluster.ClusterNamespace;
 import org.apache.doris.common.AnalysisException;
+import org.apache.doris.common.Config;
 import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.ErrorReport;
 import org.apache.doris.common.UserException;
@@ -32,10 +33,9 @@ import org.apache.doris.mysql.privilege.PrivPredicate;
 import org.apache.doris.qe.ConnectContext;
 
 import com.clearspring.analytics.util.Lists;
+import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import com.google.common.collect.Maps;
-
-import org.apache.parquet.Preconditions;
-import org.apache.parquet.Strings;
 
 import java.util.List;
 import java.util.Map;
@@ -53,7 +53,7 @@ import java.util.Map;
  * properties: properties of statistics jobs
  */
 public class AnalyzeStmt extends DdlStmt {
-    private TableName dbTableName;
+    private final TableName dbTableName;
     private List<String> columnNames;
     private Map<String, String> properties;
 
@@ -93,18 +93,17 @@ public class AnalyzeStmt extends DdlStmt {
 
         // step1: analyze database and table
         if (this.dbTableName != null) {
-            this.dbName = this.dbTableName.getDb();
-            if (Strings.isNullOrEmpty(this.dbName)) {
+            if (Strings.isNullOrEmpty(this.dbTableName.getDb())) {
                 this.dbName = analyzer.getDefaultDb();
             } else {
-                this.dbName = ClusterNamespace.getFullName(analyzer.getClusterName(), this.dbName);
+                this.dbName = ClusterNamespace.getFullName(analyzer.getClusterName(), this.dbTableName.getDb());
             }
 
-            // check database
-            Database db = analyzer.getCatalog().getDbOrAnalysisException(this.dbName);
-            if (db == null) {
+            // check db
+            if (Strings.isNullOrEmpty(this.dbName)) {
                 ErrorReport.reportAnalysisException(ErrorCode.ERR_NO_DB_ERROR);
             }
+            Database db = analyzer.getCatalog().getDbOrAnalysisException(this.dbName);
 
             // check table
             this.tblName = this.dbTableName.getTbl();
@@ -115,15 +114,12 @@ public class AnalyzeStmt extends DdlStmt {
                 }
             } else {
                 Table table = db.getTableOrAnalysisException(this.tblName);
-                if (table == null) {
-                    ErrorReport.reportAnalysisException(ErrorCode.ERR_NO_SUCH_TABLE);
-                }
-                checkAnalyzePriv(this.dbName, this.tblName);
+                checkAnalyzePriv(this.dbName, table.getName());
             }
 
             // check column
             if (this.columnNames != null) {
-                Table table = db.getOlapTableOrAnalysisException(this.tblName);
+                Table table = db.getTableOrAnalysisException(this.tblName);
                 for (String columnName : this.columnNames) {
                     Column column = table.getColumn(columnName);
                     if (column == null) {
@@ -132,7 +128,7 @@ public class AnalyzeStmt extends DdlStmt {
                 }
             } else {
                 this.columnNames = Lists.newArrayList();
-                if (Strings.isNullOrEmpty(this.tblName)) {
+                if (!Strings.isNullOrEmpty(this.tblName)) {
                     Table table = db.getOlapTableOrAnalysisException(this.tblName);
                     List<Column> baseSchema = table.getBaseSchema();
                     baseSchema.stream().map(Column::getName).forEach(name -> this.columnNames.add(name));
@@ -149,15 +145,18 @@ public class AnalyzeStmt extends DdlStmt {
         }
 
         // step2: analyze properties
-        if (this.properties == null) {
-            // TODO set default properties
-            this.properties = Maps.newHashMap();
-        } else {
+        if (this.properties != null) {
             for (Map.Entry<String, String> pros : this.properties.entrySet()) {
-                // TODO check key & value
-                String key = pros.getKey();
-                String value = pros.getValue();
+                if (!"cbo_statistics_task_timeout".equals(pros.getKey())) {
+                    throw new AnalysisException("Unsupported property: " + pros.getKey());
+                }
+                if (Integer.parseInt(pros.getValue()) <= 0) {
+                    throw new AnalysisException("Invalid property value: " + pros.getValue());
+                }
             }
+        } else {
+            this.properties = Maps.newHashMap();
+            this.properties.put("cbo_statistics_task_timeout", String.valueOf(Config.cbo_statistics_task_timeout));
         }
     }
 

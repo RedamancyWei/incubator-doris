@@ -22,13 +22,13 @@ import org.apache.doris.catalog.Catalog;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.Date;
 import java.util.List;
 import java.util.concurrent.Callable;
 
 /**
  * The StatisticsTask belongs to one StatisticsJob.
  * A job may be split into multiple tasks but a task can only belong to one job.
+ *
  * @granularityDesc, @categoryDesc, @statsTypeList
  * These three attributes indicate which statistics this task is responsible for collecting.
  * In general, a task will collect more than one @StatsType at the same time
@@ -46,25 +46,26 @@ public class StatisticsTask implements Callable<StatisticsTaskResult> {
         FAILED
     }
 
-    protected long id;
+    protected long id = Catalog.getCurrentCatalog().getNextId();
+    ;
     protected long jobId;
     protected StatsGranularityDesc granularityDesc;
     protected StatsCategoryDesc categoryDesc;
     protected List<StatsType> statsTypeList;
-    protected TaskState taskState;
-    protected final Date createTime;
-    protected Date scheduleTime;
-    protected Date finishTime;
+    protected TaskState taskState = TaskState.CREATED;
 
-    public StatisticsTask(long jobId, StatsGranularityDesc granularityDesc,
-                          StatsCategoryDesc categoryDesc, List<StatsType> statsTypeList) {
-        this.id = Catalog.getCurrentCatalog().getNextId();
+    protected final long createTime = System.currentTimeMillis();
+    protected long scheduleTime;
+    protected long finishTime;
+
+    public StatisticsTask(long jobId,
+                          StatsGranularityDesc granularityDesc,
+                          StatsCategoryDesc categoryDesc,
+                          List<StatsType> statsTypeList) {
         this.jobId = jobId;
         this.granularityDesc = granularityDesc;
         this.categoryDesc = categoryDesc;
         this.statsTypeList = statsTypeList;
-        this.taskState = TaskState.CREATED;
-        this.createTime = new Date(System.currentTimeMillis());
     }
 
     public long getId() {
@@ -95,23 +96,23 @@ public class StatisticsTask implements Callable<StatisticsTaskResult> {
         this.taskState = taskState;
     }
 
-    public Date getCreateTime() {
-        return this.createTime;
+    public long getCreateTime() {
+        return createTime;
     }
 
-    public Date getScheduleTime() {
-        return this.scheduleTime;
+    public long getScheduleTime() {
+        return scheduleTime;
     }
 
-    public void setScheduleTime(Date scheduleTime) {
+    public void setScheduleTime(long scheduleTime) {
         this.scheduleTime = scheduleTime;
     }
 
-    public Date getFinishTime() {
-        return this.finishTime;
+    public long getFinishTime() {
+        return finishTime;
     }
 
-    public void setFinishTime(Date finishTime) {
+    public void setFinishTime(long finishTime) {
         this.finishTime = finishTime;
     }
 
