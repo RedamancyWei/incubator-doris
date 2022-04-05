@@ -117,8 +117,11 @@ public class StatisticsJobManager {
 
     public void alterStatisticsJobInfo(Long jobId, Long taskId, Exception exception) {
         StatisticsJob statisticsJob = idToStatisticsJob.get(jobId);
-        List<StatisticsTask> tasks = statisticsJob.getTasks();
+        if (statisticsJob == null) {
+            return;
+        }
 
+        List<StatisticsTask> tasks = statisticsJob.getTasks();
         for (StatisticsTask task : tasks) {
             if (taskId == task.getId()) {
                 if (exception == null) {
