@@ -17,8 +17,6 @@
 
 package org.apache.doris.statistics;
 
-import org.apache.doris.catalog.Catalog;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -46,8 +44,7 @@ public class StatisticsTask implements Callable<StatisticsTaskResult> {
         FAILED
     }
 
-    protected long id = Catalog.getCurrentCatalog().getNextId();
-    ;
+    protected long id = -1;
     protected long jobId;
     protected StatsGranularityDesc granularityDesc;
     protected StatsCategoryDesc categoryDesc;
@@ -70,6 +67,10 @@ public class StatisticsTask implements Callable<StatisticsTaskResult> {
 
     public long getId() {
         return this.id;
+    }
+
+    public void setId(long id) {
+        this.id = id;
     }
 
     public long getJobId() {

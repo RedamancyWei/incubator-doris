@@ -52,6 +52,14 @@ public class StatisticsJobScheduler extends MasterDaemon {
     private static final Logger LOG = LogManager.getLogger(StatisticsJobScheduler.class);
 
     /**
+     * If the table row-count is greater than the maximum number of Be scans for a single BE,
+     * we'll divide subtasks by partition. relevant values(3700000000L&600000000L) are derived from test.
+     * COUNT_MAX_SCAN_PER_TASK is for count(expr), NDV_MAX_SCAN_PER_TASK is for min(c1)/max(c1)/ndv(c1).
+     */
+    private static final long COUNT_MAX_SCAN_PER_TASK = 3700000000L;
+    private static final long NDV_MAX_SCAN_PER_TASK = 600000000L;
+
+    /**
      * Different statistics need to be collected for the jobs submitted by users.
      * if all statistics be collected at the same time, the cluster may be overburdened
      * and normal query services may be affected. Therefore, we put the jobs into the queue
@@ -71,8 +79,8 @@ public class StatisticsJobScheduler extends MasterDaemon {
             StatisticsJob.JobState jobState = pendingJob.getJobState();
             // job scheduler is only responsible for moving the job from pending -> scheduler
             if (jobState == StatisticsJob.JobState.PENDING) {
-                pendingJob.setScheduleTime(System.currentTimeMillis());
                 try {
+                    pendingJob.setId(Catalog.getCurrentCatalog().getNextId());
                     List<StatisticsTask> tasks = this.divide(pendingJob);
                     ArrayList<StatisticsTask> list = Lists.newArrayList();
                     for (StatisticsTask task : tasks) {
@@ -82,8 +90,9 @@ public class StatisticsJobScheduler extends MasterDaemon {
                         }
                     }
                     pendingJob.setTasks(list);
-                    Catalog.getCurrentCatalog().getStatisticsTaskScheduler().addTasks(list);
+                    pendingJob.setScheduleTime(System.currentTimeMillis());
                     pendingJob.setJobState(StatisticsJob.JobState.SCHEDULING);
+                    Catalog.getCurrentCatalog().getStatisticsTaskScheduler().addTasks(list);
                 } catch (DdlException e) {
                     pendingJob.setJobState(StatisticsJob.JobState.FAILED);
                     LOG.info("Failed to schedule the statistical job. " + e.getMessage());
@@ -154,7 +163,7 @@ public class StatisticsJobScheduler extends MasterDaemon {
                         rowCountGranularity, rowCountCategory, Collections.singletonList(StatsType.ROW_COUNT));
                 tasks.add(metaTask);
             } else {
-                if (rowCount > backendIds.size() * 3700000000L) {
+                if (rowCount > backendIds.size() * COUNT_MAX_SCAN_PER_TASK) {
                     // divide subtasks by partition
                     for (Long partitionId : partitionIds) {
                         StatsCategoryDesc rowCountCategory = this.getTblStatsCategoryDesc(dbId, tableId);
@@ -173,7 +182,7 @@ public class StatisticsJobScheduler extends MasterDaemon {
             }
 
             // step 3: generate [min,max,ndv] task
-            if (rowCount > backendIds.size() * 600000000L) {
+            if (rowCount > backendIds.size() * NDV_MAX_SCAN_PER_TASK) {
                 for (String columnName : columnNameList) {
                     // divide subtasks by partition
                     for (Long partitionId : partitionIds) {

@@ -42,9 +42,9 @@ import java.util.Set;
 
 import javax.annotation.Nullable;
 
-/*
-Used to store statistics job info,
-including job status, progress, etc.
+/***
+ * Used to store statistics job info,
+ * including job status, progress, etc.
  */
 public class StatisticsJob {
     private static final Logger LOG = LogManager.getLogger(StatisticsJob.class);
@@ -58,7 +58,7 @@ public class StatisticsJob {
         FAILED
     }
 
-    private final long id = Catalog.getCurrentCatalog().getNextId();
+    private long id = -1;
 
     /**
      * to be collected database stats.
@@ -101,6 +101,10 @@ public class StatisticsJob {
 
     public long getId() {
         return this.id;
+    }
+
+    public void setId(long id) {
+        this.id = id;
     }
 
     public long getDbId() {
@@ -174,13 +178,9 @@ public class StatisticsJob {
         Map<Long, List<String>> tableIdToColumnName = Maps.newHashMap();
         List<String> columnNames = analyzeStmt.getColumnNames();
 
-        String dbName = analyzeStmt.getDbName();
-        String tblName = analyzeStmt.getTblName();
-        Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbName);
-
-        if (Strings.isNullOrEmpty(tblName)) {
-            List<Table> tables = db.getTables();
-            for (Table table : tables) {
+        // it means that analyze all columns in the table
+        if (columnNames == null || columnNames.isEmpty()) {
+            for (Table table : analyzeStmt.getTables()) {
                 long tableId = table.getId();
                 tableIdList.add(tableId);
                 List<String> colNames = Lists.newArrayList();
@@ -189,13 +189,14 @@ public class StatisticsJob {
                 tableIdToColumnName.put(tableId, colNames);
             }
         } else {
-            Table table = db.getOlapTableOrDdlException(tblName);
+            // only one table to be analyzed
+            Table table = analyzeStmt.getTables().get(0);
             tableIdList.add(table.getId());
             tableIdToColumnName.put(table.getId(), columnNames);
         }
 
         return new StatisticsJob(
-                db.getId(),
+                analyzeStmt.getDb().getId(),
                 tableIdList,
                 tableIdToColumnName,
                 analyzeStmt.getProperties());

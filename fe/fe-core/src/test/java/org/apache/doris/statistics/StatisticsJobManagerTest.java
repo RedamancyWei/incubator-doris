@@ -51,7 +51,7 @@ public class StatisticsJobManagerTest {
 
     @Before
     public void setUp() throws Exception {
-        statisticsJobManagerUnderTest = new StatisticsJobManager();
+        this.statisticsJobManagerUnderTest = new StatisticsJobManager();
     }
 
     @Test
@@ -81,13 +81,13 @@ public class StatisticsJobManagerTest {
 
         new Expectations() {
             {
-                analyzeStmt.getDbName();
+                analyzeStmt.getDb();
                 this.minTimes = 0;
-                this.result = "cluster:db";
+                this.result = database;
 
-                analyzeStmt.getTblName();
+                analyzeStmt.getTables();
                 this.minTimes = 0;
-                this.result = "tbl";
+                this.result = Collections.singletonList(table);
 
                 analyzeStmt.getClusterName();
                 this.minTimes = 0;
@@ -117,7 +117,7 @@ public class StatisticsJobManagerTest {
 
         // Run the test and verify the results
         try {
-            statisticsJobManagerUnderTest.createStatisticsJob(analyzeStmt);
+            this.statisticsJobManagerUnderTest.createStatisticsJob(analyzeStmt);
         } catch (UserException e) {
             Assert.fail("UserException throws.");
         }
@@ -150,13 +150,13 @@ public class StatisticsJobManagerTest {
 
         new Expectations() {
             {
-                analyzeStmt.getDbName();
+                analyzeStmt.getDb();
                 this.minTimes = 0;
-                this.result = "cluster:db";
+                this.result = database;
 
-                analyzeStmt.getTblName();
+                analyzeStmt.getTables();
                 this.minTimes = 0;
-                this.result = "tbl";
+                this.result = Collections.singletonList(table);
 
                 analyzeStmt.getClusterName();
                 this.minTimes = 0;
@@ -185,8 +185,8 @@ public class StatisticsJobManagerTest {
         };
 
         // Run the test and verify same table has two unfinished statistics job
-        statisticsJobManagerUnderTest.createStatisticsJob(analyzeStmt);
-        statisticsJobManagerUnderTest.createStatisticsJob(analyzeStmt);
+        this.statisticsJobManagerUnderTest.createStatisticsJob(analyzeStmt);
+        this.statisticsJobManagerUnderTest.createStatisticsJob(analyzeStmt);
     }
 
     @Test
@@ -216,13 +216,13 @@ public class StatisticsJobManagerTest {
 
         new Expectations() {
             {
-                analyzeStmt.getDbName();
+                analyzeStmt.getDb();
                 this.minTimes = 0;
-                this.result = "cluster:db";
+                this.result = database;
 
-                analyzeStmt.getTblName();
+                analyzeStmt.getTables();
                 this.minTimes = 0;
-                this.result = "tbl";
+                this.result = Collections.singletonList(table);
 
                 analyzeStmt.getClusterName();
                 this.minTimes = 0;
@@ -252,20 +252,19 @@ public class StatisticsJobManagerTest {
 
         // Run the test and verify the results
         try {
-            statisticsJobManagerUnderTest.createStatisticsJob(analyzeStmt);
-            Map<Long, StatisticsJob> idToStatisticsJob = statisticsJobManagerUnderTest.getIdToStatisticsJob();
+            this.statisticsJobManagerUnderTest.createStatisticsJob(analyzeStmt);
+            Map<Long, StatisticsJob> idToStatisticsJob = this.statisticsJobManagerUnderTest.getIdToStatisticsJob();
             for (Map.Entry<Long, StatisticsJob> entry : idToStatisticsJob.entrySet()) {
                 Long jobId = entry.getKey();
                 StatisticsJob statisticsJob = entry.getValue();
                 statisticsJob.setTasks(Collections.singletonList(new StatisticsTask(jobId, null, null, null)));
                 long taskId = statisticsJob.getTasks().get(0).getId();
-                statisticsJobManagerUnderTest.alterStatisticsJobInfo(jobId,taskId, null);
-                statisticsJobManagerUnderTest.alterStatisticsJobInfo(jobId,taskId, new Exception("test"));
+                this.statisticsJobManagerUnderTest.alterStatisticsJobInfo(jobId,taskId, null);
+                this.statisticsJobManagerUnderTest.alterStatisticsJobInfo(jobId,taskId, new Exception("test"));
                 break;
             }
         } catch (UserException e) {
             Assert.fail("UserException throws.");
         }
     }
-
 }

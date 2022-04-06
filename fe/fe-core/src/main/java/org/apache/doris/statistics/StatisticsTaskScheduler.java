@@ -74,8 +74,9 @@ public class StatisticsTaskScheduler extends MasterDaemon {
                     taskMap.clear();
                     taskSize = 0;
                 }
-                Future<StatisticsTaskResult> future = executor.submit(task);
+                task.setId(Catalog.getCurrentCatalog().getNextId());
                 task.setScheduleTime(System.currentTimeMillis());
+                Future<StatisticsTaskResult> future = executor.submit(task);
                 long taskId = task.getId();
                 taskMap.put(taskId, future);
                 jobId = task.getJobId();
@@ -115,7 +116,7 @@ public class StatisticsTaskScheduler extends MasterDaemon {
         StatisticsJobManager jobManager = Catalog.getCurrentCatalog().getStatisticsJobManager();
 
         Map<String, String> properties = jobManager.getIdToStatisticsJob().get(jobId).getProperties();
-        int timeout = Integer.parseInt(properties.get("cbo_statistics_task_timeout"));
+        int timeout = Integer.parseInt(properties.get("cbo_statistics_task_timeout_sec"));
 
         for (Map.Entry<Long, Future<StatisticsTaskResult>> entry : taskMap.entrySet()) {
             Exception exception = null;
