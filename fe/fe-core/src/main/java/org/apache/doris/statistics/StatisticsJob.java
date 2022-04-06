@@ -136,11 +136,11 @@ public class StatisticsJob {
     }
 
     public long getCreateTime() {
-        return createTime;
+        return this.createTime;
     }
 
     public long getScheduleTime() {
-        return scheduleTime;
+        return this.scheduleTime;
     }
 
     public void setScheduleTime(long scheduleTime) {
@@ -148,7 +148,7 @@ public class StatisticsJob {
     }
 
     public long getFinishTime() {
-        return finishTime;
+        return this.finishTime;
     }
 
     public void setFinishTime(long finishTime) {

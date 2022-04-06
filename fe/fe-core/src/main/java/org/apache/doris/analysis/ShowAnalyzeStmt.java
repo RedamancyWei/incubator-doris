@@ -80,7 +80,7 @@ public class ShowAnalyzeStmt extends ShowStmt {
     }
 
     public List<Long> getJobIds() {
-        return jobIds;
+        return this.jobIds;
     }
 
     @Override
@@ -132,7 +132,7 @@ public class ShowAnalyzeStmt extends ShowStmt {
         return RedirectStatus.FORWARD_NO_SYNC;
     }
 
-    public void checkShowAnalyzePriv(String dbName, String tblName) throws AnalysisException {
+    private void checkShowAnalyzePriv(String dbName, String tblName) throws AnalysisException {
         PaloAuth auth = Catalog.getCurrentCatalog().getAuth();
         if (!auth.checkTblPriv(ConnectContext.get(), dbName, tblName, PrivPredicate.SHOW)) {
             ErrorReport.reportAnalysisException(

@@ -50,7 +50,7 @@ public class StatisticsJobManager {
     private final Map<Long, StatisticsJob> idToStatisticsJob = Maps.newConcurrentMap();
 
     public Map<Long, StatisticsJob> getIdToStatisticsJob() {
-        return idToStatisticsJob;
+        return this.idToStatisticsJob;
     }
 
     public void createStatisticsJob(AnalyzeStmt analyzeStmt) throws UserException {
@@ -65,7 +65,7 @@ public class StatisticsJobManager {
     }
 
     public void createStatisticsJob(StatisticsJob statisticsJob) throws DdlException {
-        idToStatisticsJob.put(statisticsJob.getId(), statisticsJob);
+        this.idToStatisticsJob.put(statisticsJob.getId(), statisticsJob);
         try {
             Catalog.getCurrentCatalog().getStatisticsJobScheduler().addPendingJob(statisticsJob);
         } catch (IllegalStateException e) {
@@ -93,7 +93,7 @@ public class StatisticsJobManager {
         int unfinishedJobs = 0;
 
         // check table unfinished job
-        for (Map.Entry<Long, StatisticsJob> jobEntry : idToStatisticsJob.entrySet()) {
+        for (Map.Entry<Long, StatisticsJob> jobEntry : this.idToStatisticsJob.entrySet()) {
             StatisticsJob statisticsJob = jobEntry.getValue();
             StatisticsJob.JobState jobState = statisticsJob.getJobState();
             List<Long> tableIdList = statisticsJob.getTableIds();
@@ -116,7 +116,7 @@ public class StatisticsJobManager {
     }
 
     public void alterStatisticsJobInfo(Long jobId, Long taskId, Exception exception) {
-        StatisticsJob statisticsJob = idToStatisticsJob.get(jobId);
+        StatisticsJob statisticsJob = this.idToStatisticsJob.get(jobId);
         if (statisticsJob == null) {
             return;
         }

@@ -31,12 +31,13 @@ import org.apache.doris.common.ErrorReport;
 import org.apache.doris.mysql.privilege.PrivPredicate;
 import org.apache.doris.qe.ConnectContext;
 
-import java.util.List;
-import java.util.Map;
-
 import com.clearspring.analytics.util.Lists;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
+import java.util.List;
+import java.util.Map;
 
 public class StatisticsManager {
     private final static Logger LOG = LogManager.getLogger(StatisticsTaskScheduler.class);
@@ -44,13 +45,13 @@ public class StatisticsManager {
     private final Statistics statistics;
 
     public StatisticsManager() {
-        statistics = new Statistics();
+        this.statistics = new Statistics();
     }
 
     public void alterTableStatistics(AlterTableStatsStmt stmt)
             throws AnalysisException {
         Table table = validateTableName(stmt.getTableName());
-        statistics.updateTableStats(table.getId(), stmt.getProperties());
+        this.statistics.updateTableStats(table.getId(), stmt.getProperties());
     }
 
     public void alterColumnStatistics(AlterColumnStatsStmt stmt) throws AnalysisException {
@@ -61,7 +62,7 @@ public class StatisticsManager {
             ErrorReport.reportAnalysisException(ErrorCode.ERR_BAD_FIELD_ERROR, columnName, table.getName());
         }
         // match type and column value
-        statistics.updateColumnStats(table.getId(), columnName, column.getType(), stmt.getProperties());
+        this.statistics.updateColumnStats(table.getId(), columnName, column.getType(), stmt.getProperties());
     }
 
     public List<List<String>> showTableStatsList(String dbName, String tableName)
@@ -109,7 +110,7 @@ public class StatisticsManager {
         }
         // get stats
         List<List<String>> result = Lists.newArrayList();
-        Map<String, ColumnStats> nameToColumnStats = statistics.getColumnStats(table.getId());
+        Map<String, ColumnStats> nameToColumnStats = this.statistics.getColumnStats(table.getId());
         if (nameToColumnStats == null) {
             throw new AnalysisException("There is no column statistics in this table:" + table.getName());
         }
@@ -123,7 +124,7 @@ public class StatisticsManager {
     }
 
     private List<String> showTableStats(Table table) throws AnalysisException {
-        TableStats tableStats = statistics.getTableStats(table.getId());
+        TableStats tableStats = this.statistics.getTableStats(table.getId());
         if (tableStats == null) {
             throw new AnalysisException("There is no statistics in this table:" + table.getName());
         }
@@ -145,7 +146,7 @@ public class StatisticsManager {
         StatsGranularityDesc desc = taskResult.getGranularityDesc();
         long tableId = desc.getTableId();
         Map<String, String> statsNameToValue = taskResult.getStatsNameToValue();
-        statistics.updateTableStats(tableId, statsNameToValue);
+        this.statistics.updateTableStats(tableId, statsNameToValue);
     }
 
     public void alterColumnStatistics(StatisticsTaskResult taskResult) throws AnalysisException {
@@ -157,6 +158,6 @@ public class StatisticsManager {
         String columnName = categoryDesc.getColumnName();
         Type columnType = table.getColumn(columnName).getType();
         Map<String, String> statsNameToValue = taskResult.getStatsNameToValue();
-        statistics.updateColumnStats(tableId, columnName, columnType, statsNameToValue);
+        this.statistics.updateColumnStats(tableId, columnName, columnType, statsNameToValue);
     }
 }

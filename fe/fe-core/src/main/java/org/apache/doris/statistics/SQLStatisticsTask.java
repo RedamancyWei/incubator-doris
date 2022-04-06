@@ -63,7 +63,7 @@ public class SQLStatisticsTask extends StatisticsTask {
 
         // step2: execute query
         // the result should be sequence by @statsTypeList
-        List<String> queryResultList = executeQuery(query);
+        List<String> queryResultList = executeQuery(this.query);
 
         // step3: construct StatisticsTaskResult by query result
         return constructTaskResult(queryResultList);
@@ -111,10 +111,10 @@ public class SQLStatisticsTask extends StatisticsTask {
     }
 
     protected StatisticsTaskResult constructTaskResult(List<String> queryResultList) {
-        Preconditions.checkState(statsTypeList.size() == queryResultList.size());
+        Preconditions.checkState(this.statsTypeList.size() == queryResultList.size());
         Map<StatsType, String> statsTypeToValue = Maps.newHashMap();
-        for (int i = 0; i < statsTypeList.size(); i++) {
-            statsTypeToValue.put(statsTypeList.get(i), queryResultList.get(i));
+        for (int i = 0; i < this.statsTypeList.size(); i++) {
+            statsTypeToValue.put(this.statsTypeList.get(i), queryResultList.get(i));
         }
         return new StatisticsTaskResult(this.granularityDesc, this.categoryDesc, statsTypeToValue);
     }

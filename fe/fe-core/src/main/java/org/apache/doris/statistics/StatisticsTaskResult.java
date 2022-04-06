@@ -33,20 +33,20 @@ public class StatisticsTaskResult {
     }
 
     public StatsGranularityDesc getGranularityDesc() {
-        return granularityDesc;
+        return this.granularityDesc;
     }
 
     public StatsCategoryDesc getCategoryDesc() {
-        return categoryDesc;
+        return this.categoryDesc;
     }
 
     public Map<StatsType, String> getStatsTypeToValue() {
-        return statsTypeToValue;
+        return this.statsTypeToValue;
     }
 
     public Map<String, String> getStatsNameToValue() {
         Map<String, String> statsNameToValue = Maps.newHashMap();
-        for (Map.Entry<StatsType, String> typeStringEntry : statsTypeToValue.entrySet()) {
+        for (Map.Entry<StatsType, String> typeStringEntry : this.statsTypeToValue.entrySet()) {
             String statsName = typeStringEntry.getKey().getValue();
             String value = typeStringEntry.getValue();
             statsNameToValue.put(statsName, value);

@@ -17,7 +17,6 @@
 
 package org.apache.doris.analysis;
 
-
 import org.apache.doris.catalog.Catalog;
 import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.Database;
@@ -127,8 +126,8 @@ public class AnalyzeStmt extends DdlStmt {
                     }
                 }
             } else {
-                this.columnNames = Lists.newArrayList();
                 if (!Strings.isNullOrEmpty(this.tblName)) {
+                    this.columnNames = Lists.newArrayList();
                     Table table = db.getOlapTableOrAnalysisException(this.tblName);
                     List<Column> baseSchema = table.getBaseSchema();
                     baseSchema.stream().map(Column::getName).forEach(name -> this.columnNames.add(name));
@@ -165,7 +164,7 @@ public class AnalyzeStmt extends DdlStmt {
         return RedirectStatus.FORWARD_NO_SYNC;
     }
 
-    public void checkAnalyzePriv(String dbName, String tblName) throws AnalysisException {
+    private void checkAnalyzePriv(String dbName, String tblName) throws AnalysisException {
         PaloAuth auth = Catalog.getCurrentCatalog().getAuth();
         if (!auth.checkTblPriv(ConnectContext.get(), dbName, tblName, PrivPredicate.SELECT)) {
             ErrorReport.reportAnalysisException(
