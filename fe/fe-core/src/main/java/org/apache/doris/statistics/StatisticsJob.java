@@ -194,7 +194,8 @@ public class StatisticsJob {
             tableIdToColumnName.put(table.getId(), columnNames);
         }
 
-        return new StatisticsJob(db.getId(),
+        return new StatisticsJob(
+                db.getId(),
                 tableIdList,
                 tableIdToColumnName,
                 analyzeStmt.getProperties());
