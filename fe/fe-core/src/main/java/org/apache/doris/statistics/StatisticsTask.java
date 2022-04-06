@@ -47,7 +47,7 @@ public class StatisticsTask implements Callable<StatisticsTaskResult> {
     }
 
     protected long id = Catalog.getCurrentCatalog().getNextId();
-    ;
+
     protected long jobId;
     protected StatsGranularityDesc granularityDesc;
     protected StatsCategoryDesc categoryDesc;
