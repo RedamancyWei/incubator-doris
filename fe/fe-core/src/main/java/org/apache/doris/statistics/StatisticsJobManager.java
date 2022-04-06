@@ -65,6 +65,8 @@ public class StatisticsJobManager {
     }
 
     public void createStatisticsJob(StatisticsJob statisticsJob) throws DdlException {
+        // assign the id when the job is ready to run
+        statisticsJob.setId(Catalog.getCurrentCatalog().getNextId());
         this.idToStatisticsJob.put(statisticsJob.getId(), statisticsJob);
         try {
             Catalog.getCurrentCatalog().getStatisticsJobScheduler().addPendingJob(statisticsJob);

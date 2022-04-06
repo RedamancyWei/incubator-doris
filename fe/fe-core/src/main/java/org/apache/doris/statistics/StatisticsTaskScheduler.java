@@ -74,6 +74,7 @@ public class StatisticsTaskScheduler extends MasterDaemon {
                     taskMap.clear();
                     taskSize = 0;
                 }
+                // assign the id when the task is ready to run
                 task.setId(Catalog.getCurrentCatalog().getNextId());
                 task.setScheduleTime(System.currentTimeMillis());
                 Future<StatisticsTaskResult> future = executor.submit(task);

@@ -80,7 +80,6 @@ public class StatisticsJobScheduler extends MasterDaemon {
             // job scheduler is only responsible for moving the job from pending -> scheduler
             if (jobState == StatisticsJob.JobState.PENDING) {
                 try {
-                    pendingJob.setId(Catalog.getCurrentCatalog().getNextId());
                     List<StatisticsTask> tasks = this.divide(pendingJob);
                     ArrayList<StatisticsTask> list = Lists.newArrayList();
                     for (StatisticsTask task : tasks) {
