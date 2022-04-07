@@ -88,10 +88,6 @@ public class AnalyzeStmt extends DdlStmt {
         return this.tableIdToColumnName;
     }
 
-    public List<String> getColumnNames() {
-        return this.columnNames;
-    }
-
     public Map<String, String> getProperties() {
         return this.properties;
     }

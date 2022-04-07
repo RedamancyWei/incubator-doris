@@ -33,6 +33,9 @@ import org.apache.doris.common.jmockit.Deencapsulation;
 import org.apache.doris.mysql.privilege.PaloAuth;
 import org.apache.doris.mysql.privilege.PrivPredicate;
 
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -40,6 +43,7 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import mockit.Expectations;
@@ -65,6 +69,12 @@ public class StatisticsJobManagerTest {
                 new PartitionInfo(), new HashDistributionInfo());
         Database database = new Database(1L, "db");
         database.createTable(table);
+
+        Set<String> cols = Sets.newHashSet();
+        cols.add("col1");
+        cols.add("col2");
+        Map<Long, Set<String>> tableIdToColumnName =  Maps.newHashMap();
+        tableIdToColumnName.put(1L, cols);
 
         Catalog catalog = Catalog.getCurrentCatalog();
         Deencapsulation.setField(catalog, "statisticsJobScheduler", new StatisticsJobScheduler());
@@ -97,9 +107,9 @@ public class StatisticsJobManagerTest {
                 this.minTimes = 0;
                 this.result = analyzer;
 
-                analyzeStmt.getColumnNames();
+                analyzeStmt.getTableIdToColumnName();
                 this.minTimes = 0;
-                this.result = Arrays.asList("col1", "col2");
+                this.result = tableIdToColumnName;
 
                 analyzeStmt.getUserInfo();
                 this.minTimes = 0;
@@ -135,6 +145,12 @@ public class StatisticsJobManagerTest {
         Database database = new Database(1L, "db");
         database.createTable(table);
 
+        Set<String> cols = Sets.newHashSet();
+        cols.add("col1");
+        cols.add("col2");
+        Map<Long, Set<String>> tableIdToColumnName =  Maps.newHashMap();
+        tableIdToColumnName.put(1L, cols);
+
         Catalog catalog = Catalog.getCurrentCatalog();
         Deencapsulation.setField(catalog, "statisticsJobScheduler", new StatisticsJobScheduler());
 
@@ -166,9 +182,9 @@ public class StatisticsJobManagerTest {
                 this.minTimes = 0;
                 this.result = analyzer;
 
-                analyzeStmt.getColumnNames();
+                analyzeStmt.getTableIdToColumnName();
                 this.minTimes = 0;
-                this.result = Arrays.asList("col1", "col2");
+                this.result = tableIdToColumnName;
 
                 analyzeStmt.getUserInfo();
                 this.minTimes = 0;
@@ -201,6 +217,12 @@ public class StatisticsJobManagerTest {
         Database database = new Database(1L, "db");
         database.createTable(table);
 
+        Set<String> cols = Sets.newHashSet();
+        cols.add("col1");
+        cols.add("col2");
+        Map<Long, Set<String>> tableIdToColumnName =  Maps.newHashMap();
+        tableIdToColumnName.put(1L, cols);
+
         Catalog catalog = Catalog.getCurrentCatalog();
         Deencapsulation.setField(catalog, "statisticsJobScheduler", new StatisticsJobScheduler());
 
@@ -232,9 +254,9 @@ public class StatisticsJobManagerTest {
                 this.minTimes = 0;
                 this.result = analyzer;
 
-                analyzeStmt.getColumnNames();
+                analyzeStmt.getTableIdToColumnName();
                 this.minTimes = 0;
-                this.result = Arrays.asList("col1", "col2");
+                this.result = tableIdToColumnName;
 
                 analyzeStmt.getUserInfo();
                 this.minTimes = 0;
