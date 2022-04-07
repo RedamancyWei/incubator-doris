@@ -29,11 +29,13 @@ import org.apache.doris.common.jmockit.Deencapsulation;
 
 import com.google.common.collect.Maps;
 
+import org.glassfish.jersey.internal.guava.Sets;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -49,7 +51,10 @@ public class StatisticsJobSchedulerTest {
         Map<Long, List<String>> tableIdToColumnName = Maps.newHashMap();
         tableIdToColumnName.put(0L, Arrays.asList("c1", "c2"));
         tableIdToColumnName.put(1L, Arrays.asList("c1", "c2"));
-        statisticsJob = new StatisticsJob(0L, Arrays.asList(0L, 1L), tableIdToColumnName, null);
+        HashSet<Long> tblIds = Sets.newHashSet();
+        tblIds.add(0L);
+        tblIds.add(1L);
+        statisticsJob = new StatisticsJob(0L, tblIds, tableIdToColumnName, null);
         statisticsJobSchedulerUnderTest.addPendingJob(statisticsJob);
     }
 

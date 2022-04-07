@@ -62,6 +62,7 @@ public class AnalyzeStmt extends DdlStmt {
     // after analyzed
     private Database db;
     private List<Table> tables;
+    private final Map<Long, List<String>> tableIdToColumnName = Maps.newHashMap();
 
     public AnalyzeStmt(TableName dbTableName, List<String> columns, Map<String, String> properties) {
         this.dbTableName = dbTableName;
@@ -79,6 +80,12 @@ public class AnalyzeStmt extends DdlStmt {
         Preconditions.checkArgument(isAnalyzed(),
                 "The db name must be obtained after the parsing is complete");
         return this.tables;
+    }
+
+    public Map<Long, List<String>> getTableIdToColumnName() {
+        Preconditions.checkArgument(isAnalyzed(),
+                "The db name must be obtained after the parsing is complete");
+        return this.tableIdToColumnName;
     }
 
     public List<String> getColumnNames() {
@@ -122,24 +129,20 @@ public class AnalyzeStmt extends DdlStmt {
             }
 
             // check column
-            if (this.columnNames != null) {
-                Table table = this.tables.get(0);
+            if (this.columnNames == null || this.columnNames.isEmpty()) {
+                setTableIdToColumnName();
+            } else {
+                Table table = this.db.getTableOrAnalysisException(tblName);
                 for (String columnName : this.columnNames) {
                     Column column = table.getColumn(columnName);
                     if (column == null) {
                         ErrorReport.reportAnalysisException(ErrorCode.ERR_WRONG_COLUMN_NAME, columnName);
                     }
                 }
-            } else {
-                if (!Strings.isNullOrEmpty(tblName)) {
-                    this.columnNames = Lists.newArrayList();
-                    Table table = this.tables.get(0);
-                    List<Column> baseSchema = table.getBaseSchema();
-                    baseSchema.stream().map(Column::getName).forEach(name -> this.columnNames.add(name));
-                }
+                this.tableIdToColumnName.put(table.getId(), this.columnNames);
             }
         } else {
-            // analyze the default db
+            // analyze the current default db
             String dbName = analyzer.getDefaultDb();
             if (Strings.isNullOrEmpty(dbName)) {
                 ErrorReport.reportAnalysisException(ErrorCode.ERR_NO_DB_ERROR);
@@ -149,6 +152,7 @@ public class AnalyzeStmt extends DdlStmt {
             for (Table table : this.tables) {
                 checkAnalyzePriv(dbName, table.getName());
             }
+            setTableIdToColumnName();
         }
 
         // step2: analyze properties
@@ -181,6 +185,16 @@ public class AnalyzeStmt extends DdlStmt {
                     ConnectContext.get().getQualifiedUser(),
                     ConnectContext.get().getRemoteIP(),
                     dbName + ": " + tblName);
+        }
+    }
+
+    private void setTableIdToColumnName() {
+        for (Table table : this.tables) {
+            long tableId = table.getId();
+            List<Column> baseSchema = table.getBaseSchema();
+            List<String> colNames = Lists.newArrayList();
+            baseSchema.stream().map(Column::getName).forEach(colNames::add);
+            this.tableIdToColumnName.put(tableId, colNames);
         }
     }
 }

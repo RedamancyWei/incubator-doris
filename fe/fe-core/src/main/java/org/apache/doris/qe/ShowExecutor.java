@@ -2149,13 +2149,11 @@ public class ShowExecutor {
                 results.add(showInfo);
             }
         } else {
-            Set<Map.Entry<Long, StatisticsJob>> entries = idToStatisticsJob.entrySet();
             String dbName = showStmt.getDbName();
             String tblName = showStmt.getTblName();
             Database db = ctx.getCatalog().getDbOrAnalysisException(dbName);
             if (Strings.isNullOrEmpty(tblName)) {
-                for (Map.Entry<Long, StatisticsJob> entry : entries) {
-                    StatisticsJob statisticsJob = entry.getValue();
+                for (StatisticsJob statisticsJob : idToStatisticsJob.values()) {
                     long dbId = statisticsJob.getDbId();
                     if (dbId == db.getId()) {
                         List<String> showInfo = statisticsJob.getShowInfo(null);
@@ -2163,13 +2161,12 @@ public class ShowExecutor {
                     }
                 }
             } else {
-                for (Map.Entry<Long, StatisticsJob> entry : entries) {
-                    StatisticsJob statisticsJob = entry.getValue();
+                for (StatisticsJob statisticsJob : idToStatisticsJob.values()) {
                     long dbId = statisticsJob.getDbId();
                     Table table = db.getTableOrAnalysisException(tblName);
                     long tableId = table.getId();
-                    List<Long> tableIds = statisticsJob.getTableIds();
-                    if (dbId == db.getId() && tableIds.contains(tableId)) {
+                    Set<Long> tblIds = statisticsJob.getTblIds();
+                    if (dbId == db.getId() && tblIds.contains(tableId)) {
                         List<String> showInfo = statisticsJob.getShowInfo(tableId);
                         results.add(showInfo);
                     }

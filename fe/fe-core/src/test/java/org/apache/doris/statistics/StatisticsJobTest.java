@@ -23,6 +23,7 @@ import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.OlapTable;
 import org.apache.doris.catalog.PrimitiveType;
 
+import org.glassfish.jersey.internal.guava.Sets;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -43,7 +44,10 @@ public class StatisticsJobTest {
 
     @Before
     public void setUp() throws Exception {
-        this.statisticsJobUnderTest = new StatisticsJob(0L, Arrays.asList(0L, 1L, 1L), new HashMap<>(), null);
+        HashSet<Long> tblIds = Sets.newHashSet();
+        tblIds.add(0L);
+        tblIds.add(1L);
+        this.statisticsJobUnderTest = new StatisticsJob(0L, tblIds, new HashMap<>(), null);
     }
 
     @Test

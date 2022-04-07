@@ -23,7 +23,6 @@ import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.Table;
 import org.apache.doris.common.AnalysisException;
-import org.apache.doris.common.UserException;
 import org.apache.doris.common.util.TimeUtils;
 
 import com.clearspring.analytics.util.Lists;
@@ -68,7 +67,7 @@ public class StatisticsJob {
     /**
      * to be collected table stats.
      */
-    private final List<Long> tableIds;
+    private final Set<Long> tblIds;
 
     /**
      * to be collected column stats.
@@ -90,11 +89,11 @@ public class StatisticsJob {
     private int progress = 0;
 
     public StatisticsJob(Long dbId,
-                         List<Long> tableIdList,
+                         Set<Long> tables,
                          Map<Long, List<String>> tableIdToColumnName,
                          Map<String, String> properties) {
         this.dbId = dbId;
-        this.tableIds = tableIdList;
+        this.tblIds = tables;
         this.tableIdToColumnName = tableIdToColumnName;
         this.properties = properties;
     }
@@ -111,8 +110,8 @@ public class StatisticsJob {
         return this.dbId;
     }
 
-    public List<Long> getTableIds() {
-        return this.tableIds;
+    public Set<Long> getTblIds() {
+        return this.tblIds;
     }
 
     public Map<Long, List<String>> getTableIdToColumnName() {
@@ -173,38 +172,17 @@ public class StatisticsJob {
      * tableId: [t1]
      * tableIdToColumnName <t1, [c1,c2,c3]>
      */
-    public static StatisticsJob fromAnalyzeStmt(AnalyzeStmt analyzeStmt) throws UserException {
-        List<Long> tableIdList = Lists.newArrayList();
-        Map<Long, List<String>> tableIdToColumnName = Maps.newHashMap();
-        List<String> columnNames = analyzeStmt.getColumnNames();
-
-        // it means that analyze all columns in the table
-        if (columnNames == null || columnNames.isEmpty()) {
-            for (Table table : analyzeStmt.getTables()) {
-                long tableId = table.getId();
-                tableIdList.add(tableId);
-                List<String> colNames = Lists.newArrayList();
-                List<Column> baseSchema = table.getBaseSchema();
-                baseSchema.stream().map(Column::getName).forEach(colNames::add);
-                tableIdToColumnName.put(tableId, colNames);
-            }
-        } else {
-            // only one table to be analyzed
-            Table table = analyzeStmt.getTables().get(0);
-            tableIdList.add(table.getId());
-            tableIdToColumnName.put(table.getId(), columnNames);
-        }
-
-        return new StatisticsJob(
-                analyzeStmt.getDb().getId(),
-                tableIdList,
-                tableIdToColumnName,
-                analyzeStmt.getProperties());
+    public static StatisticsJob fromAnalyzeStmt(AnalyzeStmt analyzeStmt) {
+        long dbId = analyzeStmt.getDb().getId();
+        Map<Long, List<String>> tableIdToColumnName = analyzeStmt.getTableIdToColumnName();
+        Set<Long> tblIds = tableIdToColumnName.keySet();
+        Map<String, String> properties = analyzeStmt.getProperties();
+        return new StatisticsJob(dbId, tblIds, tableIdToColumnName, properties);
     }
 
     public Set<Long> relatedTableId() {
         Set<Long> relatedTableId = Sets.newHashSet();
-        relatedTableId.addAll(this.tableIds);
+        relatedTableId.addAll(this.tblIds);
         relatedTableId.addAll(this.tableIdToColumnName.keySet());
         return relatedTableId;
     }
@@ -244,7 +222,7 @@ public class StatisticsJob {
 
         List<String> scope = Lists.newArrayList();
         Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(this.dbId);
-        for (Long tblId : this.tableIds) {
+        for (Long tblId : this.tblIds) {
             try {
                 Table table = db.getTableOrAnalysisException(tblId);
                 List<Column> baseSchema = table.getBaseSchema();

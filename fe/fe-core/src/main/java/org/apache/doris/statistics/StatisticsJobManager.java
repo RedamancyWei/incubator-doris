@@ -96,12 +96,12 @@ public class StatisticsJobManager {
         // check table unfinished job
         for (StatisticsJob statisticsJob : this.idToStatisticsJob.values()) {
             StatisticsJob.JobState jobState = statisticsJob.getJobState();
-            List<Long> tableIdList = statisticsJob.getTableIds();
+            Set<Long> tblIds = statisticsJob.getTblIds();
             if (jobState == StatisticsJob.JobState.PENDING
                     || jobState == StatisticsJob.JobState.SCHEDULING
                     || jobState == StatisticsJob.JobState.RUNNING) {
                 for (Long tableId : tableIds) {
-                    if (tableIdList.contains(tableId)) {
+                    if (tblIds.contains(tableId)) {
                         throw new AnalysisException("The table(id=" + tableId + ") have unfinished statistics jobs");
                     }
                 }
