@@ -36,6 +36,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.Maps;
 
+import org.apache.commons.lang3.StringUtils;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -155,7 +157,7 @@ public class AnalyzeStmt extends DdlStmt {
                 if (!"cbo_statistics_task_timeout_sec".equals(pros.getKey())) {
                     throw new AnalysisException("Unsupported property: " + pros.getKey());
                 }
-                if (Integer.parseInt(pros.getValue()) <= 0) {
+                if (!StringUtils.isNumeric(pros.getValue()) || Integer.parseInt(pros.getValue()) <= 0) {
                     throw new AnalysisException("Invalid property value: " + pros.getValue());
                 }
             }
