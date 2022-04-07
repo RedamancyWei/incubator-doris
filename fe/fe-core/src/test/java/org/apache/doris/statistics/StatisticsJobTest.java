@@ -53,7 +53,7 @@ public class StatisticsJobTest {
     @Test
     public void testRelatedTableId() {
         // Run the test
-        final Set<Long> result = this.statisticsJobUnderTest.relatedTableId();
+        final Set<Long> result = this.statisticsJobUnderTest.getTblIds();
         // Verify the results
         Assert.assertEquals(new HashSet<>(Arrays.asList(0L, 1L)), result);
     }

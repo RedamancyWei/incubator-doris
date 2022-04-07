@@ -180,13 +180,6 @@ public class StatisticsJob {
         return new StatisticsJob(dbId, tblIds, tableIdToColumnName, properties);
     }
 
-    public Set<Long> relatedTableId() {
-        Set<Long> relatedTableId = Sets.newHashSet();
-        relatedTableId.addAll(this.tblIds);
-        relatedTableId.addAll(this.tableIdToColumnName.keySet());
-        return relatedTableId;
-    }
-
     public List<String> getShowInfo(@Nullable Long tableId) throws AnalysisException {
         List<String> result = Lists.newArrayList();
         SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");

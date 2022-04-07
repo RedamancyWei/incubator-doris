@@ -58,7 +58,7 @@ public class StatisticsJobManager {
         StatisticsJob statisticsJob = StatisticsJob.fromAnalyzeStmt(analyzeStmt);
 
         // step2: check restrict
-        this.checkRestrict(analyzeStmt.getDb(), statisticsJob.relatedTableId());
+        this.checkRestrict(analyzeStmt.getDb(), statisticsJob.getTblIds());
 
         // step3: create it
         this.createStatisticsJob(statisticsJob);

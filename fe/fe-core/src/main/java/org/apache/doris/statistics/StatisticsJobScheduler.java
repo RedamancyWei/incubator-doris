@@ -135,20 +135,20 @@ public class StatisticsJobScheduler extends MasterDaemon {
         long jobId = statisticsJob.getId();
         long dbId = statisticsJob.getDbId();
         Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbId);
-        Set<Long> tableIds = statisticsJob.relatedTableId();
+        Set<Long> tblIds = statisticsJob.getTblIds();
         Map<Long, List<String>> tableIdToColumnName = statisticsJob.getTableIdToColumnName();
         List<StatisticsTask> tasks = statisticsJob.getTasks();
         List<Long> backendIds = Catalog.getCurrentSystemInfo().getBackendIds(true);
 
-        for (Long tableId : tableIds) {
-            Table tbl = db.getTableOrDdlException(tableId);
+        for (Long tblId : tblIds) {
+            Table tbl = db.getTableOrDdlException(tblId);
             long rowCount = tbl.getRowCount();
             List<Long> partitionIds = ((OlapTable) tbl).getPartitionIds();
-            List<String> columnNameList = tableIdToColumnName.get(tableId);
+            List<String> columnNameList = tableIdToColumnName.get(tblId);
 
             // step 1: generate data_size task
-            StatsCategoryDesc dataSizeCategory = this.getTblStatsCategoryDesc(dbId, tableId);
-            StatsGranularityDesc dataSizeGranularity = this.getTblStatsGranularityDesc(tableId);
+            StatsCategoryDesc dataSizeCategory = this.getTblStatsCategoryDesc(dbId, tblId);
+            StatsGranularityDesc dataSizeGranularity = this.getTblStatsGranularityDesc(tblId);
             MetaStatisticsTask dataSizeTask = new MetaStatisticsTask(jobId,
                     dataSizeGranularity, dataSizeCategory, Collections.singletonList(StatsType.DATA_SIZE));
             tasks.add(dataSizeTask);
@@ -156,8 +156,8 @@ public class StatisticsJobScheduler extends MasterDaemon {
             // step 2: generate row_count task
             KeysType keysType = ((OlapTable) tbl).getKeysType();
             if (keysType == KeysType.DUP_KEYS) {
-                StatsCategoryDesc rowCountCategory = this.getTblStatsCategoryDesc(dbId, tableId);
-                StatsGranularityDesc rowCountGranularity = this.getTblStatsGranularityDesc(tableId);
+                StatsCategoryDesc rowCountCategory = this.getTblStatsCategoryDesc(dbId, tblId);
+                StatsGranularityDesc rowCountGranularity = this.getTblStatsGranularityDesc(tblId);
                 MetaStatisticsTask metaTask = new MetaStatisticsTask(jobId,
                         rowCountGranularity, rowCountCategory, Collections.singletonList(StatsType.ROW_COUNT));
                 tasks.add(metaTask);
@@ -165,15 +165,15 @@ public class StatisticsJobScheduler extends MasterDaemon {
                 if (rowCount > backendIds.size() * COUNT_MAX_SCAN_PER_TASK) {
                     // divide subtasks by partition
                     for (Long partitionId : partitionIds) {
-                        StatsCategoryDesc rowCountCategory = this.getTblStatsCategoryDesc(dbId, tableId);
-                        StatsGranularityDesc rowCountGranularity = this.getPartitionStatsGranularityDesc(tableId, partitionId);
+                        StatsCategoryDesc rowCountCategory = this.getTblStatsCategoryDesc(dbId, tblId);
+                        StatsGranularityDesc rowCountGranularity = this.getPartitionStatsGranularityDesc(tblId, partitionId);
                         SQLStatisticsTask sqlTask = new SQLStatisticsTask(jobId,
                                 rowCountGranularity, rowCountCategory, Collections.singletonList(StatsType.ROW_COUNT));
                         tasks.add(sqlTask);
                     }
                 } else {
-                    StatsCategoryDesc rowCountCategory = this.getTblStatsCategoryDesc(dbId, tableId);
-                    StatsGranularityDesc rowCountGranularity = this.getTblStatsGranularityDesc(tableId);
+                    StatsCategoryDesc rowCountCategory = this.getTblStatsCategoryDesc(dbId, tblId);
+                    StatsGranularityDesc rowCountGranularity = this.getTblStatsGranularityDesc(tblId);
                     SQLStatisticsTask sqlTask = new SQLStatisticsTask(jobId,
                             rowCountGranularity, rowCountCategory, Collections.singletonList(StatsType.ROW_COUNT));
                     tasks.add(sqlTask);
@@ -185,8 +185,8 @@ public class StatisticsJobScheduler extends MasterDaemon {
                 for (String columnName : columnNameList) {
                     // divide subtasks by partition
                     for (Long partitionId : partitionIds) {
-                        StatsCategoryDesc columnCategory = this.getColStatsCategoryDesc(dbId, tableId, columnName);
-                        StatsGranularityDesc columnGranularity = this.getPartitionStatsGranularityDesc(tableId, partitionId);
+                        StatsCategoryDesc columnCategory = this.getColStatsCategoryDesc(dbId, tblId, columnName);
+                        StatsGranularityDesc columnGranularity = this.getPartitionStatsGranularityDesc(tblId, partitionId);
                         List<StatsType> statsTypes = Arrays.asList(StatsType.MIN_VALUE, StatsType.MAX_VALUE, StatsType.NDV);
                         SQLStatisticsTask sqlTask = new SQLStatisticsTask(jobId, columnGranularity, columnCategory, statsTypes);
                         tasks.add(sqlTask);
@@ -194,8 +194,8 @@ public class StatisticsJobScheduler extends MasterDaemon {
                 }
             } else {
                 for (String columnName : columnNameList) {
-                    StatsCategoryDesc columnCategory = this.getColStatsCategoryDesc(dbId, tableId, columnName);
-                    StatsGranularityDesc columnGranularity = this.getTblStatsGranularityDesc(tableId);
+                    StatsCategoryDesc columnCategory = this.getColStatsCategoryDesc(dbId, tblId, columnName);
+                    StatsGranularityDesc columnGranularity = this.getTblStatsGranularityDesc(tblId);
                     List<StatsType> statsTypes = Arrays.asList(StatsType.MIN_VALUE, StatsType.MAX_VALUE, StatsType.NDV);
                     SQLStatisticsTask sqlTask = new SQLStatisticsTask(jobId, columnGranularity, columnCategory, statsTypes);
                     tasks.add(sqlTask);
@@ -204,8 +204,8 @@ public class StatisticsJobScheduler extends MasterDaemon {
 
             // step 4: generate num_nulls task
             for (String columnName : columnNameList) {
-                StatsCategoryDesc columnCategory = this.getColStatsCategoryDesc(dbId, tableId, columnName);
-                StatsGranularityDesc columnGranularity = this.getTblStatsGranularityDesc(tableId);
+                StatsCategoryDesc columnCategory = this.getColStatsCategoryDesc(dbId, tblId, columnName);
+                StatsGranularityDesc columnGranularity = this.getTblStatsGranularityDesc(tblId);
                 SQLStatisticsTask sqlTask = new SQLStatisticsTask(jobId,
                         columnGranularity, columnCategory, Collections.singletonList(StatsType.NUM_NULLS));
                 tasks.add(sqlTask);
@@ -213,8 +213,8 @@ public class StatisticsJobScheduler extends MasterDaemon {
 
             // step 5: generate [max_col_lens, avg_col_lens] task
             for (String columnName : columnNameList) {
-                StatsCategoryDesc columnCategory = this.getColStatsCategoryDesc(dbId, tableId, columnName);
-                StatsGranularityDesc columnGranularity = this.getTblStatsGranularityDesc(tableId);
+                StatsCategoryDesc columnCategory = this.getColStatsCategoryDesc(dbId, tblId, columnName);
+                StatsGranularityDesc columnGranularity = this.getTblStatsGranularityDesc(tblId);
                 List<StatsType> statsTypes = Arrays.asList(StatsType.MAX_SIZE, StatsType.AVG_SIZE);
                 Column column = tbl.getColumn(columnName);
                 Type colType = column.getType();
