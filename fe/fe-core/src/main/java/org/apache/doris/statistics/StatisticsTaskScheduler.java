@@ -69,6 +69,7 @@ public class StatisticsTaskScheduler extends MasterDaemon {
             int taskSize = 0;
             for (StatisticsTask task : tasks) {
                 this.queue.remove();
+                // handle task result for each job
                 if (taskSize > 0 && jobId != task.getJobId()) {
                     handleTaskResult(jobId, taskMap);
                     taskMap.clear();
@@ -76,13 +77,16 @@ public class StatisticsTaskScheduler extends MasterDaemon {
                 }
                 // assign the id when the task is ready to run
                 task.setId(Catalog.getCurrentCatalog().getNextId());
-                task.setScheduleTime(System.currentTimeMillis());
+                task.setStartTime(System.currentTimeMillis());
+                task.setTaskState(StatisticsTask.TaskState.RUNNING);
                 Future<StatisticsTaskResult> future = executor.submit(task);
                 long taskId = task.getId();
                 taskMap.put(taskId, future);
+                // update job state
                 jobId = task.getJobId();
                 StatisticsJob statisticsJob = statisticsJobs.get(jobId);
                 if (statisticsJob.getJobState() == JobState.SCHEDULING) {
+                    statisticsJob.setStartTime(System.currentTimeMillis());
                     statisticsJob.setJobState(JobState.RUNNING);
                 }
                 taskSize++;

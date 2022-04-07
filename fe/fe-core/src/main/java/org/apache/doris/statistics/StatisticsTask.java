@@ -38,7 +38,7 @@ public class StatisticsTask implements Callable<StatisticsTaskResult> {
     protected static final Logger LOG = LogManager.getLogger(StatisticsTask.class);
 
     public enum TaskState {
-        CREATED,
+        PENDING,
         RUNNING,
         FINISHED,
         FAILED
@@ -49,11 +49,11 @@ public class StatisticsTask implements Callable<StatisticsTaskResult> {
     protected StatsGranularityDesc granularityDesc;
     protected StatsCategoryDesc categoryDesc;
     protected List<StatsType> statsTypeList;
-    protected TaskState taskState = TaskState.CREATED;
+    protected TaskState taskState = TaskState.PENDING;
 
     protected final long createTime = System.currentTimeMillis();
-    protected long scheduleTime;
-    protected long finishTime;
+    protected long startTime = -1L;;
+    protected long finishTime = -1L;;
 
     public StatisticsTask(long jobId,
                           StatsGranularityDesc granularityDesc,
@@ -101,12 +101,12 @@ public class StatisticsTask implements Callable<StatisticsTaskResult> {
         return this.createTime;
     }
 
-    public long getScheduleTime() {
-        return this.scheduleTime;
+    public long getStartTime() {
+        return this.startTime;
     }
 
-    public void setScheduleTime(long scheduleTime) {
-        this.scheduleTime = scheduleTime;
+    public void setStartTime(long startTime) {
+        this.startTime = startTime;
     }
 
     public long getFinishTime() {

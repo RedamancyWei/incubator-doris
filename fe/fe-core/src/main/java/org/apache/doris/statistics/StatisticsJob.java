@@ -53,8 +53,8 @@ public class StatisticsJob {
         SCHEDULING,
         RUNNING,
         FINISHED,
-        CANCELLED,
-        FAILED
+        FAILED,
+        CANCELLED
     }
 
     private long id = -1;
@@ -84,7 +84,7 @@ public class StatisticsJob {
     private JobState jobState = JobState.PENDING;
 
     private final long createTime = System.currentTimeMillis();
-    private long scheduleTime = -1L;
+    private long startTime = -1L;
     private long finishTime = -1L;
     private int progress = 0;
 
@@ -142,12 +142,12 @@ public class StatisticsJob {
         return this.createTime;
     }
 
-    public long getScheduleTime() {
-        return this.scheduleTime;
+    public long getStartTime() {
+        return this.startTime;
     }
 
-    public void setScheduleTime(long scheduleTime) {
-        this.scheduleTime = scheduleTime;
+    public void setStartTime(long startTime) {
+        this.startTime = startTime;
     }
 
     public long getFinishTime() {
@@ -186,7 +186,7 @@ public class StatisticsJob {
 
         result.add(Long.toString(this.id));
         result.add(TimeUtils.longToTimeString(this.createTime, dateFormat));
-        result.add(this.scheduleTime != -1L ? TimeUtils.longToTimeString(this.scheduleTime, dateFormat) : "N/A");
+        result.add(this.startTime != -1L ? TimeUtils.longToTimeString(this.startTime, dateFormat) : "N/A");
         result.add(this.finishTime != -1L ? TimeUtils.longToTimeString(this.finishTime, dateFormat) : "N/A");
 
         int totalTaskNum = 0;

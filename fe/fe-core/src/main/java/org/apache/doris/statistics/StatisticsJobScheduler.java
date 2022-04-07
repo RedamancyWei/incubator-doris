@@ -84,12 +84,11 @@ public class StatisticsJobScheduler extends MasterDaemon {
                     ArrayList<StatisticsTask> list = Lists.newArrayList();
                     for (StatisticsTask task : tasks) {
                         // TODO now only support meta task
-                        if (task instanceof MetaStatisticsTask){
+                        if (task instanceof MetaStatisticsTask) {
                             list.add(task);
                         }
                     }
                     pendingJob.setTasks(list);
-                    pendingJob.setScheduleTime(System.currentTimeMillis());
                     pendingJob.setJobState(StatisticsJob.JobState.SCHEDULING);
                     Catalog.getCurrentCatalog().getStatisticsTaskScheduler().addTasks(list);
                 } catch (DdlException e) {

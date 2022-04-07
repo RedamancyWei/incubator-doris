@@ -42,7 +42,7 @@ public class ShowAnalyzeStmt extends ShowStmt {
     private static final ImmutableList<String> TITLE_NAMES = new ImmutableList.Builder<String>()
             .add("id")
             .add("create_time")
-            .add("running_time")
+            .add("start_time")
             .add("finish_time")
             .add("scope")
             .add("progress")
