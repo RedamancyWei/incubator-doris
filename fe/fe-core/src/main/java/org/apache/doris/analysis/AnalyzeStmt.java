@@ -56,7 +56,7 @@ import java.util.Map;
  */
 public class AnalyzeStmt extends DdlStmt {
     private final TableName dbTableName;
-    private List<String> columnNames;
+    private final List<String> columnNames;
     private Map<String, String> properties;
 
     // after analyzed

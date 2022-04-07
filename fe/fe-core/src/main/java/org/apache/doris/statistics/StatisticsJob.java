@@ -89,11 +89,11 @@ public class StatisticsJob {
     private int progress = 0;
 
     public StatisticsJob(Long dbId,
-                         Set<Long> tables,
+                         Set<Long> tblIds,
                          Map<Long, List<String>> tableIdToColumnName,
                          Map<String, String> properties) {
         this.dbId = dbId;
-        this.tblIds = tables;
+        this.tblIds = tblIds;
         this.tableIdToColumnName = tableIdToColumnName;
         this.properties = properties;
     }
