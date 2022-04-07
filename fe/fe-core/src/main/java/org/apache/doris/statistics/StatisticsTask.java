@@ -52,8 +52,8 @@ public class StatisticsTask implements Callable<StatisticsTaskResult> {
     protected TaskState taskState = TaskState.PENDING;
 
     protected final long createTime = System.currentTimeMillis();
-    protected long startTime = -1L;;
-    protected long finishTime = -1L;;
+    protected long startTime = -1L;
+    protected long finishTime = -1L;
 
     public StatisticsTask(long jobId,
                           StatsGranularityDesc granularityDesc,

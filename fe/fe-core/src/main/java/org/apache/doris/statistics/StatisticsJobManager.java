@@ -135,6 +135,7 @@ public class StatisticsJobManager {
                     task.setFinishTime(System.currentTimeMillis());
                     task.setTaskState(StatisticsTask.TaskState.FINISHED);
                 } else {
+                    LOG.info("The statistics task(id=" + taskId + ") is failed, cause by: " + exception.getMessage());
                     task.setTaskState(StatisticsTask.TaskState.FAILED);
                     statisticsJob.setJobState(StatisticsJob.JobState.FAILED);
                 }
