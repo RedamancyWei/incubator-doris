@@ -22,13 +22,28 @@ package org.apache.doris.statistics;
 // import java.nio.ByteBuffer;
 // import java.util.List;
 
+import org.apache.doris.analysis.Analyzer;
+import org.apache.doris.analysis.SelectStmt;
+import org.apache.doris.analysis.SqlParser;
+import org.apache.doris.analysis.SqlScanner;
 import org.apache.doris.analysis.UserIdentity;
 import org.apache.doris.catalog.Catalog;
+import org.apache.doris.common.util.SqlParserUtils;
 import org.apache.doris.mysql.MysqlCommand;
+import org.apache.doris.planner.Planner;
 import org.apache.doris.qe.ConnectContext;
+import org.apache.doris.qe.Coordinator;
+import org.apache.doris.qe.OriginStatement;
+import org.apache.doris.qe.RowBatch;
 import org.apache.doris.system.SystemInfoService;
+import org.apache.doris.thrift.TQueryOptions;
+import org.apache.doris.thrift.TResultBatch;
 import org.apache.doris.thrift.TUniqueId;
 
+import com.google.common.collect.Lists;
+
+import java.io.StringReader;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -71,7 +86,7 @@ public class StatisticsUtils {
         // TODO(kks): remove this if pipeline support STATISTIC result sink type
         // context.getSessionVariable().setEnablePipelineEngine(false);
         context.setCluster(SystemInfoService.DEFAULT_CLUSTER);
-        context.setDatabase("default");
+        context.setDatabase("default_cluster:example_db");
         context.setCatalog(Catalog.getCurrentCatalog());
         context.setCurrentUserIdentity(UserIdentity.ROOT);
         context.setQualifiedUser(UserIdentity.ROOT.getQualifiedUser());
@@ -84,6 +99,64 @@ public class StatisticsUtils {
 
         context.setCommand(MysqlCommand.COM_QUERY);
 
+        // 用于审计
+        // ctx.getAuditEventBuilder()
+        //         .setTimestamp(System.currentTimeMillis())
+        //         .setClientIp(ctx.getMysqlChannel().getRemoteHostPortString())
+        //         .setUser(ctx.getQualifiedUser())
+        //         .setDb(ctx.getDatabase())
+        //         .setSqlHash(ctx.getSqlHash());
+
+        // parsedStmt = stmts.get(i);
+        // parsedStmt.setOrigStmt(new OriginStatement(originStmt, i));
+        // parsedStmt.setUserInfo(ctx.getCurrentUserIdentity());
+        // executor = new StmtExecutor(ctx, parsedStmt);
+        // ctx.setExecutor(executor);
+        // executor.execute();
+
+        // 开始执行
+        // execute(TUniqueId queryId);
+
+        // plannerProfile.setQueryBeginTime();
+        // context.setStmtId(STMT_ID_GENERATOR.incrementAndGet());
+        // context.setQueryId(queryId);
+
+        // 通用参数设置与转化
+        // analyze(context.getSessionVariable().toThrift());
+
+        // context.getState().setIsQuery(true);
+
+        // handleQueryStmt();
+
+        // context.setQueryDetail(queryDetail);
+
+        // coord = new Coordinator(context, analyzer, planner);
+
+        Analyzer analyzer = new Analyzer(context.getCatalog(), context);
+        try {
+            // step3: construct queryStmt
+            SqlParser parser = new SqlParser(new SqlScanner(new StringReader("SELECT * FROM table1;\n")));
+            SelectStmt query = (SelectStmt) SqlParserUtils.getStmt(parser, 0);
+            query.setOrigStmt(new OriginStatement("SELECT * FROM table1;\n", 0));
+            query.analyze(analyzer);
+            Planner planner = new Planner();
+            TQueryOptions tQueryOptions = new TQueryOptions();
+            planner.plan(query, analyzer, tQueryOptions);
+            Coordinator coord = new Coordinator(context, analyzer, planner);
+            coord.exec();
+            RowBatch batch;
+            List<TResultBatch> sqlResult = Lists.newArrayList();
+            do {
+                batch = coord.getNext();
+                if (batch.getBatch() != null) {
+                    sqlResult.add(batch.getBatch());
+                }
+            } while (!batch.isEos());
+            System.out.println(sqlResult);
+        } catch (Exception e) {
+            // TODO(zt): handle exception
+            e.printStackTrace();
+        }
         return context;
     }
 

@@ -73,6 +73,7 @@ public class StatisticsJobScheduler extends MasterDaemon {
 
     @Override
     protected void runAfterCatalogReady() {
+        StatisticsUtils.buildConnectContext();
         StatisticsJob pendingJob = this.pendingJobQueue.peek();
         if (pendingJob != null) {
             this.pendingJobQueue.remove();
