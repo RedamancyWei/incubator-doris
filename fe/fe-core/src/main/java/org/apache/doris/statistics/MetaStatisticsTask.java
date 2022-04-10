@@ -20,12 +20,8 @@ package org.apache.doris.statistics;
 import org.apache.doris.catalog.Catalog;
 import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.Database;
-import org.apache.doris.catalog.MaterializedIndex;
 import org.apache.doris.catalog.OlapTable;
-import org.apache.doris.catalog.Partition;
-import org.apache.doris.catalog.Replica;
 import org.apache.doris.catalog.Table;
-import org.apache.doris.catalog.Tablet;
 import org.apache.doris.common.DdlException;
 
 import com.google.common.collect.Maps;
@@ -86,16 +82,7 @@ public class MetaStatisticsTask extends StatisticsTask {
         long tableId = categoryDesc.getTableId();
         Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbId);
         OlapTable olapTable = (OlapTable) db.getTableOrDdlException(tableId);
-        int dataSize = 0;
-        for (Partition partition : olapTable.getPartitions()) {
-            for (MaterializedIndex index : partition.getMaterializedIndices(MaterializedIndex.IndexExtState.VISIBLE)) {
-                for (Tablet tablet : index.getTablets()) {
-                    for (Replica replica : tablet.getReplicas()) {
-                        dataSize += replica.getDataSize();
-                    }
-                }
-            }
-        }
+        long dataSize = olapTable.getDataSize();
         statsTypeToValue.put(statsType, String.valueOf(dataSize));
     }
 
