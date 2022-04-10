@@ -2137,43 +2137,74 @@ public class ShowExecutor {
         Map<Long, StatisticsJob> idToStatisticsJob = Catalog.getCurrentCatalog()
                 .getStatisticsJobManager().getIdToStatisticsJob();
         List<Long> jobIds = showStmt.getJobIds();
-        List<List<String>> results = Lists.newArrayList();
+        List<List<Comparable>> results = Lists.newArrayList();
 
+        // step1: fetch job info
         if (jobIds != null && !jobIds.isEmpty()){
             for (Long jobId : jobIds) {
                 StatisticsJob statisticsJob = idToStatisticsJob.get(jobId);
                 if (statisticsJob == null) {
                     throw new AnalysisException("No such job id: " + jobId);
                 }
-                List<String> showInfo = statisticsJob.getShowInfo(null);
+                List<Comparable> showInfo = statisticsJob.getShowInfo(null);
                 results.add(showInfo);
             }
         } else {
-            String dbName = showStmt.getDbName();
-            String tblName = showStmt.getTblName();
-            Database db = ctx.getCatalog().getDbOrAnalysisException(dbName);
-            if (Strings.isNullOrEmpty(tblName)) {
+            Database db = showStmt.getDb();
+            Table table = showStmt.getTable();
+            if (table == null) {
                 for (StatisticsJob statisticsJob : idToStatisticsJob.values()) {
                     long dbId = statisticsJob.getDbId();
                     if (dbId == db.getId()) {
-                        List<String> showInfo = statisticsJob.getShowInfo(null);
+                        List<Comparable> showInfo = statisticsJob.getShowInfo(null);
                         results.add(showInfo);
                     }
                 }
             } else {
                 for (StatisticsJob statisticsJob : idToStatisticsJob.values()) {
                     long dbId = statisticsJob.getDbId();
-                    Table table = db.getTableOrAnalysisException(tblName);
                     long tableId = table.getId();
                     Set<Long> tblIds = statisticsJob.getTblIds();
                     if (dbId == db.getId() && tblIds.contains(tableId)) {
-                        List<String> showInfo = statisticsJob.getShowInfo(tableId);
+                        List<Comparable> showInfo = statisticsJob.getShowInfo(tableId);
                         results.add(showInfo);
                     }
                 }
             }
         }
 
-        resultSet = new ShowResultSet(showStmt.getMetaData(), results);
+        // step2: order the result
+        ListComparator<List<Comparable>> comparator;
+        List<OrderByPair> orderByPairs = showStmt.getOrderByPairs();
+        if (orderByPairs == null) {
+            // sort by id asc
+            comparator = new ListComparator<>(0);
+        } else {
+            OrderByPair[] orderByPairArr = new OrderByPair[orderByPairs.size()];
+            comparator = new ListComparator<>(orderByPairs.toArray(orderByPairArr));
+        }
+        results.sort(comparator);
+
+        // step3: filter by limit
+        long limit = showStmt.getLimit();
+        long offset = showStmt.getOffset() == -1L ? 0 : showStmt.getOffset();
+        if (offset >= results.size()) {
+            results = Collections.emptyList();
+        } else if (limit != -1L) {
+            if ((limit + offset) >= results.size()) {
+                results = results.subList((int) offset, results.size());
+            } else {
+                results = results.subList((int) offset, (int) (limit + offset));
+            }
+        }
+
+        // step4: convert to result and return it
+        List<List<String>> rows = Lists.newArrayList();
+        for (List<Comparable> loadInfo : results) {
+            List<String> oneInfo = loadInfo.stream().map(Object::toString)
+                    .collect(Collectors.toCollection(() -> new ArrayList<>(loadInfo.size())));
+            rows.add(oneInfo);
+        }
+        resultSet = new ShowResultSet(showStmt.getMetaData(), rows);
     }
 }

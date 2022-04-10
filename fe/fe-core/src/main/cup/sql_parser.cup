@@ -1912,6 +1912,14 @@ show_create_routine_load_stmt ::=
     :}
     ;
 
+// analyze statment
+analyze_stmt ::=
+    KW_ANALYZE opt_table_name:tbl opt_col_list:cols opt_properties:properties
+    {:
+        RESULT = new AnalyzeStmt(tbl, cols, properties);
+    :}
+    ;
+
 // Grant statement
 grant_stmt ::=
     KW_GRANT privilege_list:privs KW_ON tbl_pattern:tblPattern KW_TO user_identity:userId
@@ -2890,13 +2898,14 @@ show_param ::=
     {:
         RESULT = new ShowLastInsertStmt();
     :}
-    | KW_ANALYZE opt_table_name:tbl
-    {:
-        RESULT = new ShowAnalyzeStmt(tbl);
-    :}
+    /* show analyze job */
     | KW_ANALYZE integer_list:jobIds
     {:
         RESULT = new ShowAnalyzeStmt(jobIds);
+    :}
+    | KW_ANALYZE opt_table_name:tbl opt_wild_where order_by_clause:orderByClause limit_clause:limitClause
+    {:
+        RESULT = new ShowAnalyzeStmt(tbl, parser.where, orderByClause, limitClause);
     :}
     ;
 
@@ -5367,14 +5376,6 @@ transaction_label ::=
     | ident:label
     {:
         RESULT = label;
-    :}
-    ;
-
-// analyze statment
-analyze_stmt ::=
-    KW_ANALYZE opt_table_name:tbl opt_col_list:cols opt_properties:properties
-    {:
-        RESULT = new AnalyzeStmt(tbl, cols, properties);
     :}
     ;
 

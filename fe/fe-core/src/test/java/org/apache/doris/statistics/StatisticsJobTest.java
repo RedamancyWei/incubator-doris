@@ -91,7 +91,7 @@ public class StatisticsJobTest {
         };
 
         // Run the test
-        final List<String> result = this.statisticsJobUnderTest.getShowInfo(0L);
+        final List<Comparable> result = this.statisticsJobUnderTest.getShowInfo(0L);
 
         // Verify the results
         Assert.assertEquals(result.size(), 7);

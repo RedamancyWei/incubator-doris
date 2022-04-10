@@ -82,6 +82,7 @@ public class StatisticsJob {
     private List<StatisticsTask> tasks = Lists.newArrayList();
 
     private JobState jobState = JobState.PENDING;
+    private final List<String> errorMsgs  = Lists.newArrayList();
 
     private final long createTime = System.currentTimeMillis();
     private long startTime = -1L;
@@ -128,6 +129,10 @@ public class StatisticsJob {
 
     public void setTasks(List<StatisticsTask> tasks) {
         this.tasks = tasks;
+    }
+
+    public List<String> getErrorMsgs() {
+        return errorMsgs;
     }
 
     public JobState getJobState() {
@@ -180,14 +185,21 @@ public class StatisticsJob {
         return new StatisticsJob(dbId, tblIds, tableIdToColumnName, properties);
     }
 
-    public List<String> getShowInfo(@Nullable Long tableId) throws AnalysisException {
-        List<String> result = Lists.newArrayList();
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+    public List<Comparable> getShowInfo(@Nullable Long tableId) throws AnalysisException {
+        List<Comparable> result = Lists.newArrayList();
 
         result.add(Long.toString(this.id));
+
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
         result.add(TimeUtils.longToTimeString(this.createTime, dateFormat));
         result.add(this.startTime != -1L ? TimeUtils.longToTimeString(this.startTime, dateFormat) : "N/A");
         result.add(this.finishTime != -1L ? TimeUtils.longToTimeString(this.finishTime, dateFormat) : "N/A");
+
+        StringBuilder sb = new StringBuilder();
+        for (String errorMsg : this.errorMsgs) {
+            sb.append(errorMsg).append("\n");
+        }
+        result.add(sb.toString());
 
         int totalTaskNum = 0;
         int finishedTaskNum = 0;
@@ -237,7 +249,7 @@ public class StatisticsJob {
         result.add(finishedTaskNum + "/" + totalTaskNum);
 
         if (totalTaskNum == finishedTaskNum) {
-            result.add("finished");
+            result.add("FINISHED");
         } else {
             result.add(this.jobState.toString());
         }
