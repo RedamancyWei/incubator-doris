@@ -21,7 +21,16 @@ package org.apache.doris.statistics;
 // import com.alibaba.google.common.collect.Lists;
 // import java.nio.ByteBuffer;
 // import java.util.List;
+
+import org.apache.doris.analysis.UserIdentity;
+import org.apache.doris.catalog.Catalog;
+import org.apache.doris.mysql.MysqlCommand;
+import org.apache.doris.qe.ConnectContext;
+import org.apache.doris.system.SystemInfoService;
+import org.apache.doris.thrift.TUniqueId;
+
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 // import org.apache.doris.analysis.Analyzer;
@@ -51,25 +60,34 @@ public class StatisticsUtils {
         return sb.toString();
     }
 
-    /*
-    public static ConnectContext buildConnectContext(String cluster, String dbName) {
+    public static ConnectContext buildConnectContext() {
         ConnectContext context = new ConnectContext();
         // Note: statistics query does not register query id to QeProcessorImpl::coordinatorMap,
         // but QeProcessorImpl::reportExecStatus will check query id,
         // So we must disable report query status from BE to FE
-        // context.getSessionVariable().setReportsetSuccess(false);
+        // context.getSessionVariable().setReportSuccess(false);
         // Always use 1 parallel to avoid affect normal query
-        context.setCluster(cluster);
-        context.setDatabase(dbName);
+        // context.getSessionVariable().setParallelExecInstanceNum(1);
+        // TODO(kks): remove this if pipeline support STATISTIC result sink type
+        // context.getSessionVariable().setEnablePipelineEngine(false);
+        context.setCluster(SystemInfoService.DEFAULT_CLUSTER);
+        context.setDatabase("default");
         context.setCatalog(Catalog.getCurrentCatalog());
         context.setCurrentUserIdentity(UserIdentity.ROOT);
         context.setQualifiedUser(UserIdentity.ROOT.getQualifiedUser());
-        context.setQueryId(UUID.randomUUID(););
-        context.setExecutionId(UUIDUtil.toTUniqueId(context.getQueryId()));
+        UUID uuid = UUID.randomUUID();
+        TUniqueId queryId = new TUniqueId(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
+        context.setQueryId(queryId);
+        // context.setExecutionId(UUIDUtil.toTUniqueId(context.getQueryId()));
         context.setThreadLocalInfo();
         context.setStartTime();
+
+        context.setCommand(MysqlCommand.COM_QUERY);
+
         return context;
     }
+
+    /*
 
     private static List<TResultBatch> executeStmt(ConnectContext context, ExecPlan plan) throws Exception {
         Coordinator coord = new Coordinator(context, plan.getFragments(), plan.getScanNodes(), plan.getDescTbl().toThrift());
