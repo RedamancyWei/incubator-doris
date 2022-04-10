@@ -18,6 +18,7 @@
 package org.apache.doris.statistics;
 
 import org.apache.doris.analysis.AnalyzeStmt;
+import org.apache.doris.analysis.ShowAnalyzeStmt;
 import org.apache.doris.catalog.Catalog;
 import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.Table;
@@ -27,16 +28,23 @@ import org.apache.doris.common.DdlException;
 import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.ErrorReport;
 import org.apache.doris.common.UserException;
+import org.apache.doris.common.util.ListComparator;
+import org.apache.doris.common.util.OrderByPair;
 
+import com.google.common.base.Strings;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.stream.Collectors;
 
 /**
  * For unified management of statistics job,
@@ -53,19 +61,19 @@ public class StatisticsJobManager {
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock(true);
 
     public void readLock() {
-        lock.readLock().lock();
+        this.lock.readLock().lock();
     }
 
     public void readUnlock() {
-        lock.readLock().unlock();
+        this.lock.readLock().unlock();
     }
 
     private void writeLock() {
-        lock.writeLock().lock();
+        this.lock.writeLock().lock();
     }
 
     private void writeUnlock() {
-        lock.writeLock().unlock();
+        this.lock.writeLock().unlock();
     }
 
     public Map<Long, StatisticsJob> getIdToStatisticsJob() {
@@ -138,7 +146,7 @@ public class StatisticsJobManager {
         }
     }
 
-    public void alterStatisticsJobInfo(Long jobId, Long taskId, Exception exception) {
+    public void alterStatisticsJobInfo(Long jobId, Long taskId, String errorMsg)  {
         StatisticsJob statisticsJob = this.idToStatisticsJob.get(jobId);
         if (statisticsJob == null) {
             return;
@@ -148,7 +156,7 @@ public class StatisticsJobManager {
             List<StatisticsTask> tasks = statisticsJob.getTasks();
             for (StatisticsTask task : tasks) {
                 if (taskId == task.getId()) {
-                    if (exception == null) {
+                    if (Strings.isNullOrEmpty(errorMsg)) {
                         int progress = statisticsJob.getProgress() + 1;
                         statisticsJob.setProgress(progress);
                         if (progress == statisticsJob.getTasks().size()) {
@@ -158,9 +166,8 @@ public class StatisticsJobManager {
                         task.setFinishTime(System.currentTimeMillis());
                         task.setTaskState(StatisticsTask.TaskState.FINISHED);
                     } else {
-                        LOG.info("The statistics task(id=" + taskId + ") is failed, cause by: " + exception.getMessage());
+                        statisticsJob.getErrorMsgs().add(errorMsg);
                         task.setTaskState(StatisticsTask.TaskState.FAILED);
-                        statisticsJob.getErrorMsgs().add(exception.getMessage());
                         statisticsJob.setJobState(StatisticsJob.JobState.FAILED);
                     }
                     return;
@@ -169,5 +176,92 @@ public class StatisticsJobManager {
         } finally {
             writeUnlock();
         }
+    }
+
+    public List<List<String>> getAnalyzeJobInfos(ShowAnalyzeStmt showStmt) throws AnalysisException {
+        List<List<Comparable>> results = Lists.newArrayList();
+
+        String stateValue = showStmt.getStateValue();
+        StatisticsJob.JobState jobState = null;
+        if (!Strings.isNullOrEmpty(stateValue)) {
+            jobState = StatisticsJob.JobState.valueOf(stateValue);
+        }
+
+        // step 1: get job infos
+        List<Long> jobIds = showStmt.getJobIds();
+        if (jobIds != null && !jobIds.isEmpty()) {
+            for (Long jobId : jobIds) {
+                StatisticsJob statisticsJob = this.idToStatisticsJob.get(jobId);
+                if (statisticsJob == null) {
+                    throw new AnalysisException("No such job id: " + jobId);
+                }
+                // get info by ID does not require checking the state
+                List<Comparable> showInfo = statisticsJob.getShowInfo(null);
+                results.add(showInfo);
+            }
+        } else {
+            Database db = showStmt.getDb();
+            Table table = showStmt.getTable();
+            if (table == null) {
+                for (StatisticsJob statisticsJob : this.idToStatisticsJob.values()) {
+                    long dbId = statisticsJob.getDbId();
+                    if (dbId == db.getId()) {
+                        // check the state
+                        if (jobState == null || jobState == statisticsJob.getJobState()) {
+                            List<Comparable> showInfo = statisticsJob.getShowInfo(null);
+                            results.add(showInfo);
+                        }
+                    }
+                }
+            } else {
+                for (StatisticsJob statisticsJob : this.idToStatisticsJob.values()) {
+                    long dbId = statisticsJob.getDbId();
+                    long tableId = table.getId();
+                    Set<Long> tblIds = statisticsJob.getTblIds();
+                    if (dbId == db.getId() && tblIds.contains(tableId)) {
+                        // check the state
+                        if (jobState == null || jobState == statisticsJob.getJobState()) {
+                            List<Comparable> showInfo = statisticsJob.getShowInfo(tableId);
+                            results.add(showInfo);
+                        }
+                    }
+                }
+            }
+        }
+
+        // step2: order the result
+        ListComparator<List<Comparable>> comparator;
+        List<OrderByPair> orderByPairs = showStmt.getOrderByPairs();
+        if (orderByPairs == null) {
+            // sort by id asc
+            comparator = new ListComparator<>(0);
+        } else {
+            OrderByPair[] orderByPairArr = new OrderByPair[orderByPairs.size()];
+            comparator = new ListComparator<>(orderByPairs.toArray(orderByPairArr));
+        }
+        results.sort(comparator);
+
+        // step3: filter by limit
+        long limit = showStmt.getLimit();
+        long offset = showStmt.getOffset() == -1L ? 0 : showStmt.getOffset();
+        if (offset >= results.size()) {
+            results = Collections.emptyList();
+        } else if (limit != -1L) {
+            if ((limit + offset) >= results.size()) {
+                results = results.subList((int) offset, results.size());
+            } else {
+                results = results.subList((int) offset, (int) (limit + offset));
+            }
+        }
+
+        // step4: convert to result and return it
+        List<List<String>> rows = Lists.newArrayList();
+        for (List<Comparable> result : results) {
+            List<String> row = result.stream().map(Object::toString)
+                    .collect(Collectors.toCollection(() -> new ArrayList<>(result.size())));
+            rows.add(row);
+        }
+
+        return rows;
     }
 }

@@ -73,7 +73,6 @@ public class ShowAnalyzeStmt extends ShowStmt {
     private LimitElement limitElement;
     private List<OrderByElement> orderByElements;
 
-
     // after analyzed
     private Database db;
     private Table table;

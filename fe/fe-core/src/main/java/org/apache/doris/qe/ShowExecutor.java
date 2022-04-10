@@ -155,7 +155,7 @@ import org.apache.doris.load.LoadJob;
 import org.apache.doris.load.LoadJob.JobState;
 import org.apache.doris.load.routineload.RoutineLoadJob;
 import org.apache.doris.mysql.privilege.PrivPredicate;
-import org.apache.doris.statistics.StatisticsJob;
+import org.apache.doris.statistics.StatisticsJobManager;
 import org.apache.doris.system.Backend;
 import org.apache.doris.system.SystemInfoService;
 import org.apache.doris.thrift.TUnit;
@@ -2134,77 +2134,8 @@ public class ShowExecutor {
 
     private void handleShowAnalyze() throws AnalysisException {
         ShowAnalyzeStmt showStmt = (ShowAnalyzeStmt) stmt;
-        Map<Long, StatisticsJob> idToStatisticsJob = Catalog.getCurrentCatalog()
-                .getStatisticsJobManager().getIdToStatisticsJob();
-        List<Long> jobIds = showStmt.getJobIds();
-        List<List<Comparable>> results = Lists.newArrayList();
-
-        // step1: fetch job info
-        if (jobIds != null && !jobIds.isEmpty()){
-            for (Long jobId : jobIds) {
-                StatisticsJob statisticsJob = idToStatisticsJob.get(jobId);
-                if (statisticsJob == null) {
-                    throw new AnalysisException("No such job id: " + jobId);
-                }
-                List<Comparable> showInfo = statisticsJob.getShowInfo(null);
-                results.add(showInfo);
-            }
-        } else {
-            Database db = showStmt.getDb();
-            Table table = showStmt.getTable();
-            if (table == null) {
-                for (StatisticsJob statisticsJob : idToStatisticsJob.values()) {
-                    long dbId = statisticsJob.getDbId();
-                    if (dbId == db.getId()) {
-                        List<Comparable> showInfo = statisticsJob.getShowInfo(null);
-                        results.add(showInfo);
-                    }
-                }
-            } else {
-                for (StatisticsJob statisticsJob : idToStatisticsJob.values()) {
-                    long dbId = statisticsJob.getDbId();
-                    long tableId = table.getId();
-                    Set<Long> tblIds = statisticsJob.getTblIds();
-                    if (dbId == db.getId() && tblIds.contains(tableId)) {
-                        List<Comparable> showInfo = statisticsJob.getShowInfo(tableId);
-                        results.add(showInfo);
-                    }
-                }
-            }
-        }
-
-        // step2: order the result
-        ListComparator<List<Comparable>> comparator;
-        List<OrderByPair> orderByPairs = showStmt.getOrderByPairs();
-        if (orderByPairs == null) {
-            // sort by id asc
-            comparator = new ListComparator<>(0);
-        } else {
-            OrderByPair[] orderByPairArr = new OrderByPair[orderByPairs.size()];
-            comparator = new ListComparator<>(orderByPairs.toArray(orderByPairArr));
-        }
-        results.sort(comparator);
-
-        // step3: filter by limit
-        long limit = showStmt.getLimit();
-        long offset = showStmt.getOffset() == -1L ? 0 : showStmt.getOffset();
-        if (offset >= results.size()) {
-            results = Collections.emptyList();
-        } else if (limit != -1L) {
-            if ((limit + offset) >= results.size()) {
-                results = results.subList((int) offset, results.size());
-            } else {
-                results = results.subList((int) offset, (int) (limit + offset));
-            }
-        }
-
-        // step4: convert to result and return it
-        List<List<String>> rows = Lists.newArrayList();
-        for (List<Comparable> loadInfo : results) {
-            List<String> oneInfo = loadInfo.stream().map(Object::toString)
-                    .collect(Collectors.toCollection(() -> new ArrayList<>(loadInfo.size())));
-            rows.add(oneInfo);
-        }
-        resultSet = new ShowResultSet(showStmt.getMetaData(), rows);
+        StatisticsJobManager jobManager = Catalog.getCurrentCatalog().getStatisticsJobManager();
+        List<List<String>> results = jobManager.getAnalyzeJobInfos(showStmt);
+        resultSet = new ShowResultSet(showStmt.getMetaData(), results);
     }
 }

@@ -282,7 +282,7 @@ public class StatisticsJobManagerTest {
                 statisticsJob.setTasks(Collections.singletonList(new StatisticsTask(jobId, null, null, null)));
                 long taskId = statisticsJob.getTasks().get(0).getId();
                 this.statisticsJobManagerUnderTest.alterStatisticsJobInfo(jobId,taskId, null);
-                this.statisticsJobManagerUnderTest.alterStatisticsJobInfo(jobId,taskId, new Exception("test"));
+                this.statisticsJobManagerUnderTest.alterStatisticsJobInfo(jobId,taskId, "error");
                 break;
             }
         } catch (UserException e) {
