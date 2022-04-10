@@ -94,7 +94,7 @@ public class StatisticsJobTest {
         final List<Comparable> result = this.statisticsJobUnderTest.getShowInfo(0L);
 
         // Verify the results
-        Assert.assertEquals(result.size(), 7);
-        Assert.assertEquals(result.get(6), "PENDING");
+        Assert.assertEquals(result.size(), 8);
+        Assert.assertEquals(result.get(7), "PENDING");
     }
 }
