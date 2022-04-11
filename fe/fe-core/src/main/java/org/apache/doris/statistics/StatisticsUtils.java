@@ -34,6 +34,7 @@ import org.apache.doris.planner.Planner;
 import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.qe.Coordinator;
 import org.apache.doris.qe.OriginStatement;
+import org.apache.doris.qe.QeProcessorImpl;
 import org.apache.doris.qe.RowBatch;
 import org.apache.doris.system.SystemInfoService;
 import org.apache.doris.thrift.TQueryOptions;
@@ -43,6 +44,9 @@ import org.apache.doris.thrift.TUniqueId;
 import com.google.common.collect.Lists;
 
 import java.io.StringReader;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -99,6 +103,8 @@ public class StatisticsUtils {
 
         context.setCommand(MysqlCommand.COM_QUERY);
 
+        // context.getSessionVariable()
+
         // 用于审计
         // ctx.getAuditEventBuilder()
         //         .setTimestamp(System.currentTimeMillis())
@@ -143,6 +149,8 @@ public class StatisticsUtils {
             TQueryOptions tQueryOptions = new TQueryOptions();
             planner.plan(query, analyzer, tQueryOptions);
             Coordinator coord = new Coordinator(context, analyzer, planner);
+            QeProcessorImpl.INSTANCE.registerQuery(queryId, coord);
+
             coord.exec();
             RowBatch batch;
             List<TResultBatch> sqlResult = Lists.newArrayList();
@@ -152,13 +160,30 @@ public class StatisticsUtils {
                     sqlResult.add(batch.getBatch());
                 }
             } while (!batch.isEos());
-            System.out.println(sqlResult);
+
+            CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder();
+
+            List<String> result = Lists.newArrayList();
+            for (TResultBatch b : sqlResult) {
+                for (ByteBuffer byteBuffer : b.getRows()) {
+                    // String row = decoder.decode(byteBuffer).toString();
+                    result.add(decoder.decode(byteBuffer).toString().substring(1));
+                }
+            }
+
+            // print result
+            for (String s : result) {
+                String[] s1 = s.split(" ");
+                System.out.println(s);
+            }
+
         } catch (Exception e) {
             // TODO(zt): handle exception
             e.printStackTrace();
         }
         return context;
     }
+
 
     /*
 
