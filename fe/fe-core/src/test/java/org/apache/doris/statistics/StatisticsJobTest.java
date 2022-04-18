@@ -47,7 +47,7 @@ public class StatisticsJobTest {
         HashSet<Long> tblIds = Sets.newHashSet();
         tblIds.add(0L);
         tblIds.add(1L);
-        this.statisticsJobUnderTest = new StatisticsJob(0L, tblIds, new HashMap<>(), null);
+        this.statisticsJobUnderTest = new StatisticsJob(0L, tblIds, new HashMap<>());
     }
 
     @Test

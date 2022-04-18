@@ -28,6 +28,7 @@ import org.apache.doris.catalog.KeysType;
 import org.apache.doris.catalog.OlapTable;
 import org.apache.doris.catalog.PartitionInfo;
 import org.apache.doris.catalog.PrimitiveType;
+import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.UserException;
 import org.apache.doris.common.jmockit.Deencapsulation;
 import org.apache.doris.mysql.privilege.PaloAuth;
@@ -61,7 +62,7 @@ public class StatisticsJobManagerTest {
     @Test
     public void testCreateStatisticsJob(@Mocked AnalyzeStmt analyzeStmt,
                                         @Mocked PaloAuth auth,
-                                        @Mocked Analyzer analyzer) {
+                                        @Mocked Analyzer analyzer) throws AnalysisException {
         // Setup
         Column col1 = new Column("col1", PrimitiveType.STRING);
         Column col2 = new Column("col2", PrimitiveType.INT);
@@ -208,7 +209,7 @@ public class StatisticsJobManagerTest {
     @Test
     public void testAlterStatisticsJobInfo(@Mocked AnalyzeStmt analyzeStmt,
                                            @Mocked PaloAuth auth,
-                                           @Mocked Analyzer analyzer) {
+                                           @Mocked Analyzer analyzer) throws AnalysisException {
         // Setup
         Column col1 = new Column("col1", PrimitiveType.STRING);
         Column col2 = new Column("col2", PrimitiveType.INT);

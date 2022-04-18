@@ -54,7 +54,7 @@ public class StatisticsJobSchedulerTest {
         HashSet<Long> tblIds = Sets.newHashSet();
         tblIds.add(0L);
         tblIds.add(1L);
-        statisticsJob = new StatisticsJob(0L, tblIds, tableIdToColumnName, null);
+        statisticsJob = new StatisticsJob(0L, tblIds, tableIdToColumnName);
         statisticsJobSchedulerUnderTest.addPendingJob(statisticsJob);
     }
 

@@ -57,7 +57,7 @@ public class StatisticsJob {
         CANCELLED
     }
 
-    private long id = -1;
+    private long id = Catalog.getCurrentCatalog().getNextId();;
 
     /**
      * to be collected database stats.
@@ -74,7 +74,10 @@ public class StatisticsJob {
      */
     private final Map<Long, List<String>> tableIdToColumnName;
 
-    private final Map<String, String> properties;
+    /**
+     * timeout of a collection task
+     */
+    private long taskTimeout;
 
     /**
      * to be executed tasks.
@@ -91,12 +94,10 @@ public class StatisticsJob {
 
     public StatisticsJob(Long dbId,
                          Set<Long> tblIds,
-                         Map<Long, List<String>> tableIdToColumnName,
-                         Map<String, String> properties) {
+                         Map<Long, List<String>> tableIdToColumnName) {
         this.dbId = dbId;
         this.tblIds = tblIds;
         this.tableIdToColumnName = tableIdToColumnName;
-        this.properties = properties;
     }
 
     public long getId() {
@@ -119,8 +120,8 @@ public class StatisticsJob {
         return this.tableIdToColumnName;
     }
 
-    public Map<String, String> getProperties() {
-        return this.properties;
+    public long getTaskTimeout() {
+        return taskTimeout;
     }
 
     public List<StatisticsTask> getTasks() {
@@ -177,12 +178,14 @@ public class StatisticsJob {
      * tableId: [t1]
      * tableIdToColumnName <t1, [c1,c2,c3]>
      */
-    public static StatisticsJob fromAnalyzeStmt(AnalyzeStmt analyzeStmt) {
-        long dbId = analyzeStmt.getDb().getId();
+    public static StatisticsJob fromAnalyzeStmt(AnalyzeStmt analyzeStmt) throws AnalysisException {
+        long dbId = analyzeStmt.getDbId();
         Map<Long, List<String>> tableIdToColumnName = analyzeStmt.getTableIdToColumnName();
-        Set<Long> tblIds = tableIdToColumnName.keySet();
+        Set<Long> tblIds = analyzeStmt.getTblIds();
         Map<String, String> properties = analyzeStmt.getProperties();
-        return new StatisticsJob(dbId, tblIds, tableIdToColumnName, properties);
+        StatisticsJob statisticsJob = new StatisticsJob(dbId, tblIds, tableIdToColumnName);
+        statisticsJob.setOptional(analyzeStmt);
+        return statisticsJob;
     }
 
     public List<Comparable> getShowInfo(@Nullable Long tableId) throws AnalysisException {
@@ -255,5 +258,11 @@ public class StatisticsJob {
         }
 
         return result;
+    }
+
+    private void setOptional(AnalyzeStmt stmt) {
+        if (stmt.getTaskTimeout() != -1) {
+            this.taskTimeout = stmt.getTaskTimeout();
+        }
     }
 }

@@ -305,7 +305,9 @@ public class ShowAnalyzeStmt extends ShowStmt {
         StringBuilder sb = new StringBuilder();
         sb.append("SHOW ANALYZE ");
         if (this.table != null) {
-            sb.append("`").append(this.table.getName()).append("`");
+            String fullName = this.db.getFullName();
+            String dbName = fullName.split("\\.")[1];
+            sb.append("`").append(dbName).append(".").append(this.table.getName()).append("`");
         }
 
         if (this.whereClause != null) {
