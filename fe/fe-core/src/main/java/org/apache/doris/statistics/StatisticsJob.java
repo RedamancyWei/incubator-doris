@@ -57,7 +57,7 @@ public class StatisticsJob {
         CANCELLED
     }
 
-    private long id = Catalog.getCurrentCatalog().getNextId();;
+    private long id = Catalog.getCurrentCatalog().getNextId();
 
     /**
      * to be collected database stats.
@@ -85,7 +85,7 @@ public class StatisticsJob {
     private List<StatisticsTask> tasks = Lists.newArrayList();
 
     private JobState jobState = JobState.PENDING;
-    private final List<String> errorMsgs  = Lists.newArrayList();
+    private final List<String> errorMsgs = Lists.newArrayList();
 
     private final long createTime = System.currentTimeMillis();
     private long startTime = -1L;
@@ -140,10 +140,6 @@ public class StatisticsJob {
         return this.jobState;
     }
 
-    public void setJobState(JobState jobState) {
-        this.jobState = jobState;
-    }
-
     public long getCreateTime() {
         return this.createTime;
     }
@@ -172,6 +168,49 @@ public class StatisticsJob {
         this.progress = progress;
     }
 
+    private void setOptional(AnalyzeStmt stmt) {
+        if (stmt.getTaskTimeout() != -1) {
+            this.taskTimeout = stmt.getTaskTimeout();
+        }
+    }
+
+    public synchronized void updateJobState(JobState jobState) {
+        // PENDING -> SCHEDULING/FAILED/CANCELLED
+        if (this.jobState == JobState.PENDING) {
+            if (jobState == JobState.SCHEDULING) {
+                this.jobState = JobState.SCHEDULING;
+            } else if (jobState == JobState.FAILED) {
+                this.jobState = JobState.FAILED;
+            } else if (jobState == JobState.CANCELLED) {
+                this.jobState = JobState.CANCELLED;
+            }
+            return;
+        }
+
+        // SCHEDULING -> RUNNING/FAILED/CANCELLED
+        if (this.jobState == JobState.SCHEDULING) {
+            if (jobState == JobState.RUNNING) {
+                this.jobState = JobState.RUNNING;
+            } else if (jobState == JobState.FAILED) {
+                this.jobState = JobState.FAILED;
+            } else if (jobState == JobState.CANCELLED) {
+                this.jobState = JobState.CANCELLED;
+            }
+            return;
+        }
+
+        // RUNNING -> FINISHED/FAILED/CANCELLED
+        if (this.jobState == JobState.RUNNING) {
+            if (jobState == JobState.FINISHED) {
+                this.jobState = JobState.FINISHED;
+            } else if (jobState == JobState.FAILED) {
+                this.jobState = JobState.FAILED;
+            } else if (jobState == JobState.CANCELLED) {
+                this.jobState = JobState.CANCELLED;
+            }
+        }
+    }
+
     /**
      * get statisticsJob from analyzeStmt.
      * AnalyzeStmt: analyze t1(c1,c2,c3)
@@ -182,7 +221,6 @@ public class StatisticsJob {
         long dbId = analyzeStmt.getDbId();
         Map<Long, List<String>> tableIdToColumnName = analyzeStmt.getTableIdToColumnName();
         Set<Long> tblIds = analyzeStmt.getTblIds();
-        Map<String, String> properties = analyzeStmt.getProperties();
         StatisticsJob statisticsJob = new StatisticsJob(dbId, tblIds, tableIdToColumnName);
         statisticsJob.setOptional(analyzeStmt);
         return statisticsJob;
@@ -258,11 +296,5 @@ public class StatisticsJob {
         }
 
         return result;
-    }
-
-    private void setOptional(AnalyzeStmt stmt) {
-        if (stmt.getTaskTimeout() != -1) {
-            this.taskTimeout = stmt.getTaskTimeout();
-        }
     }
 }

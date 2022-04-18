@@ -95,8 +95,6 @@ public class StatisticsJobManager {
     }
 
     public void createStatisticsJob(StatisticsJob statisticsJob) throws DdlException {
-        // assign the id when the job is ready to run
-        statisticsJob.setId(Catalog.getCurrentCatalog().getNextId());
         this.idToStatisticsJob.put(statisticsJob.getId(), statisticsJob);
         try {
             Catalog.getCurrentCatalog().getStatisticsJobScheduler().addPendingJob(statisticsJob);
@@ -168,14 +166,14 @@ public class StatisticsJobManager {
                         statisticsJob.setProgress(progress);
                         if (progress == statisticsJob.getTasks().size()) {
                             statisticsJob.setFinishTime(System.currentTimeMillis());
-                            statisticsJob.setJobState(StatisticsJob.JobState.FINISHED);
+                            statisticsJob.updateJobState(StatisticsJob.JobState.FINISHED);
                         }
                         task.setFinishTime(System.currentTimeMillis());
                         task.setTaskState(StatisticsTask.TaskState.FINISHED);
                     } else {
                         statisticsJob.getErrorMsgs().add(errorMsg);
                         task.setTaskState(StatisticsTask.TaskState.FAILED);
-                        statisticsJob.setJobState(StatisticsJob.JobState.FAILED);
+                        statisticsJob.updateJobState(StatisticsJob.JobState.FAILED);
                     }
                     return;
                 }
