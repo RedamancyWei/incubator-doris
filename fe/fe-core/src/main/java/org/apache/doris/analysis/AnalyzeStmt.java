@@ -162,10 +162,12 @@ public class AnalyzeStmt extends DdlStmt {
         // step1: analyze db, table and column
         if (this.dbTableName != null) {
             this.dbTableName.analyze(analyzer);
-            checkAnalyzePriv(this.dbTableName.getDb(), this.dbTableName.getTbl());
+            String dbName = this.dbTableName.getDb();
+            String tblName = this.dbTableName.getTbl();
+            checkAnalyzePriv(dbName, tblName);
 
-            Database db = analyzer.getCatalog().getDbOrAnalysisException(this.dbTableName.getDb());
-            Table table = db.getTableOrAnalysisException(this.dbTableName.getTbl());
+            Database db = analyzer.getCatalog().getDbOrAnalysisException(dbName);
+            Table table = db.getTableOrAnalysisException(tblName);
 
             if (this.columnNames != null && !this.columnNames.isEmpty()) {
                 table.readLock();
