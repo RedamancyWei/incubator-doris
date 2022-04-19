@@ -36,7 +36,7 @@ import java.util.concurrent.Callable;
  * For example: the task is responsible for collecting min, max, ndv of t1.c1 in partition p1.
  * @granularityDesc: StatsGranularity=partition
  */
-public class StatisticsTask implements Callable<StatisticsTaskResult> {
+public abstract class StatisticsTask implements Callable<StatisticsTaskResult> {
     protected static final Logger LOG = LogManager.getLogger(StatisticsTask.class);
 
     public enum TaskState {
@@ -115,11 +115,14 @@ public class StatisticsTask implements Callable<StatisticsTaskResult> {
         this.finishTime = finishTime;
     }
 
+    /**
+     * Different statistics implement different collection methods.
+     *
+     * @return true if this task is finished, false otherwise
+     * @throws Exception
+     */
     @Override
-    public StatisticsTaskResult call() throws Exception {
-        LOG.warn("execute invalid statistics task.");
-        return null;
-    }
+    public abstract StatisticsTaskResult call() throws Exception;
 
     public synchronized void updateTaskState(TaskState taskState) {
         // PENDING -> RUNNING/FAILED

@@ -280,7 +280,12 @@ public class StatisticsJobManagerTest {
             for (Map.Entry<Long, StatisticsJob> entry : idToStatisticsJob.entrySet()) {
                 Long jobId = entry.getKey();
                 StatisticsJob statisticsJob = entry.getValue();
-                statisticsJob.setTasks(Collections.singletonList(new StatisticsTask(jobId, null, null, null)));
+                statisticsJob.setTasks(Collections.singletonList(new StatisticsTask(jobId, null, null, null) {
+                    @Override
+                    public StatisticsTaskResult call() throws Exception {
+                        return null;
+                    }
+                }));
                 long taskId = statisticsJob.getTasks().get(0).getId();
                 this.statisticsJobManagerUnderTest.alterStatisticsJobInfo(jobId,taskId, null);
                 this.statisticsJobManagerUnderTest.alterStatisticsJobInfo(jobId,taskId, "error");

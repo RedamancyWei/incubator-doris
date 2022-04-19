@@ -75,7 +75,12 @@ public class StatisticsJobTest {
         statsGranularityDesc.setTableId(0L);
         statsGranularityDesc.setGranularity(StatsGranularityDesc.StatsGranularity.TABLE);
 
-        this.statisticsJobUnderTest.setTasks(Collections.singletonList(new StatisticsTask(0L, statsGranularityDesc, statsCategoryDesc, null)));
+        this.statisticsJobUnderTest.setTasks(Collections.singletonList(new StatisticsTask(0L, statsGranularityDesc, statsCategoryDesc, null) {
+            @Override
+            public StatisticsTaskResult call() throws Exception {
+                return null;
+            }
+        }));
 
         new Expectations() {
             {
