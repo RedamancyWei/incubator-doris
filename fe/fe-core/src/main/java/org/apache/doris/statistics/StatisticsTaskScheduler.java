@@ -23,6 +23,7 @@ import org.apache.doris.common.Config;
 import org.apache.doris.common.ThreadPoolManager;
 import org.apache.doris.common.util.MasterDaemon;
 import org.apache.doris.statistics.StatisticsJob.JobState;
+import org.apache.doris.statistics.StatisticsTask.TaskState;
 import org.apache.doris.statistics.StatsCategoryDesc.StatsCategory;
 
 import com.clearspring.analytics.util.Lists;
@@ -75,11 +76,9 @@ public class StatisticsTaskScheduler extends MasterDaemon {
                     taskMap.clear();
                     taskSize = 0;
                 }
-                // assign the id when the task is ready to run
-                task.setId(Catalog.getCurrentCatalog().getNextId());
-                task.setStartTime(System.currentTimeMillis());
-                task.setTaskState(StatisticsTask.TaskState.RUNNING);
                 Future<StatisticsTaskResult> future = executor.submit(task);
+                task.setStartTime(System.currentTimeMillis());
+                task.updateTaskState(TaskState.RUNNING);
                 long taskId = task.getId();
                 taskMap.put(taskId, future);
                 // update job state
@@ -87,7 +86,7 @@ public class StatisticsTaskScheduler extends MasterDaemon {
                 StatisticsJob statisticsJob = statisticsJobs.get(jobId);
                 if (statisticsJob.getJobState() == JobState.SCHEDULING) {
                     statisticsJob.setStartTime(System.currentTimeMillis());
-                    statisticsJob.setJobState(JobState.RUNNING);
+                    statisticsJob.updateJobState(JobState.RUNNING);
                 }
                 taskSize++;
             }
@@ -120,8 +119,7 @@ public class StatisticsTaskScheduler extends MasterDaemon {
         StatisticsManager statsManager = Catalog.getCurrentCatalog().getStatisticsManager();
         StatisticsJobManager jobManager = Catalog.getCurrentCatalog().getStatisticsJobManager();
 
-        Map<String, String> properties = jobManager.getIdToStatisticsJob().get(jobId).getProperties();
-        int timeout = Integer.parseInt(properties.get("cbo_statistics_task_timeout_sec"));
+        long timeout = jobManager.getIdToStatisticsJob().get(jobId).getTaskTimeout();
 
         for (Map.Entry<Long, Future<StatisticsTaskResult>> entry : taskMap.entrySet()) {
             String errorMsg = "";

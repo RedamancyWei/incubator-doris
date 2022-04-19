@@ -17,6 +17,8 @@
 
 package org.apache.doris.statistics;
 
+import org.apache.doris.catalog.Catalog;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -34,7 +36,7 @@ import java.util.concurrent.Callable;
  * For example: the task is responsible for collecting min, max, ndv of t1.c1 in partition p1.
  * @granularityDesc: StatsGranularity=partition
  */
-public class StatisticsTask implements Callable<StatisticsTaskResult> {
+public abstract class StatisticsTask implements Callable<StatisticsTaskResult> {
     protected static final Logger LOG = LogManager.getLogger(StatisticsTask.class);
 
     public enum TaskState {
@@ -44,7 +46,7 @@ public class StatisticsTask implements Callable<StatisticsTaskResult> {
         FAILED
     }
 
-    protected long id = -1;
+    protected long id = Catalog.getCurrentCatalog().getNextId();;
     protected long jobId;
     protected StatsGranularityDesc granularityDesc;
     protected StatsCategoryDesc categoryDesc;
@@ -93,10 +95,6 @@ public class StatisticsTask implements Callable<StatisticsTaskResult> {
         return this.taskState;
     }
 
-    public void setTaskState(TaskState taskState) {
-        this.taskState = taskState;
-    }
-
     public long getCreateTime() {
         return this.createTime;
     }
@@ -117,9 +115,33 @@ public class StatisticsTask implements Callable<StatisticsTaskResult> {
         this.finishTime = finishTime;
     }
 
+    /**
+     * Different statistics implement different collection methods.
+     *
+     * @return true if this task is finished, false otherwise
+     * @throws Exception
+     */
     @Override
-    public StatisticsTaskResult call() throws Exception {
-        LOG.warn("execute invalid statistics task.");
-        return null;
+    public abstract StatisticsTaskResult call() throws Exception;
+
+    public synchronized void updateTaskState(TaskState taskState) {
+        // PENDING -> RUNNING/FAILED
+        if (this.taskState == TaskState.PENDING) {
+            if (taskState == TaskState.RUNNING) {
+                this.taskState = TaskState.RUNNING;
+            } else if (taskState == TaskState.FAILED) {
+                this.taskState = TaskState.FAILED;
+            }
+            return;
+        }
+
+        // RUNNING -> FINISHED/FAILED
+        if (this.taskState == TaskState.RUNNING) {
+            if (taskState == TaskState.FINISHED) {
+                this.taskState = TaskState.FINISHED;
+            } else if (taskState == TaskState.FAILED) {
+                this.taskState = TaskState.FAILED;
+            }
+        }
     }
 }
