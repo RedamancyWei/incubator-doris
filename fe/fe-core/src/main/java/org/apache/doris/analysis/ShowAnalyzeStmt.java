@@ -107,7 +107,7 @@ public class ShowAnalyzeStmt extends ShowStmt {
 
     public Set<Long> getTblIds() {
         Preconditions.checkArgument(isAnalyzed(),
-                "The dbId must be obtained after the parsing is complete");
+                "The tblIds must be obtained after the parsing is complete");
         return this.tblIds;
     }
 
@@ -177,8 +177,6 @@ public class ShowAnalyzeStmt extends ShowStmt {
                 db.readUnlock();
             }
         }
-
-
 
         // analyze where clause if not null
         if (this.whereClause != null) {
