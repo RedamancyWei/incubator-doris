@@ -75,7 +75,7 @@ public class StatisticsJob {
     private final Map<Long, List<String>> tableIdToColumnName;
 
     /**
-     * timeout of a collection task
+     * timeout of a statistics task
      */
     private long taskTimeout;
 
