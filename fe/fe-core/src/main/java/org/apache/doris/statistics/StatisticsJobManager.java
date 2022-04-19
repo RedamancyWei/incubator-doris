@@ -34,6 +34,7 @@ import org.apache.doris.common.util.OrderByPair;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -200,33 +201,26 @@ public class StatisticsJobManager {
                 if (statisticsJob == null) {
                     throw new AnalysisException("No such job id: " + jobId);
                 }
-                // get info by ID does not require checking the state
-                List<Comparable> showInfo = statisticsJob.getShowInfo(null);
-                results.add(showInfo);
+                if (jobState == null || jobState == statisticsJob.getJobState()) {
+                    List<Comparable> showInfo = statisticsJob.getShowInfo(null);
+                    results.add(showInfo);
+                }
             }
         } else {
-            Database db = showStmt.getDb();
-            Table table = showStmt.getTable();
-            if (table == null) {
-                for (StatisticsJob statisticsJob : this.idToStatisticsJob.values()) {
-                    long dbId = statisticsJob.getDbId();
-                    if (dbId == db.getId()) {
-                        // check the state
-                        if (jobState == null || jobState == statisticsJob.getJobState()) {
-                            List<Comparable> showInfo = statisticsJob.getShowInfo(null);
-                            results.add(showInfo);
-                        }
-                    }
-                }
-            } else {
-                for (StatisticsJob statisticsJob : this.idToStatisticsJob.values()) {
-                    long dbId = statisticsJob.getDbId();
-                    long tableId = table.getId();
-                    Set<Long> tblIds = statisticsJob.getTblIds();
-                    if (dbId == db.getId() && tblIds.contains(tableId)) {
-                        // check the state
-                        if (jobState == null || jobState == statisticsJob.getJobState()) {
-                            List<Comparable> showInfo = statisticsJob.getShowInfo(tableId);
+            long dbId = showStmt.getDbId();
+            Set<Long> tblIds = showStmt.getTblIds();
+            for (StatisticsJob statisticsJob : this.idToStatisticsJob.values()) {
+                long jobDbId = statisticsJob.getDbId();
+                if (jobDbId == dbId) {
+                    // check the state
+                    if (jobState == null || jobState == statisticsJob.getJobState()) {
+                        Set<Long> jobTblIds = statisticsJob.getTblIds();
+                        // get the intersection of two sets
+                        Set<Long> set = Sets.newHashSet();
+                        set.addAll(jobTblIds);
+                        set.retainAll(tblIds);
+                        for (long tblId : set) {
+                            List<Comparable> showInfo = statisticsJob.getShowInfo(tblId);
                             results.add(showInfo);
                         }
                     }

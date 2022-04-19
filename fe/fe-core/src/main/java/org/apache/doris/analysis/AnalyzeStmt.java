@@ -88,26 +88,26 @@ public class AnalyzeStmt extends DdlStmt {
     }
 
     public long getDbId() {
+        Preconditions.checkArgument(isAnalyzed(),
+                "The dbId must be obtained after the parsing is complete");
         return this.dbId;
     }
 
     public Set<Long> getTblIds() {
+        Preconditions.checkArgument(isAnalyzed(),
+                "The tblIds must be obtained after the parsing is complete");
         return this.tblIds;
-    }
-
-    public long getTaskTimeout() {
-        return this.taskTimeout;
     }
 
     public Database getDb() throws AnalysisException {
         Preconditions.checkArgument(isAnalyzed(),
-                "The db name must be obtained after the parsing is complete");
+                "The db must be obtained after the parsing is complete");
         return this.analyzer.getCatalog().getDbOrAnalysisException(this.dbId);
     }
 
     public List<Table> getTables() throws AnalysisException {
         Preconditions.checkArgument(isAnalyzed(),
-                "The db name must be obtained after the parsing is complete");
+                "The tables must be obtained after the parsing is complete");
         Database db = getDb();
         List<Table> tables = Lists.newArrayList();
 
@@ -151,8 +151,8 @@ public class AnalyzeStmt extends DdlStmt {
         return tableIdToColumnName;
     }
 
-    public Map<String, String> getProperties() {
-        return this.properties;
+    public long getTaskTimeout() {
+        return this.taskTimeout;
     }
 
     @Override

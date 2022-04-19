@@ -22,7 +22,6 @@ import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.ScalarType;
 import org.apache.doris.catalog.Table;
-import org.apache.doris.cluster.ClusterNamespace;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.ErrorReport;
@@ -37,9 +36,11 @@ import org.apache.doris.statistics.StatisticsJob;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Sets;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * ShowAnalyzeStmt is used to show statistics job info.
@@ -74,8 +75,9 @@ public class ShowAnalyzeStmt extends ShowStmt {
     private List<OrderByElement> orderByElements;
 
     // after analyzed
-    private Database db;
-    private Table table;
+    private long dbId;
+    private final Set<Long> tblIds = Sets.newHashSet();
+
     private String stateValue;
     private ArrayList<OrderByPair> orderByPairs;
 
@@ -97,16 +99,16 @@ public class ShowAnalyzeStmt extends ShowStmt {
         return this.jobIds;
     }
 
-    public Database getDb() {
+    public long getDbId() {
         Preconditions.checkArgument(isAnalyzed(),
-                "The db name must be obtained after the parsing is complete");
-        return this.db;
+                "The dbId must be obtained after the parsing is complete");
+        return this.dbId;
     }
 
-    public Table getTable() {
+    public Set<Long> getTblIds() {
         Preconditions.checkArgument(isAnalyzed(),
-                "The tbl name must be obtained after the parsing is complete");
-        return this.table;
+                "The dbId must be obtained after the parsing is complete");
+        return this.tblIds;
     }
 
     public String getStateValue() {
@@ -139,34 +141,44 @@ public class ShowAnalyzeStmt extends ShowStmt {
     public void analyze(Analyzer analyzer) throws AnalysisException, UserException {
         super.analyze(analyzer);
 
-        String dbName = null;
-        String tblName = null;
         if (this.dbTableName != null) {
-            dbName = this.dbTableName.getDb();
-            tblName = this.dbTableName.getTbl();
-        }
+            this.dbTableName.analyze(analyzer);
+            String dbName = this.dbTableName.getDb();
+            String tblName = this.dbTableName.getTbl();
+            checkShowAnalyzePriv(dbName, tblName);
 
-        if (Strings.isNullOrEmpty(dbName)) {
-            dbName = analyzer.getDefaultDb();
+            Database db = analyzer.getCatalog().getDbOrAnalysisException(dbName);
+            Table table = db.getTableOrAnalysisException(tblName);
+
+            this.dbId = db.getId();
+            this.tblIds.add(table.getId());
         } else {
-            dbName = ClusterNamespace.getFullName(analyzer.getClusterName(), dbName);
-        }
-
-        if (Strings.isNullOrEmpty(dbName)) {
-            ErrorReport.reportAnalysisException(ErrorCode.ERR_NO_DB_ERROR);
-        }
-        this.db = analyzer.getCatalog().getDbOrAnalysisException(dbName);
-
-        if (Strings.isNullOrEmpty(tblName)) {
-            this.table = null;
-            List<Table> tables = this.db.getTables();
-            for (Table table : tables) {
-                checkShowAnalyzePriv(dbName, table.getName());
+            // analyze the current default db
+            String dbName = analyzer.getDefaultDb();
+            if (Strings.isNullOrEmpty(dbName)) {
+                ErrorReport.reportAnalysisException(ErrorCode.ERR_NO_DB_ERROR);
             }
-        } else {
-            this.table = this.db.getTableOrAnalysisException(tblName);
-            checkShowAnalyzePriv(dbName, this.table.getName());
+
+            Database db = analyzer.getCatalog().getDbOrAnalysisException(dbName);
+
+            db.readLock();
+            try {
+                List<Table> tables = db.getTables();
+                for (Table table : tables) {
+                    checkShowAnalyzePriv(dbName, table.getName());
+                }
+
+                this.dbId = db.getId();
+                for (Table table : tables) {
+                    long tblId = table.getId();
+                    this.tblIds.add(tblId);
+                }
+            } finally {
+                db.readUnlock();
+            }
         }
+
+
 
         // analyze where clause if not null
         if (this.whereClause != null) {
@@ -304,10 +316,10 @@ public class ShowAnalyzeStmt extends ShowStmt {
     public String toSql() {
         StringBuilder sb = new StringBuilder();
         sb.append("SHOW ANALYZE ");
-        if (this.table != null) {
-            String fullName = this.db.getFullName();
-            String dbName = fullName.split("\\.")[1];
-            sb.append("`").append(dbName).append(".").append(this.table.getName()).append("`");
+        if (this.dbTableName != null) {
+            String dbName = this.dbTableName.getDb();
+            String tblName = this.dbTableName.getTbl();
+            sb.append("`").append(dbName).append(".").append(tblName).append("`");
         }
 
         if (this.whereClause != null) {
