@@ -121,9 +121,9 @@ public class StatisticsTask implements Callable<StatisticsTaskResult> {
         return null;
     }
 
-    public synchronized void updateTaskState(StatisticsTask.TaskState taskState) {
+    public synchronized void updateTaskState(TaskState taskState) {
         // PENDING -> RUNNING/FAILED
-        if (this.taskState == StatisticsTask.TaskState.PENDING) {
+        if (this.taskState == TaskState.PENDING) {
             if (taskState == TaskState.RUNNING) {
                 this.taskState = TaskState.RUNNING;
             } else if (taskState == TaskState.FAILED) {
@@ -133,7 +133,7 @@ public class StatisticsTask implements Callable<StatisticsTaskResult> {
         }
 
         // RUNNING -> FINISHED/FAILED
-        if (this.taskState == StatisticsTask.TaskState.RUNNING) {
+        if (this.taskState == TaskState.RUNNING) {
             if (taskState == TaskState.FINISHED) {
                 this.taskState = TaskState.FINISHED;
             } else if (taskState == TaskState.FAILED) {
