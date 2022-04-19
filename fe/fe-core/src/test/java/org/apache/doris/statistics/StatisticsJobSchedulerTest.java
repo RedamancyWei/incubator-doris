@@ -80,7 +80,6 @@ public class StatisticsJobSchedulerTest {
         idToDb.put(0L, database);
         Deencapsulation.setField(catalog, "idToDb", idToDb);
 
-
         // Run the test
         statisticsJobSchedulerUnderTest.runAfterCatalogReady();
 
@@ -100,12 +99,7 @@ public class StatisticsJobSchedulerTest {
          */
         // Assert.assertEquals(2 * 8, statisticsJob.getTasks().size());
 
-        /* now only support meta task:
-         * mateTask(5):
-         *  - col2[avg_len、max_len] --->2
-         *  - data_size --->1
-         */
-        Assert.assertEquals(5, statisticsJob.getTasks().size());
+        Assert.assertEquals(16, statisticsJob.getTasks().size());
     }
 
     @Test

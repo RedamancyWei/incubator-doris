@@ -18,8 +18,11 @@
 package org.apache.doris.statistics;
 
 import org.apache.doris.analysis.AnalyzeStmt;
-import org.apache.doris.analysis.Analyzer;
-import org.apache.doris.analysis.UserIdentity;
+import org.apache.doris.analysis.Expr;
+import org.apache.doris.analysis.LimitElement;
+import org.apache.doris.analysis.OrderByElement;
+import org.apache.doris.analysis.ShowAnalyzeStmt;
+import org.apache.doris.analysis.TableName;
 import org.apache.doris.catalog.Catalog;
 import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.Database;
@@ -31,10 +34,7 @@ import org.apache.doris.catalog.PrimitiveType;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.UserException;
 import org.apache.doris.common.jmockit.Deencapsulation;
-import org.apache.doris.mysql.privilege.PaloAuth;
-import org.apache.doris.mysql.privilege.PrivPredicate;
 
-import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 
 import org.junit.Assert;
@@ -43,12 +43,14 @@ import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import mockit.Expectations;
 import mockit.Mocked;
+
+import static org.junit.Assert.assertEquals;
 
 public class StatisticsJobManagerTest {
 
@@ -60,9 +62,7 @@ public class StatisticsJobManagerTest {
     }
 
     @Test
-    public void testCreateStatisticsJob(@Mocked AnalyzeStmt analyzeStmt,
-                                        @Mocked PaloAuth auth,
-                                        @Mocked Analyzer analyzer) throws AnalysisException {
+    public void testCreateStatisticsJob(@Mocked AnalyzeStmt analyzeStmt) {
         // Setup
         Column col1 = new Column("col1", PrimitiveType.STRING);
         Column col2 = new Column("col2", PrimitiveType.INT);
@@ -70,12 +70,6 @@ public class StatisticsJobManagerTest {
                 new PartitionInfo(), new HashDistributionInfo());
         Database database = new Database(1L, "db");
         database.createTable(table);
-
-        Set<String> cols = Sets.newHashSet();
-        cols.add("col1");
-        cols.add("col2");
-        Map<Long, Set<String>> tableIdToColumnName =  Maps.newHashMap();
-        tableIdToColumnName.put(1L, cols);
 
         Catalog catalog = Catalog.getCurrentCatalog();
         Deencapsulation.setField(catalog, "statisticsJobScheduler", new StatisticsJobScheduler());
@@ -88,41 +82,11 @@ public class StatisticsJobManagerTest {
         idToDb.put(1L, database);
         Deencapsulation.setField(catalog, "idToDb", idToDb);
 
-        UserIdentity userIdentity = new UserIdentity("root", "host", false);
-
         new Expectations() {
             {
-                analyzeStmt.getDb();
+                analyzeStmt.getDbId();
                 this.minTimes = 0;
-                this.result = database;
-
-                analyzeStmt.getTables();
-                this.minTimes = 0;
-                this.result = Collections.singletonList(table);
-
-                analyzeStmt.getClusterName();
-                this.minTimes = 0;
-                this.result = "cluster";
-
-                analyzeStmt.getAnalyzer();
-                this.minTimes = 0;
-                this.result = analyzer;
-
-                analyzeStmt.getTableIdToColumnName();
-                this.minTimes = 0;
-                this.result = tableIdToColumnName;
-
-                analyzeStmt.getUserInfo();
-                this.minTimes = 0;
-                this.result = userIdentity;
-
-                auth.checkDbPriv(userIdentity, this.anyString, PrivPredicate.SELECT);
-                this.minTimes = 0;
-                this.result = true;
-
-                auth.checkTblPriv(userIdentity, this.anyString, this.anyString, PrivPredicate.SELECT);
-                this.minTimes = 0;
-                this.result = true;
+                this.result = 1L;
             }
         };
 
@@ -130,14 +94,12 @@ public class StatisticsJobManagerTest {
         try {
             this.statisticsJobManagerUnderTest.createStatisticsJob(analyzeStmt);
         } catch (UserException e) {
-            Assert.fail("UserException throws.");
+            Assert.fail("UserException throws." + e);
         }
     }
 
     @Test(expected = UserException.class)
-    public void testCreateStatisticsJob_throwUserException(@Mocked AnalyzeStmt analyzeStmt,
-                                         @Mocked PaloAuth auth,
-                                         @Mocked Analyzer analyzer) throws UserException {
+    public void testCreateStatisticsJob_throwUserException(@Mocked AnalyzeStmt analyzeStmt) throws UserException {
         // Setup
         Column col1 = new Column("col1", PrimitiveType.STRING);
         Column col2 = new Column("col2", PrimitiveType.INT);
@@ -145,12 +107,6 @@ public class StatisticsJobManagerTest {
                 new PartitionInfo(), new HashDistributionInfo());
         Database database = new Database(1L, "db");
         database.createTable(table);
-
-        Set<String> cols = Sets.newHashSet();
-        cols.add("col1");
-        cols.add("col2");
-        Map<Long, Set<String>> tableIdToColumnName =  Maps.newHashMap();
-        tableIdToColumnName.put(1L, cols);
 
         Catalog catalog = Catalog.getCurrentCatalog();
         Deencapsulation.setField(catalog, "statisticsJobScheduler", new StatisticsJobScheduler());
@@ -163,53 +119,29 @@ public class StatisticsJobManagerTest {
         idToDb.put(1L, database);
         Deencapsulation.setField(catalog, "idToDb", idToDb);
 
-        UserIdentity userIdentity = new UserIdentity("root", "host", false);
-
         new Expectations() {
             {
-                analyzeStmt.getDb();
+                analyzeStmt.getDbId();
                 this.minTimes = 0;
-                this.result = database;
+                this.result = 1L;
 
-                analyzeStmt.getTables();
+                analyzeStmt.getTblIds();
                 this.minTimes = 0;
-                this.result = Collections.singletonList(table);
-
-                analyzeStmt.getClusterName();
-                this.minTimes = 0;
-                this.result = "cluster";
-
-                analyzeStmt.getAnalyzer();
-                this.minTimes = 0;
-                this.result = analyzer;
-
-                analyzeStmt.getTableIdToColumnName();
-                this.minTimes = 0;
-                this.result = tableIdToColumnName;
-
-                analyzeStmt.getUserInfo();
-                this.minTimes = 0;
-                this.result = userIdentity;
-
-                auth.checkDbPriv(userIdentity, this.anyString, PrivPredicate.SELECT);
-                this.minTimes = 0;
-                this.result = true;
-
-                auth.checkTblPriv(userIdentity, this.anyString, this.anyString, PrivPredicate.SELECT);
-                this.minTimes = 0;
-                this.result = true;
+                this.result = Sets.newHashSet(1L);
             }
         };
 
-        // Run the test and verify same table has two unfinished statistics job
-        this.statisticsJobManagerUnderTest.createStatisticsJob(analyzeStmt);
-        this.statisticsJobManagerUnderTest.createStatisticsJob(analyzeStmt);
+        try {
+            // Run the test and verify same table has two unfinished statistics job
+            this.statisticsJobManagerUnderTest.createStatisticsJob(analyzeStmt);
+            this.statisticsJobManagerUnderTest.createStatisticsJob(analyzeStmt);
+        } catch (UserException e) {
+            throw new UserException(e);
+        }
     }
 
     @Test
-    public void testAlterStatisticsJobInfo(@Mocked AnalyzeStmt analyzeStmt,
-                                           @Mocked PaloAuth auth,
-                                           @Mocked Analyzer analyzer) throws AnalysisException {
+    public void testAlterStatisticsJobInfo(@Mocked AnalyzeStmt analyzeStmt) {
         // Setup
         Column col1 = new Column("col1", PrimitiveType.STRING);
         Column col2 = new Column("col2", PrimitiveType.INT);
@@ -217,12 +149,6 @@ public class StatisticsJobManagerTest {
                 new PartitionInfo(), new HashDistributionInfo());
         Database database = new Database(1L, "db");
         database.createTable(table);
-
-        Set<String> cols = Sets.newHashSet();
-        cols.add("col1");
-        cols.add("col2");
-        Map<Long, Set<String>> tableIdToColumnName =  Maps.newHashMap();
-        tableIdToColumnName.put(1L, cols);
 
         Catalog catalog = Catalog.getCurrentCatalog();
         Deencapsulation.setField(catalog, "statisticsJobScheduler", new StatisticsJobScheduler());
@@ -235,41 +161,11 @@ public class StatisticsJobManagerTest {
         idToDb.put(1L, database);
         Deencapsulation.setField(catalog, "idToDb", idToDb);
 
-        UserIdentity userIdentity = new UserIdentity("root", "host", false);
-
         new Expectations() {
             {
-                analyzeStmt.getDb();
+                analyzeStmt.getDbId();
                 this.minTimes = 0;
-                this.result = database;
-
-                analyzeStmt.getTables();
-                this.minTimes = 0;
-                this.result = Collections.singletonList(table);
-
-                analyzeStmt.getClusterName();
-                this.minTimes = 0;
-                this.result = "cluster";
-
-                analyzeStmt.getAnalyzer();
-                this.minTimes = 0;
-                this.result = analyzer;
-
-                analyzeStmt.getTableIdToColumnName();
-                this.minTimes = 0;
-                this.result = tableIdToColumnName;
-
-                analyzeStmt.getUserInfo();
-                this.minTimes = 0;
-                this.result = userIdentity;
-
-                auth.checkDbPriv(userIdentity, this.anyString, PrivPredicate.SELECT);
-                this.minTimes = 0;
-                this.result = true;
-
-                auth.checkTblPriv(userIdentity, this.anyString, this.anyString, PrivPredicate.SELECT);
-                this.minTimes = 0;
-                this.result = true;
+                this.result = 1L;
             }
         };
 
@@ -280,19 +176,49 @@ public class StatisticsJobManagerTest {
             for (Map.Entry<Long, StatisticsJob> entry : idToStatisticsJob.entrySet()) {
                 Long jobId = entry.getKey();
                 StatisticsJob statisticsJob = entry.getValue();
-                statisticsJob.setTasks(Collections.singletonList(new StatisticsTask(jobId, null, null, null) {
-                    @Override
-                    public StatisticsTaskResult call() throws Exception {
-                        return null;
-                    }
-                }));
+                statisticsJob.setTasks(Collections.singletonList(
+                        new StatisticsTask(jobId, null, null, null) {
+                            @Override
+                            public StatisticsTaskResult call() throws Exception {
+                                return null;
+                            }
+                        }));
                 long taskId = statisticsJob.getTasks().get(0).getId();
-                this.statisticsJobManagerUnderTest.alterStatisticsJobInfo(jobId,taskId, null);
-                this.statisticsJobManagerUnderTest.alterStatisticsJobInfo(jobId,taskId, "error");
+                this.statisticsJobManagerUnderTest.alterStatisticsJobInfo(jobId, taskId, null);
+                this.statisticsJobManagerUnderTest.alterStatisticsJobInfo(jobId, taskId, "error");
                 break;
             }
         } catch (UserException e) {
-            Assert.fail("UserException throws.");
+            Assert.fail("UserException throws." + e);
         }
+    }
+
+    @Test
+    public void testGetAnalyzeJobInfos(@Mocked ShowAnalyzeStmt showStmt) throws Exception {
+        // TODO: add more test cases
+        // Setup
+        new Expectations() {
+            {
+                showStmt.getJobIds();
+                this.minTimes = 0;
+                this.result = Sets.newHashSet(1L);
+            }
+        };
+
+        // Run the test
+        final List<List<String>> result = statisticsJobManagerUnderTest.getAnalyzeJobInfos(showStmt);
+
+        // Verify the results
+        assertEquals(Collections.singletonList(Collections.singletonList("value")), result);
+    }
+
+    @Test(expected = AnalysisException.class)
+    public void testGetAnalyzeJobInfos_ThrowsAnalysisException() throws Exception {
+        // Setup
+        final ShowAnalyzeStmt showStmt = new ShowAnalyzeStmt(new TableName("db", "tbl"), Expr.readIn(null),
+                Arrays.asList(new OrderByElement(Expr.readIn(null), false, false)), new LimitElement(0L, 0L));
+
+        // Run the test
+        statisticsJobManagerUnderTest.getAnalyzeJobInfos(showStmt);
     }
 }
