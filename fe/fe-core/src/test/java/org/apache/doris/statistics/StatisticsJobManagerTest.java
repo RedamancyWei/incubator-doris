@@ -18,30 +18,20 @@
 package org.apache.doris.statistics;
 
 import org.apache.doris.analysis.AnalyzeStmt;
-import org.apache.doris.analysis.Expr;
-import org.apache.doris.analysis.LimitElement;
-import org.apache.doris.analysis.OrderByElement;
 import org.apache.doris.analysis.ShowAnalyzeStmt;
-import org.apache.doris.analysis.TableName;
 import org.apache.doris.catalog.Catalog;
-import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.Database;
-import org.apache.doris.catalog.HashDistributionInfo;
-import org.apache.doris.catalog.KeysType;
-import org.apache.doris.catalog.OlapTable;
-import org.apache.doris.catalog.PartitionInfo;
-import org.apache.doris.catalog.PrimitiveType;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.UserException;
 import org.apache.doris.common.jmockit.Deencapsulation;
 
+import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -64,20 +54,8 @@ public class StatisticsJobManagerTest {
     @Test
     public void testCreateStatisticsJob(@Mocked AnalyzeStmt analyzeStmt) {
         // Setup
-        Column col1 = new Column("col1", PrimitiveType.STRING);
-        Column col2 = new Column("col2", PrimitiveType.INT);
-        OlapTable table = new OlapTable(1L, "tbl", Arrays.asList(col1, col2), KeysType.AGG_KEYS,
-                new PartitionInfo(), new HashDistributionInfo());
         Database database = new Database(1L, "db");
-        database.createTable(table);
-
         Catalog catalog = Catalog.getCurrentCatalog();
-        Deencapsulation.setField(catalog, "statisticsJobScheduler", new StatisticsJobScheduler());
-
-        ConcurrentHashMap<String, Database> fullNameToDb = new ConcurrentHashMap<>();
-        fullNameToDb.put("cluster:db", database);
-        Deencapsulation.setField(catalog, "fullNameToDb", fullNameToDb);
-
         ConcurrentHashMap<Long, Database> idToDb = new ConcurrentHashMap<>();
         idToDb.put(1L, database);
         Deencapsulation.setField(catalog, "idToDb", idToDb);
@@ -101,20 +79,8 @@ public class StatisticsJobManagerTest {
     @Test(expected = UserException.class)
     public void testCreateStatisticsJob_throwUserException(@Mocked AnalyzeStmt analyzeStmt) throws UserException {
         // Setup
-        Column col1 = new Column("col1", PrimitiveType.STRING);
-        Column col2 = new Column("col2", PrimitiveType.INT);
-        OlapTable table = new OlapTable(1L, "tbl", Arrays.asList(col1, col2), KeysType.AGG_KEYS,
-                new PartitionInfo(), new HashDistributionInfo());
         Database database = new Database(1L, "db");
-        database.createTable(table);
-
         Catalog catalog = Catalog.getCurrentCatalog();
-        Deencapsulation.setField(catalog, "statisticsJobScheduler", new StatisticsJobScheduler());
-
-        ConcurrentHashMap<String, Database> fullNameToDb = new ConcurrentHashMap<>();
-        fullNameToDb.put("cluster:db", database);
-        Deencapsulation.setField(catalog, "fullNameToDb", fullNameToDb);
-
         ConcurrentHashMap<Long, Database> idToDb = new ConcurrentHashMap<>();
         idToDb.put(1L, database);
         Deencapsulation.setField(catalog, "idToDb", idToDb);
@@ -143,20 +109,8 @@ public class StatisticsJobManagerTest {
     @Test
     public void testAlterStatisticsJobInfo(@Mocked AnalyzeStmt analyzeStmt) {
         // Setup
-        Column col1 = new Column("col1", PrimitiveType.STRING);
-        Column col2 = new Column("col2", PrimitiveType.INT);
-        OlapTable table = new OlapTable(1L, "tbl", Arrays.asList(col1, col2), KeysType.AGG_KEYS,
-                new PartitionInfo(), new HashDistributionInfo());
         Database database = new Database(1L, "db");
-        database.createTable(table);
-
         Catalog catalog = Catalog.getCurrentCatalog();
-        Deencapsulation.setField(catalog, "statisticsJobScheduler", new StatisticsJobScheduler());
-
-        ConcurrentHashMap<String, Database> fullNameToDb = new ConcurrentHashMap<>();
-        fullNameToDb.put("cluster:db", database);
-        Deencapsulation.setField(catalog, "fullNameToDb", fullNameToDb);
-
         ConcurrentHashMap<Long, Database> idToDb = new ConcurrentHashMap<>();
         idToDb.put(1L, database);
         Deencapsulation.setField(catalog, "idToDb", idToDb);
@@ -195,13 +149,25 @@ public class StatisticsJobManagerTest {
 
     @Test
     public void testGetAnalyzeJobInfos(@Mocked ShowAnalyzeStmt showStmt) throws Exception {
-        // TODO: add more test cases
         // Setup
+        Database database = new Database(1L, "db");
+        Catalog catalog = Catalog.getCurrentCatalog();
+        ConcurrentHashMap<Long, Database> idToDb = new ConcurrentHashMap<>();
+        idToDb.put(1L, database);
+        Deencapsulation.setField(catalog, "idToDb", idToDb);
+
+        statisticsJobManagerUnderTest.getIdToStatisticsJob()
+                .put(1L, new StatisticsJob(1L, Sets.newHashSet(), null));
+
         new Expectations() {
             {
                 showStmt.getJobIds();
                 this.minTimes = 0;
-                this.result = Sets.newHashSet(1L);
+                this.result = Lists.newArrayList(1L);
+
+                showStmt.getLimit();
+                this.minTimes = 0;
+                this.result = 1;
             }
         };
 
@@ -209,16 +175,40 @@ public class StatisticsJobManagerTest {
         final List<List<String>> result = statisticsJobManagerUnderTest.getAnalyzeJobInfos(showStmt);
 
         // Verify the results
-        assertEquals(Collections.singletonList(Collections.singletonList("value")), result);
+        assertEquals(1, result.size());
     }
 
     @Test(expected = AnalysisException.class)
-    public void testGetAnalyzeJobInfos_ThrowsAnalysisException() throws Exception {
+    public void testGetAnalyzeJobInfos_ThrowsAnalysisException(@Mocked ShowAnalyzeStmt showStmt) throws Exception {
         // Setup
-        final ShowAnalyzeStmt showStmt = new ShowAnalyzeStmt(new TableName("db", "tbl"), Expr.readIn(null),
-                Arrays.asList(new OrderByElement(Expr.readIn(null), false, false)), new LimitElement(0L, 0L));
+        Database database = new Database(1L, "db");
+        Catalog catalog = Catalog.getCurrentCatalog();
+        ConcurrentHashMap<Long, Database> idToDb = new ConcurrentHashMap<>();
+        idToDb.put(1L, database);
+        Deencapsulation.setField(catalog, "idToDb", idToDb);
+
+        statisticsJobManagerUnderTest.getIdToStatisticsJob()
+                .put(1L, new StatisticsJob(1L, Sets.newHashSet(), null));
+
+        new Expectations() {
+            {
+                showStmt.getJobIds();
+                this.minTimes = 0;
+                this.result = Lists.newArrayList(2L);
+
+                showStmt.getLimit();
+                this.minTimes = 0;
+                this.result = 1;
+            }
+        };
 
         // Run the test
-        statisticsJobManagerUnderTest.getAnalyzeJobInfos(showStmt);
+        try {
+            statisticsJobManagerUnderTest.getAnalyzeJobInfos(showStmt);
+        } catch (AnalysisException e) {
+            // Verify the results
+            assertEquals("errCode = 2, detailMessage = No such job id: 2", e.getMessage());
+            throw e;
+        }
     }
 }
