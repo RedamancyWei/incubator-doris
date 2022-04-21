@@ -29,7 +29,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -47,7 +46,7 @@ public class StatisticsJobTest {
         HashSet<Long> tblIds = Sets.newHashSet();
         tblIds.add(0L);
         tblIds.add(1L);
-        this.statisticsJobUnderTest = new StatisticsJob(0L, tblIds, new HashMap<>());
+        this.statisticsJobUnderTest = new StatisticsJob(0L, tblIds, new HashMap<>(), null);
     }
 
     @Test
@@ -74,14 +73,13 @@ public class StatisticsJobTest {
         StatsGranularityDesc statsGranularityDesc = new StatsGranularityDesc();
         statsGranularityDesc.setTableId(0L);
         statsGranularityDesc.setGranularity(StatsGranularityDesc.StatsGranularity.TABLE);
-
-        this.statisticsJobUnderTest.setTasks(Collections.singletonList(
-                new StatisticsTask(0L, statsGranularityDesc, statsCategoryDesc, null) {
-                    @Override
-                    public StatisticsTaskResult call() throws Exception {
-                        return null;
-                    }
-                }));
+        StatisticsTask task = new StatisticsTask(0L, statsGranularityDesc, statsCategoryDesc, null) {
+            @Override
+            public StatisticsTaskResult call() throws Exception {
+                return null;
+            }
+        };
+        this.statisticsJobUnderTest.getTasks().add(task);
 
         new Expectations() {
             {

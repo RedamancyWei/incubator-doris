@@ -32,14 +32,12 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import mockit.Expectations;
 import mockit.Mocked;
-
 import static org.junit.Assert.assertEquals;
 
 public class StatisticsJobManagerTest {
@@ -130,16 +128,16 @@ public class StatisticsJobManagerTest {
             for (Map.Entry<Long, StatisticsJob> entry : idToStatisticsJob.entrySet()) {
                 Long jobId = entry.getKey();
                 StatisticsJob statisticsJob = entry.getValue();
-                statisticsJob.setTasks(Collections.singletonList(
-                        new StatisticsTask(jobId, null, null, null) {
-                            @Override
-                            public StatisticsTaskResult call() throws Exception {
-                                return null;
-                            }
-                        }));
+                StatisticsTask task = new StatisticsTask(jobId, null, null, null) {
+                    @Override
+                    public StatisticsTaskResult call() throws Exception {
+                        return null;
+                    }
+                };
+                statisticsJob.getTasks().add(task);
                 long taskId = statisticsJob.getTasks().get(0).getId();
-                this.statisticsJobManagerUnderTest.alterStatisticsJobInfo(jobId, taskId, null);
-                this.statisticsJobManagerUnderTest.alterStatisticsJobInfo(jobId, taskId, "error");
+                statisticsJob.updateJobInfoByTaskId(taskId, null);
+                statisticsJob.updateJobInfoByTaskId(taskId, "error");
                 break;
             }
         } catch (UserException e) {
@@ -157,7 +155,7 @@ public class StatisticsJobManagerTest {
         Deencapsulation.setField(catalog, "idToDb", idToDb);
 
         statisticsJobManagerUnderTest.getIdToStatisticsJob()
-                .put(1L, new StatisticsJob(1L, Sets.newHashSet(), null));
+                .put(1L, new StatisticsJob(1L, Sets.newHashSet(), null, null));
 
         new Expectations() {
             {
@@ -188,7 +186,7 @@ public class StatisticsJobManagerTest {
         Deencapsulation.setField(catalog, "idToDb", idToDb);
 
         statisticsJobManagerUnderTest.getIdToStatisticsJob()
-                .put(1L, new StatisticsJob(1L, Sets.newHashSet(), null));
+                .put(1L, new StatisticsJob(1L, Sets.newHashSet(), null, null));
 
         new Expectations() {
             {
