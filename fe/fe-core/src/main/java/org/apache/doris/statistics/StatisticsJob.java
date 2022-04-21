@@ -38,6 +38,7 @@ import java.text.SimpleDateFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import javax.annotation.Nullable;
 
@@ -57,7 +58,9 @@ public class StatisticsJob {
         CANCELLED
     }
 
-    private long id = Catalog.getCurrentCatalog().getNextId();
+    protected ReentrantReadWriteLock lock = new ReentrantReadWriteLock(true);
+
+    private final long id = Catalog.getCurrentCatalog().getNextId();
 
     /**
      * to be collected database stats.
@@ -74,15 +77,12 @@ public class StatisticsJob {
      */
     private final Map<Long, List<String>> tableIdToColumnName;
 
-    /**
-     * timeout of a statistics task
-     */
-    private long taskTimeout;
+    private final Map<String, String> properties;
 
     /**
      * to be executed tasks.
      */
-    private List<StatisticsTask> tasks = Lists.newArrayList();
+    private final List<StatisticsTask> tasks = Lists.newArrayList();
 
     private JobState jobState = JobState.PENDING;
     private final List<String> errorMsgs = Lists.newArrayList();
@@ -94,18 +94,32 @@ public class StatisticsJob {
 
     public StatisticsJob(Long dbId,
                          Set<Long> tblIds,
-                         Map<Long, List<String>> tableIdToColumnName) {
+                         Map<Long, List<String>> tableIdToColumnName,
+                         Map<String, String> properties) {
         this.dbId = dbId;
         this.tblIds = tblIds;
         this.tableIdToColumnName = tableIdToColumnName;
+        this.properties = properties == null ? Maps.newHashMap() : properties;
+    }
+
+    public void readLock() {
+        this.lock.readLock().lock();
+    }
+
+    public void readUnlock() {
+        this.lock.readLock().unlock();
+    }
+
+    private void writeLock() {
+        this.lock.writeLock().lock();
+    }
+
+    private void writeUnlock() {
+        this.lock.writeLock().unlock();
     }
 
     public long getId() {
         return this.id;
-    }
-
-    public void setId(long id) {
-        this.id = id;
     }
 
     public long getDbId() {
@@ -120,20 +134,16 @@ public class StatisticsJob {
         return this.tableIdToColumnName;
     }
 
-    public long getTaskTimeout() {
-        return taskTimeout;
+    public Map<String, String> getProperties() {
+        return this.properties;
     }
 
     public List<StatisticsTask> getTasks() {
         return this.tasks;
     }
 
-    public void setTasks(List<StatisticsTask> tasks) {
-        this.tasks = tasks;
-    }
-
     public List<String> getErrorMsgs() {
-        return errorMsgs;
+        return this.errorMsgs;
     }
 
     public JobState getJobState() {
@@ -148,66 +158,95 @@ public class StatisticsJob {
         return this.startTime;
     }
 
-    public void setStartTime(long startTime) {
-        this.startTime = startTime;
-    }
-
     public long getFinishTime() {
         return this.finishTime;
-    }
-
-    public void setFinishTime(long finishTime) {
-        this.finishTime = finishTime;
     }
 
     public int getProgress() {
         return this.progress;
     }
 
-    public void setProgress(int progress) {
-        this.progress = progress;
-    }
+    public void updateJobState(JobState jobState) {
+        writeLock();
 
-    private void setOptional(AnalyzeStmt stmt) {
-        if (stmt.getTaskTimeout() != -1) {
-            this.taskTimeout = stmt.getTaskTimeout();
+        try {
+            // PENDING -> SCHEDULING/FAILED/CANCELLED
+            if (this.jobState == JobState.PENDING) {
+                if (jobState == JobState.SCHEDULING) {
+                    this.jobState = JobState.SCHEDULING;
+                } else if (jobState == JobState.FAILED) {
+                    this.jobState = JobState.FAILED;
+                } else if (jobState == JobState.CANCELLED) {
+                    this.jobState = JobState.CANCELLED;
+                    LOG.info("Change job state from PENDING to CANCELLED.");
+                } else {
+                    LOG.info("Invalid job state transition from PENDING to " + jobState);
+                }
+                return;
+            }
+
+            // SCHEDULING -> RUNNING/FAILED/CANCELLED
+            if (this.jobState == JobState.SCHEDULING) {
+                if (jobState == JobState.RUNNING) {
+                    this.jobState = JobState.RUNNING;
+                    // job start running, set start time
+                    this.startTime = System.currentTimeMillis();
+                } else if (jobState == JobState.FAILED) {
+                    this.jobState = JobState.FAILED;
+                } else if (jobState == JobState.CANCELLED) {
+                    this.jobState = JobState.CANCELLED;
+                    LOG.info("Change job state from SCHEDULING to CANCELLED.");
+                } else {
+                    LOG.info("Invalid job state transition from SCHEDULING to " + jobState);
+                }
+                return;
+            }
+
+            // RUNNING -> FINISHED/FAILED/CANCELLED
+            if (this.jobState == JobState.RUNNING) {
+                if (jobState == JobState.FINISHED) {
+                    // set finish time
+                    this.finishTime = System.currentTimeMillis();
+                    this.jobState = JobState.FINISHED;
+                } else if (jobState == JobState.FAILED) {
+                    this.jobState = JobState.FAILED;
+                } else if (jobState == JobState.CANCELLED) {
+                    this.jobState = JobState.CANCELLED;
+                    LOG.info("Change job state from RUNNING to CANCELLED.");
+                } else {
+                    LOG.info("Invalid job state transition from RUNNING to " + jobState);
+                }
+            }
+
+            // unsupported transition
+            LOG.info("Invalid job state transition from " + this.jobState + " to " + jobState);
+        } finally {
+            writeUnlock();
         }
     }
 
-    public synchronized void updateJobState(JobState jobState) {
-        // PENDING -> SCHEDULING/FAILED/CANCELLED
-        if (this.jobState == JobState.PENDING) {
-            if (jobState == JobState.SCHEDULING) {
-                this.jobState = JobState.SCHEDULING;
-            } else if (jobState == JobState.FAILED) {
-                this.jobState = JobState.FAILED;
-            } else if (jobState == JobState.CANCELLED) {
-                this.jobState = JobState.CANCELLED;
-            }
-            return;
-        }
+    public void updateJobInfoByTaskId(Long taskId, String errorMsg) {
+        writeLock();
 
-        // SCHEDULING -> RUNNING/FAILED/CANCELLED
-        if (this.jobState == JobState.SCHEDULING) {
-            if (jobState == JobState.RUNNING) {
-                this.jobState = JobState.RUNNING;
-            } else if (jobState == JobState.FAILED) {
-                this.jobState = JobState.FAILED;
-            } else if (jobState == JobState.CANCELLED) {
-                this.jobState = JobState.CANCELLED;
+        try {
+            for (StatisticsTask task : this.tasks) {
+                if (taskId == task.getId()) {
+                    if (Strings.isNullOrEmpty(errorMsg)) {
+                        this.progress += 1;
+                        if (this.progress == this.tasks.size()) {
+                            updateJobState(StatisticsJob.JobState.FINISHED);
+                        }
+                        task.updateTaskState(StatisticsTask.TaskState.FINISHED);
+                    } else {
+                        this.errorMsgs.add(errorMsg);
+                        task.updateTaskState(StatisticsTask.TaskState.FAILED);
+                        updateJobState(StatisticsJob.JobState.FAILED);
+                    }
+                    return;
+                }
             }
-            return;
-        }
-
-        // RUNNING -> FINISHED/FAILED/CANCELLED
-        if (this.jobState == JobState.RUNNING) {
-            if (jobState == JobState.FINISHED) {
-                this.jobState = JobState.FINISHED;
-            } else if (jobState == JobState.FAILED) {
-                this.jobState = JobState.FAILED;
-            } else if (jobState == JobState.CANCELLED) {
-                this.jobState = JobState.CANCELLED;
-            }
+        } finally {
+            writeUnlock();
         }
     }
 
@@ -221,78 +260,83 @@ public class StatisticsJob {
         long dbId = analyzeStmt.getDbId();
         Map<Long, List<String>> tableIdToColumnName = analyzeStmt.getTableIdToColumnName();
         Set<Long> tblIds = analyzeStmt.getTblIds();
-        StatisticsJob statisticsJob = new StatisticsJob(dbId, tblIds, tableIdToColumnName);
-        statisticsJob.setOptional(analyzeStmt);
-        return statisticsJob;
+        Map<String, String> properties = analyzeStmt.getProperties();
+        return new StatisticsJob(dbId, tblIds, tableIdToColumnName, properties);
     }
 
     public List<Comparable> getShowInfo(@Nullable Long tableId) throws AnalysisException {
         List<Comparable> result = Lists.newArrayList();
 
-        result.add(Long.toString(this.id));
+        readLock();
 
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
-        result.add(TimeUtils.longToTimeString(this.createTime, dateFormat));
-        result.add(this.startTime != -1L ? TimeUtils.longToTimeString(this.startTime, dateFormat) : "N/A");
-        result.add(this.finishTime != -1L ? TimeUtils.longToTimeString(this.finishTime, dateFormat) : "N/A");
+        try {
+            result.add(Long.toString(this.id));
 
-        StringBuilder sb = new StringBuilder();
-        for (String errorMsg : this.errorMsgs) {
-            sb.append(errorMsg).append("\n");
-        }
-        result.add(sb.toString());
+            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+            result.add(TimeUtils.longToTimeString(this.createTime, dateFormat));
+            result.add(this.startTime != -1L ? TimeUtils.longToTimeString(this.startTime, dateFormat) : "N/A");
+            result.add(this.finishTime != -1L ? TimeUtils.longToTimeString(this.finishTime, dateFormat) : "N/A");
 
-        int totalTaskNum = 0;
-        int finishedTaskNum = 0;
-        Map<Long, Set<String>> tblIdToCols = Maps.newHashMap();
+            StringBuilder sb = new StringBuilder();
+            for (String errorMsg : this.errorMsgs) {
+                sb.append(errorMsg).append("\n");
+            }
+            result.add(sb.toString());
 
-        for (StatisticsTask task : this.tasks) {
-            long tblId = task.getCategoryDesc().getTableId();
-            if (tableId == null || tableId == tblId) {
-                totalTaskNum++;
-                if (task.getTaskState() == StatisticsTask.TaskState.FINISHED) {
-                    finishedTaskNum++;
-                }
-                String col = task.getCategoryDesc().getColumnName();
-                if (!Strings.isNullOrEmpty(col)) {
-                    if (tblIdToCols.containsKey(tblId)) {
-                        tblIdToCols.get(tblId).add(col);
-                    } else {
-                        Set<String> cols = Sets.newHashSet();
-                        cols.add(col);
-                        tblIdToCols.put(tblId, cols);
+            int totalTaskNum = 0;
+            int finishedTaskNum = 0;
+            Map<Long, Set<String>> tblIdToCols = Maps.newHashMap();
+
+            for (StatisticsTask task : this.tasks) {
+                long tblId = task.getCategoryDesc().getTableId();
+                if (tableId == null || tableId == tblId) {
+                    totalTaskNum++;
+                    if (task.getTaskState() == StatisticsTask.TaskState.FINISHED) {
+                        finishedTaskNum++;
+                    }
+                    String col = task.getCategoryDesc().getColumnName();
+                    if (!Strings.isNullOrEmpty(col)) {
+                        if (tblIdToCols.containsKey(tblId)) {
+                            tblIdToCols.get(tblId).add(col);
+                        } else {
+                            Set<String> cols = Sets.newHashSet();
+                            cols.add(col);
+                            tblIdToCols.put(tblId, cols);
+                        }
                     }
                 }
             }
-        }
 
-        List<String> scope = Lists.newArrayList();
-        Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(this.dbId);
-        for (Long tblId : this.tblIds) {
-            try {
-                Table table = db.getTableOrAnalysisException(tblId);
-                List<Column> baseSchema = table.getBaseSchema();
-                Set<String> cols = tblIdToCols.get(tblId);
-                if (cols != null) {
-                    if (baseSchema.size() == cols.size()) {
-                        scope.add(table.getName() + "(*)");
-                    } else {
-                        scope.add(table.getName() + "(" + StringUtils.join(cols.toArray(), ",") + ")");
+            List<String> scope = Lists.newArrayList();
+            Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(this.dbId);
+            for (Long tblId : this.tblIds) {
+                try {
+                    Table table = db.getTableOrAnalysisException(tblId);
+                    List<Column> baseSchema = table.getBaseSchema();
+                    Set<String> cols = tblIdToCols.get(tblId);
+                    if (cols != null) {
+                        if (baseSchema.size() == cols.size()) {
+                            scope.add(table.getName() + "(*)");
+                        } else {
+                            scope.add(table.getName() + "(" + StringUtils.join(cols.toArray(), ",") + ")");
+                        }
                     }
+                } catch (AnalysisException e) {
+                    // catch this exception when table is dropped
+                    LOG.info("get table failed, tableId: " + tblId, e);
                 }
-            } catch (AnalysisException e) {
-                // catch this exception when table is dropped
-                LOG.info("get table failed, tableId: " + tblId, e);
             }
-        }
 
-        result.add(StringUtils.join(scope.toArray(), ","));
-        result.add(finishedTaskNum + "/" + totalTaskNum);
+            result.add(StringUtils.join(scope.toArray(), ","));
+            result.add(finishedTaskNum + "/" + totalTaskNum);
 
-        if (totalTaskNum == finishedTaskNum) {
-            result.add("FINISHED");
-        } else {
-            result.add(this.jobState.toString());
+            if (totalTaskNum == finishedTaskNum) {
+                result.add("FINISHED");
+            } else {
+                result.add(this.jobState.toString());
+            }
+        } finally {
+            readUnlock();
         }
 
         return result;

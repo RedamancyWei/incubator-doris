@@ -46,6 +46,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 /**
  * Collect statistics about a database
@@ -60,7 +61,7 @@ import java.util.function.Predicate;
  *      properties: properties of statistics jobs
  */
 public class AnalyzeStmt extends DdlStmt {
-    private static final Logger LOG = LogManager.getLogger(CreateRoutineLoadStmt.class);
+    private static final Logger LOG = LogManager.getLogger(AnalyzeStmt.class);
 
     // time to wait for collect  statistics
     public static final String CBO_STATISTICS_TASK_TIMEOUT_SEC = "cbo_statistics_task_timeout_sec";
@@ -78,8 +79,6 @@ public class AnalyzeStmt extends DdlStmt {
     // after analyzed
     private long dbId;
     private final Set<Long> tblIds = Sets.newHashSet();
-
-    private long taskTimeout = 60L;
 
     public AnalyzeStmt(TableName dbTableName, List<String> columns, Map<String, String> properties) {
         this.dbTableName = dbTableName;
@@ -151,8 +150,8 @@ public class AnalyzeStmt extends DdlStmt {
         return tableIdToColumnName;
     }
 
-    public long getTaskTimeout() {
-        return this.taskTimeout;
+    public Map<String, String> getProperties() {
+        return this.properties;
     }
 
     @Override
@@ -172,11 +171,13 @@ public class AnalyzeStmt extends DdlStmt {
             if (this.columnNames != null && !this.columnNames.isEmpty()) {
                 table.readLock();
                 try {
-                    for (String columnName : this.columnNames) {
-                        Column column = table.getColumn(columnName);
-                        if (column == null) {
-                            ErrorReport.reportAnalysisException(ErrorCode.ERR_WRONG_COLUMN_NAME, columnName);
-                        }
+                    List<String> baseSchema = table.getBaseSchema(false)
+                            .stream().map(Column::getName).collect(Collectors.toList());
+                    Optional<String> optional = this.columnNames.stream()
+                            .filter(entity -> !baseSchema.contains(entity)).findFirst();
+                    if (optional.isPresent()) {
+                        String columnName = optional.get();
+                        ErrorReport.reportAnalysisException(ErrorCode.ERR_WRONG_COLUMN_NAME, columnName);
                     }
                 } finally {
                     table.readUnlock();
@@ -238,9 +239,10 @@ public class AnalyzeStmt extends DdlStmt {
             throw new AnalysisException(optional.get() + " is invalid property");
         }
 
-        this.taskTimeout = ((Long) Util.getLongPropertyOrDefault(this.properties.get(CBO_STATISTICS_TASK_TIMEOUT_SEC),
+        long taskTimeout = ((Long) Util.getLongPropertyOrDefault(this.properties.get(CBO_STATISTICS_TASK_TIMEOUT_SEC),
                 Config.max_cbo_statistics_task_timeout_sec, DESIRED_TASK_TIMEOUT_SEC,
                 CBO_STATISTICS_TASK_TIMEOUT_SEC + " should > 0")).intValue();
+        this.properties.put(CBO_STATISTICS_TASK_TIMEOUT_SEC, String.valueOf(taskTimeout));
     }
 }
 

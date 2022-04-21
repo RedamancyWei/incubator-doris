@@ -17,6 +17,7 @@
 
 package org.apache.doris.statistics;
 
+import org.apache.doris.analysis.AnalyzeStmt;
 import org.apache.doris.catalog.Catalog;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.Config;
@@ -77,7 +78,6 @@ public class StatisticsTaskScheduler extends MasterDaemon {
                     taskSize = 0;
                 }
                 Future<StatisticsTaskResult> future = executor.submit(task);
-                task.setStartTime(System.currentTimeMillis());
                 task.updateTaskState(TaskState.RUNNING);
                 long taskId = task.getId();
                 taskMap.put(taskId, future);
@@ -85,7 +85,6 @@ public class StatisticsTaskScheduler extends MasterDaemon {
                 jobId = task.getJobId();
                 StatisticsJob statisticsJob = statisticsJobs.get(jobId);
                 if (statisticsJob.getJobState() == JobState.SCHEDULING) {
-                    statisticsJob.setStartTime(System.currentTimeMillis());
                     statisticsJob.updateJobState(JobState.RUNNING);
                 }
                 taskSize++;
@@ -118,13 +117,16 @@ public class StatisticsTaskScheduler extends MasterDaemon {
     private void handleTaskResult(Long jobId, Map<Long, Future<StatisticsTaskResult>> taskMap) {
         StatisticsManager statsManager = Catalog.getCurrentCatalog().getStatisticsManager();
         StatisticsJobManager jobManager = Catalog.getCurrentCatalog().getStatisticsJobManager();
+        StatisticsJob statisticsJob = jobManager.getIdToStatisticsJob().get(jobId);
 
-        long timeout = jobManager.getIdToStatisticsJob().get(jobId).getTaskTimeout();
+        Map<String, String> properties = statisticsJob.getProperties();
+        long timeout = Long.parseLong(properties.get(AnalyzeStmt.CBO_STATISTICS_TASK_TIMEOUT_SEC));
 
         for (Map.Entry<Long, Future<StatisticsTaskResult>> entry : taskMap.entrySet()) {
             String errorMsg = "";
             long taskId = entry.getKey();
             Future<StatisticsTaskResult> future = entry.getValue();
+
             try {
                 StatisticsTaskResult taskResult = future.get(timeout, TimeUnit.SECONDS);
                 StatsCategoryDesc categoryDesc = taskResult.getCategoryDesc();
@@ -149,8 +151,9 @@ public class StatisticsTaskScheduler extends MasterDaemon {
                 errorMsg = "The statistics task was interrupted";
                 LOG.info("{}, jobId: {}, e: {}", errorMsg, jobId, e);
             }
+
             // update the job info
-            jobManager.alterStatisticsJobInfo(jobId, taskId, errorMsg);
+            statisticsJob.updateJobInfoByTaskId(taskId, errorMsg);
         }
     }
 }

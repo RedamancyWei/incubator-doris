@@ -24,6 +24,7 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * The StatisticsTask belongs to one StatisticsJob.
@@ -46,7 +47,9 @@ public abstract class StatisticsTask implements Callable<StatisticsTaskResult> {
         FAILED
     }
 
-    protected long id = Catalog.getCurrentCatalog().getNextId();;
+    protected ReentrantReadWriteLock lock = new ReentrantReadWriteLock(true);
+
+    protected long id = Catalog.getCurrentCatalog().getNextId();
     protected long jobId;
     protected StatsGranularityDesc granularityDesc;
     protected StatsCategoryDesc categoryDesc;
@@ -65,6 +68,22 @@ public abstract class StatisticsTask implements Callable<StatisticsTaskResult> {
         this.granularityDesc = granularityDesc;
         this.categoryDesc = categoryDesc;
         this.statsTypeList = statsTypeList;
+    }
+
+    public void readLock() {
+        this.lock.readLock().lock();
+    }
+
+    public void readUnlock() {
+        this.lock.readLock().unlock();
+    }
+
+    protected void writeLock() {
+        this.lock.writeLock().lock();
+    }
+
+    protected void writeUnlock() {
+        this.lock.writeLock().unlock();
     }
 
     public long getId() {
@@ -103,16 +122,8 @@ public abstract class StatisticsTask implements Callable<StatisticsTaskResult> {
         return this.startTime;
     }
 
-    public void setStartTime(long startTime) {
-        this.startTime = startTime;
-    }
-
     public long getFinishTime() {
         return this.finishTime;
-    }
-
-    public void setFinishTime(long finishTime) {
-        this.finishTime = finishTime;
     }
 
     /**
@@ -124,24 +135,40 @@ public abstract class StatisticsTask implements Callable<StatisticsTaskResult> {
     @Override
     public abstract StatisticsTaskResult call() throws Exception;
 
-    public synchronized void updateTaskState(TaskState taskState) {
-        // PENDING -> RUNNING/FAILED
-        if (this.taskState == TaskState.PENDING) {
-            if (taskState == TaskState.RUNNING) {
-                this.taskState = TaskState.RUNNING;
-            } else if (taskState == TaskState.FAILED) {
-                this.taskState = TaskState.FAILED;
-            }
-            return;
-        }
+    public void updateTaskState(TaskState taskState) {
+        writeLock();
 
-        // RUNNING -> FINISHED/FAILED
-        if (this.taskState == TaskState.RUNNING) {
-            if (taskState == TaskState.FINISHED) {
-                this.taskState = TaskState.FINISHED;
-            } else if (taskState == TaskState.FAILED) {
-                this.taskState = TaskState.FAILED;
+        try {
+            // PENDING -> RUNNING/FAILED
+            if (this.taskState == TaskState.PENDING) {
+                if (taskState == TaskState.RUNNING) {
+                    this.taskState = TaskState.RUNNING;
+                    // task start running, set start time
+                    this.startTime = System.currentTimeMillis();
+                } else if (taskState == TaskState.FAILED) {
+                    this.taskState = TaskState.FAILED;
+                } else {
+                    LOG.info("Invalid task state transition from PENDING to " + taskState);
+                }
+                return;
             }
+
+            // RUNNING -> FINISHED/FAILED
+            if (this.taskState == TaskState.RUNNING) {
+                if (taskState == TaskState.FINISHED) {
+                    // set finish time
+                    this.finishTime = System.currentTimeMillis();
+                    this.taskState = TaskState.FINISHED;
+                } else if (taskState == TaskState.FAILED) {
+                    this.taskState = TaskState.FAILED;
+                } else {
+                    LOG.info("Invalid task state transition from RUNNING to " + taskState);
+                }
+            }
+
+           LOG.info("Task state transition from " + this.taskState + " to " + taskState);
+        } finally {
+            writeUnlock();
         }
     }
 }

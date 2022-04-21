@@ -62,19 +62,19 @@ public class StatisticsJobManager {
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock(true);
 
     public void readLock() {
-        lock.readLock().lock();
+        this.lock.readLock().lock();
     }
 
     public void readUnlock() {
-        lock.readLock().unlock();
+        this.lock.readLock().unlock();
     }
 
     private void writeLock() {
-        lock.writeLock().lock();
+        this.lock.writeLock().lock();
     }
 
     private void writeUnlock() {
-        lock.writeLock().unlock();
+        this.lock.writeLock().unlock();
     }
 
     public Map<Long, StatisticsJob> getIdToStatisticsJob() {
@@ -126,7 +126,6 @@ public class StatisticsJobManager {
             db.readUnlock();
         }
 
-
         int unfinishedJobs = 0;
 
         // check table unfinished job
@@ -149,38 +148,6 @@ public class StatisticsJobManager {
         if (unfinishedJobs > Config.cbo_max_statistics_job_num) {
             throw new AnalysisException("The unfinished statistics job could not more than cbo_max_statistics_job_num: " +
                     Config.cbo_max_statistics_job_num);
-        }
-    }
-
-    public void alterStatisticsJobInfo(Long jobId, Long taskId, String errorMsg)  {
-        StatisticsJob statisticsJob = this.idToStatisticsJob.get(jobId);
-        if (statisticsJob == null) {
-            return;
-        }
-        writeLock();
-        try {
-            List<StatisticsTask> tasks = statisticsJob.getTasks();
-            for (StatisticsTask task : tasks) {
-                if (taskId == task.getId()) {
-                    if (Strings.isNullOrEmpty(errorMsg)) {
-                        int progress = statisticsJob.getProgress() + 1;
-                        statisticsJob.setProgress(progress);
-                        if (progress == statisticsJob.getTasks().size()) {
-                            statisticsJob.setFinishTime(System.currentTimeMillis());
-                            statisticsJob.updateJobState(StatisticsJob.JobState.FINISHED);
-                        }
-                        task.setFinishTime(System.currentTimeMillis());
-                        task.updateTaskState(StatisticsTask.TaskState.FINISHED);
-                    } else {
-                        statisticsJob.getErrorMsgs().add(errorMsg);
-                        task.updateTaskState(StatisticsTask.TaskState.FAILED);
-                        statisticsJob.updateJobState(StatisticsJob.JobState.FAILED);
-                    }
-                    return;
-                }
-            }
-        } finally {
-            writeUnlock();
         }
     }
 
