@@ -178,7 +178,6 @@ public class StatisticsJob {
                     this.jobState = JobState.FAILED;
                 } else if (jobState == JobState.CANCELLED) {
                     this.jobState = JobState.CANCELLED;
-                    LOG.info("Change job state from PENDING to CANCELLED.");
                 } else {
                     LOG.info("Invalid job state transition from PENDING to " + jobState);
                 }
@@ -195,8 +194,7 @@ public class StatisticsJob {
                     this.jobState = JobState.FAILED;
                 } else if (jobState == JobState.CANCELLED) {
                     this.jobState = JobState.CANCELLED;
-                    LOG.info("Change job state from SCHEDULING to CANCELLED.");
-                } else {
+                }  else {
                     LOG.info("Invalid job state transition from SCHEDULING to " + jobState);
                 }
                 return;
@@ -212,10 +210,10 @@ public class StatisticsJob {
                     this.jobState = JobState.FAILED;
                 } else if (jobState == JobState.CANCELLED) {
                     this.jobState = JobState.CANCELLED;
-                    LOG.info("Change job state from RUNNING to CANCELLED.");
-                } else {
+                }  else {
                     LOG.info("Invalid job state transition from RUNNING to " + jobState);
                 }
+                return;
             }
 
             // unsupported transition
