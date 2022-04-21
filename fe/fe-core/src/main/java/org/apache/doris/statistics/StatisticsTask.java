@@ -47,7 +47,7 @@ public abstract class StatisticsTask implements Callable<StatisticsTaskResult> {
         FAILED
     }
 
-    protected ReentrantReadWriteLock lock = new ReentrantReadWriteLock(true);
+    protected final ReentrantReadWriteLock lock = new ReentrantReadWriteLock(true);
 
     protected long id = Catalog.getCurrentCatalog().getNextId();
     protected long jobId;
@@ -71,19 +71,19 @@ public abstract class StatisticsTask implements Callable<StatisticsTaskResult> {
     }
 
     public void readLock() {
-        this.lock.readLock().lock();
+        lock.readLock().lock();
     }
 
     public void readUnlock() {
-        this.lock.readLock().unlock();
+        lock.readLock().unlock();
     }
 
     protected void writeLock() {
-        this.lock.writeLock().lock();
+        lock.writeLock().lock();
     }
 
     protected void writeUnlock() {
-        this.lock.writeLock().unlock();
+        lock.writeLock().unlock();
     }
 
     public long getId() {

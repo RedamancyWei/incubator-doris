@@ -58,7 +58,7 @@ public class StatisticsJob {
         CANCELLED
     }
 
-    protected ReentrantReadWriteLock lock = new ReentrantReadWriteLock(true);
+    protected final ReentrantReadWriteLock lock = new ReentrantReadWriteLock(true);
 
     private final long id = Catalog.getCurrentCatalog().getNextId();
 
@@ -103,19 +103,19 @@ public class StatisticsJob {
     }
 
     public void readLock() {
-        this.lock.readLock().lock();
+        lock.readLock().lock();
     }
 
     public void readUnlock() {
-        this.lock.readLock().unlock();
+        lock.readLock().unlock();
     }
 
     private void writeLock() {
-        this.lock.writeLock().lock();
+        lock.writeLock().lock();
     }
 
     private void writeUnlock() {
-        this.lock.writeLock().unlock();
+        lock.writeLock().unlock();
     }
 
     public long getId() {
