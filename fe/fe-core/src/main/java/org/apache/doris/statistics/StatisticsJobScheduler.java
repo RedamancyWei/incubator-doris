@@ -71,16 +71,27 @@ public class StatisticsJobScheduler extends MasterDaemon {
 
     @Override
     protected void runAfterCatalogReady() {
-        // StatisticsUtils.buildConnectContext();
-        StatisticsJob pendingJob = this.pendingJobQueue.poll();
+        StatisticsJob pendingJob = pendingJobQueue.peek();
         if (pendingJob != null) {
             try {
-                List<StatisticsTask> tasks = this.divide(pendingJob);
-                Catalog.getCurrentCatalog().getStatisticsTaskScheduler().addTasks(tasks);
-                pendingJob.updateJobState(StatisticsJob.JobState.SCHEDULING);
+                if (pendingJob.getTasks().size() == 0) {
+                    divide(pendingJob);
+                }
+                List<StatisticsTask> tasks = pendingJob.getTasks();
+                int taskNum = tasks.size();
+                StatisticsTaskScheduler scheduler = Catalog.getCurrentCatalog().getStatisticsTaskScheduler();
+                int unfinishedTaskNum = scheduler.getUnfinishedTaskNum();
+                if (taskNum > Config.cbo_max_statistics_task_num - unfinishedTaskNum) {
+                    LOG.info("Too many unfinished statistics tasks, schedule the job(id={}) later",
+                            pendingJob.getId());
+                } else {
+                    pendingJobQueue.remove();
+                    scheduler.addTasks(tasks);
+                    pendingJob.updateJobState(StatisticsJob.JobState.SCHEDULING);
+                }
             } catch (DdlException e) {
                 pendingJob.updateJobState(StatisticsJob.JobState.FAILED);
-                LOG.info("Failed to schedule the statistical job. " + e.getMessage());
+                LOG.info("Failed to schedule the statistical job(id={})", pendingJob.getId(), e);
             }
         }
     }
@@ -116,7 +127,7 @@ public class StatisticsJobScheduler extends MasterDaemon {
      * @see SampleSQLStatisticsTask
      * @see SQLStatisticsTask
      */
-    private List<StatisticsTask> divide(StatisticsJob statisticsJob) throws DdlException {
+    private void divide(StatisticsJob statisticsJob) throws DdlException {
         long jobId = statisticsJob.getId();
         long dbId = statisticsJob.getDbId();
         Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbId);
@@ -212,8 +223,6 @@ public class StatisticsJobScheduler extends MasterDaemon {
                 }
             }
         }
-
-        return tasks;
     }
 
     private StatsCategoryDesc getTblStatsCategoryDesc(long dbId, long tableId) {
