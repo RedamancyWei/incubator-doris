@@ -130,12 +130,12 @@ public abstract class StatisticsTask implements Callable<StatisticsTaskResult> {
      * Different statistics implement different collection methods.
      *
      * @return true if this task is finished, false otherwise
-     * @throws IllegalStateException if this state is incorrect
+     * @throws Exception
      */
     @Override
-    public abstract StatisticsTaskResult call() throws IllegalStateException;
+    public abstract StatisticsTaskResult call() throws Exception;
 
-    public void updateTaskState(TaskState newState) {
+    public void updateTaskState(TaskState newState) throws IllegalStateException{
         writeLock();
 
         try {
