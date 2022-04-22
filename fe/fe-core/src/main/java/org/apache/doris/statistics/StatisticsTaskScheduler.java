@@ -97,12 +97,10 @@ public class StatisticsTaskScheduler extends MasterDaemon {
             if (taskSize > 0) {
                 handleTaskResult(jobId, taskMap);
             }
-        } else {
-            throw new IllegalStateException("No statistics task to schedule");
         }
     }
 
-    public void addTasks(List<StatisticsTask> statisticsTaskList) {
+    public void addTasks(List<StatisticsTask> statisticsTaskList) throws IllegalStateException {
         this.queue.addAll(statisticsTaskList);
     }
 

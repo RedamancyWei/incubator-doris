@@ -85,11 +85,12 @@ public class StatisticsJobScheduler extends MasterDaemon {
                     LOG.info("Too many unfinished statistics tasks, schedule the job(id={}) later",
                             pendingJob.getId());
                 } else {
-                    pendingJobQueue.remove();
                     scheduler.addTasks(tasks);
                     pendingJob.updateJobState(StatisticsJob.JobState.SCHEDULING);
+                    pendingJobQueue.remove();
                 }
-            } catch (DdlException e) {
+            } catch (DdlException | IllegalStateException e) {
+                pendingJobQueue.remove();
                 pendingJob.updateJobState(StatisticsJob.JobState.FAILED);
                 LOG.info("Failed to schedule the statistical job(id={})", pendingJob.getId(), e);
             }
