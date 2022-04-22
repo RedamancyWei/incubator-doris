@@ -28,8 +28,8 @@ import org.apache.doris.catalog.PrimitiveType;
 import org.apache.doris.common.jmockit.Deencapsulation;
 
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 
-import org.glassfish.jersey.internal.guava.Sets;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
