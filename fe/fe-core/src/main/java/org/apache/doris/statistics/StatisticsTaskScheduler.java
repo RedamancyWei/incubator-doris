@@ -27,7 +27,7 @@ import org.apache.doris.statistics.StatisticsJob.JobState;
 import org.apache.doris.statistics.StatisticsTask.TaskState;
 import org.apache.doris.statistics.StatsCategoryDesc.StatsCategory;
 
-import com.clearspring.analytics.util.Lists;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Queues;
 
@@ -93,6 +93,8 @@ public class StatisticsTaskScheduler extends MasterDaemon {
             if (taskSize > 0) {
                 handleTaskResult(jobId, taskMap);
             }
+        } else {
+            throw new IllegalStateException("No statistics task to schedule");
         }
     }
 
