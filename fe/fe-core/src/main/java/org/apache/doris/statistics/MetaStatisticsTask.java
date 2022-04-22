@@ -94,7 +94,7 @@ public class MetaStatisticsTask extends StatisticsTask {
         Table table = db.getTableOrDdlException(tableId);
         String columnName = categoryDesc.getColumnName();
         Column column = table.getColumn(columnName);
-        int typeSize = column.getDataType().getOlapColumnIndexSize();
+        int typeSize = column.getDataType().getSlotSize();
         statsTypeToValue.put(statsType, String.valueOf(typeSize));
     }
 }
