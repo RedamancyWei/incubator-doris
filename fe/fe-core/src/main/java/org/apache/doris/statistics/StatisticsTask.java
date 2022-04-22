@@ -130,43 +130,48 @@ public abstract class StatisticsTask implements Callable<StatisticsTaskResult> {
      * Different statistics implement different collection methods.
      *
      * @return true if this task is finished, false otherwise
-     * @throws Exception
+     * @throws IllegalStateException if this state is incorrect
      */
     @Override
-    public abstract StatisticsTaskResult call() throws Exception;
+    public abstract StatisticsTaskResult call() throws IllegalStateException;
 
-    public void updateTaskState(TaskState taskState) {
+    public void updateTaskState(TaskState newState) {
         writeLock();
 
         try {
             // PENDING -> RUNNING/FAILED
-            if (this.taskState == TaskState.PENDING) {
-                if (taskState == TaskState.RUNNING) {
-                    this.taskState = TaskState.RUNNING;
+            if (taskState == TaskState.PENDING) {
+                if (newState == TaskState.RUNNING) {
+                    taskState = newState;
                     // task start running, set start time
-                    this.startTime = System.currentTimeMillis();
-                } else if (taskState == TaskState.FAILED) {
-                    this.taskState = TaskState.FAILED;
+                    startTime = System.currentTimeMillis();
+                } else if (newState == TaskState.FAILED) {
+                    taskState = newState;
+                    LOG.info("Statistics task(id={}) failed", id);
                 } else {
-                    LOG.info("Invalid task state transition from PENDING to " + taskState);
+                    LOG.info("Invalid task state transition from PENDING to " + newState);
+                    throw new IllegalStateException("Invalid task state transition from PENDING to " + newState);
                 }
                 return;
             }
 
             // RUNNING -> FINISHED/FAILED
-            if (this.taskState == TaskState.RUNNING) {
-                if (taskState == TaskState.FINISHED) {
+            if (taskState == TaskState.RUNNING) {
+                if (newState == TaskState.FINISHED) {
                     // set finish time
-                    this.finishTime = System.currentTimeMillis();
-                    this.taskState = TaskState.FINISHED;
-                } else if (taskState == TaskState.FAILED) {
-                    this.taskState = TaskState.FAILED;
+                    finishTime = System.currentTimeMillis();
+                    taskState = newState;
+                } else if (newState == TaskState.FAILED) {
+                    taskState = newState;
+                    LOG.info("Statistics task(id={}) failed", id);
                 } else {
-                    LOG.info("Invalid task state transition from RUNNING to " + taskState);
+                    LOG.info("Invalid task state transition from RUNNING to " + newState);
+                    throw new IllegalStateException("Invalid task state transition from RUNNING to " + newState);
                 }
             }
 
-           LOG.info("Task state transition from " + this.taskState + " to " + taskState);
+            LOG.info("Statistics task(id={}) {} changed to {}", id, taskState, newState);
+            throw new IllegalStateException("Invalid task state transition from " + taskState + " to " + newState);
         } finally {
             writeUnlock();
         }

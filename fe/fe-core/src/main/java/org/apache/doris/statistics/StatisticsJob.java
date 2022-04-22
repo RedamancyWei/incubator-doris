@@ -30,8 +30,8 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
 import org.apache.commons.lang3.StringUtils;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.glassfish.jersey.internal.guava.Sets;
 
 import java.text.SimpleDateFormat;
@@ -166,58 +166,68 @@ public class StatisticsJob {
         return this.progress;
     }
 
-    public void updateJobState(JobState jobState) {
+    public void updateJobState(JobState newState) throws IllegalStateException {
         writeLock();
 
         try {
             // PENDING -> SCHEDULING/FAILED/CANCELLED
-            if (this.jobState == JobState.PENDING) {
-                if (jobState == JobState.SCHEDULING) {
-                    this.jobState = JobState.SCHEDULING;
-                } else if (jobState == JobState.FAILED) {
+            if (jobState == JobState.PENDING) {
+                if (newState == JobState.SCHEDULING) {
+                    this.jobState = newState;
+                } else if (newState == JobState.FAILED) {
                     this.jobState = JobState.FAILED;
-                } else if (jobState == JobState.CANCELLED) {
-                    this.jobState = JobState.CANCELLED;
+                    LOG.info("Statistics job(id={}) is failed", id);
+                } else if (newState == JobState.CANCELLED) {
+                    this.jobState = newState;
+                    LOG.info("Statistics job(id={}) is cancelled.", id);
                 } else {
-                    LOG.info("Invalid job state transition from PENDING to " + jobState);
+                    LOG.info("Invalid job state transition from PENDING to " + newState);
+                    throw new IllegalStateException("Invalid job state transition from PENDING to " + newState);
                 }
                 return;
             }
 
             // SCHEDULING -> RUNNING/FAILED/CANCELLED
-            if (this.jobState == JobState.SCHEDULING) {
-                if (jobState == JobState.RUNNING) {
-                    this.jobState = JobState.RUNNING;
+            if (jobState == JobState.SCHEDULING) {
+                if (newState == JobState.RUNNING) {
+                    this.jobState = newState;
                     // job start running, set start time
                     this.startTime = System.currentTimeMillis();
-                } else if (jobState == JobState.FAILED) {
-                    this.jobState = JobState.FAILED;
-                } else if (jobState == JobState.CANCELLED) {
-                    this.jobState = JobState.CANCELLED;
+                } else if (newState == JobState.FAILED) {
+                    this.jobState = newState;
+                    LOG.info("Statistics job(id={}) is failed", id);
+                } else if (newState == JobState.CANCELLED) {
+                    this.jobState = newState;
+                    LOG.info("Statistics job(id={}) is cancelled.", id);
                 }  else {
-                    LOG.info("Invalid job state transition from SCHEDULING to " + jobState);
+                    LOG.info("Invalid job state transition from SCHEDULING to " + newState);
+                    throw new IllegalStateException("Invalid job state transition from SCHEDULING to " + newState);
                 }
                 return;
             }
 
             // RUNNING -> FINISHED/FAILED/CANCELLED
-            if (this.jobState == JobState.RUNNING) {
-                if (jobState == JobState.FINISHED) {
+            if (jobState == JobState.RUNNING) {
+                if (newState == JobState.FINISHED) {
                     // set finish time
                     this.finishTime = System.currentTimeMillis();
-                    this.jobState = JobState.FINISHED;
-                } else if (jobState == JobState.FAILED) {
-                    this.jobState = JobState.FAILED;
-                } else if (jobState == JobState.CANCELLED) {
-                    this.jobState = JobState.CANCELLED;
+                    this.jobState = newState;
+                } else if (newState == JobState.FAILED) {
+                    this.jobState = newState;
+                    LOG.info("Statistics job(id={}) is failed", id);
+                } else if (newState == JobState.CANCELLED) {
+                    this.jobState = newState;
+                    LOG.info("Statistics job(id={}) is cancelled.", id);
                 }  else {
-                    LOG.info("Invalid job state transition from RUNNING to " + jobState);
+                    LOG.info("Invalid job state transition from RUNNING to " + newState);
+                    throw new IllegalStateException("Invalid job state transition from RUNNING to " + newState);
                 }
                 return;
             }
 
             // unsupported transition
-            LOG.info("Invalid job state transition from " + this.jobState + " to " + jobState);
+            LOG.info("Invalid job(id={}) state transition from {} to {} ", id, jobState, newState);
+            throw new IllegalStateException("Invalid job state transition from " + jobState + " to " + newState);
         } finally {
             writeUnlock();
         }
