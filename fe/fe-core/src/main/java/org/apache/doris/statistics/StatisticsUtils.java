@@ -161,6 +161,7 @@ public class StatisticsUtils {
                 }
             } while (!batch.isEos());
 
+            // TODO(kks): remove this if BE support STATISTIC result sink type
             CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder();
 
             List<String> result = Lists.newArrayList();
