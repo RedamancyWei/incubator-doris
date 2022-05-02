@@ -43,6 +43,7 @@ Status VSortNode::prepare(RuntimeState* state) {
     SCOPED_TIMER(_runtime_profile->total_time_counter());
     _runtime_profile->add_info_string("TOP-N", _limit == -1 ? "false" : "true");
     RETURN_IF_ERROR(ExecNode::prepare(state));
+    SCOPED_SWITCH_TASK_THREAD_LOCAL_MEM_TRACKER(_mem_tracker);
     _block_mem_tracker = MemTracker::create_virtual_tracker(-1, "VSortNode:Block", mem_tracker());
     RETURN_IF_ERROR(_vsort_exec_exprs.prepare(state, child(0)->row_desc(), _row_descriptor,
                                               expr_mem_tracker()));
@@ -51,6 +52,7 @@ Status VSortNode::prepare(RuntimeState* state) {
 
 Status VSortNode::open(RuntimeState* state) {
     SCOPED_TIMER(_runtime_profile->total_time_counter());
+    SCOPED_SWITCH_TASK_THREAD_LOCAL_MEM_TRACKER(_mem_tracker);
     RETURN_IF_ERROR(ExecNode::open(state));
     RETURN_IF_ERROR(_vsort_exec_exprs.open(state));
     RETURN_IF_CANCELLED(state);
@@ -64,7 +66,7 @@ Status VSortNode::open(RuntimeState* state) {
     // Unless we are inside a subplan expecting to call open()/get_next() on the child
     // again, the child can be closed at this point.
     // if (!IsInSubplan()) {
-//    child(0)->close(state);
+    //    child(0)->close(state);
     // }
     return Status::OK();
 }
@@ -76,6 +78,7 @@ Status VSortNode::get_next(RuntimeState* state, RowBatch* row_batch, bool* eos) 
 
 Status VSortNode::get_next(RuntimeState* state, Block* block, bool* eos) {
     SCOPED_TIMER(_runtime_profile->total_time_counter());
+    SCOPED_SWITCH_TASK_THREAD_LOCAL_EXISTED_MEM_TRACKER(_mem_tracker);
 
     auto status = Status::OK();
     if (_sorted_blocks.empty()) {
@@ -132,7 +135,7 @@ Status VSortNode::sort_input(RuntimeState* state) {
             size_t mem_usage = block.allocated_bytes();
 
             // dispose TOP-N logic
-            if (_limit != -1 ) {
+            if (_limit != -1) {
                 // Here is a little opt to reduce the mem uasge, we build a max heap
                 // to order the block in _block_priority_queue.
                 // if one block totally greater the heap top of _block_priority_queue
@@ -141,8 +144,8 @@ Status VSortNode::sort_input(RuntimeState* state) {
                     _total_mem_usage += mem_usage;
                     _sorted_blocks.emplace_back(std::move(block));
                     _num_rows_in_block += rows;
-                    _block_priority_queue.emplace(
-                            _pool->add(new SortCursorImpl(_sorted_blocks.back(), _sort_description)));
+                    _block_priority_queue.emplace(_pool->add(
+                            new SortCursorImpl(_sorted_blocks.back(), _sort_description)));
                 } else {
                     SortBlockCursor block_cursor(
                             _pool->add(new SortCursorImpl(block, _sort_description)));
@@ -201,17 +204,17 @@ Status VSortNode::pretreat_block(doris::vectorized::Block& block) {
 }
 
 void VSortNode::build_merge_tree() {
-    for (const auto &block : _sorted_blocks) {
+    for (const auto& block : _sorted_blocks) {
         _cursors.emplace_back(block, _sort_description);
     }
 
     if (_sorted_blocks.size() > 1) {
-        for (auto& _cursor : _cursors)
-            _priority_queue.push(SortCursor(&_cursor));
+        for (auto& _cursor : _cursors) _priority_queue.push(SortCursor(&_cursor));
     }
 }
 
-Status VSortNode::merge_sort_read(doris::RuntimeState *state, doris::vectorized::Block *block, bool *eos) {
+Status VSortNode::merge_sort_read(doris::RuntimeState* state, doris::vectorized::Block* block,
+                                  bool* eos) {
     size_t num_columns = _sorted_blocks[0].columns();
 
     bool mem_reuse = block->mem_reuse();
@@ -237,8 +240,7 @@ Status VSortNode::merge_sort_read(doris::RuntimeState *state, doris::vectorized:
             _priority_queue.push(current);
         }
 
-        if (merged_rows == state->batch_size())
-            break;
+        if (merged_rows == state->batch_size()) break;
     }
 
     if (merged_rows == 0) {
@@ -254,4 +256,4 @@ Status VSortNode::merge_sort_read(doris::RuntimeState *state, doris::vectorized:
     return Status::OK();
 }
 
-} // end namespace doris
+} // namespace doris::vectorized

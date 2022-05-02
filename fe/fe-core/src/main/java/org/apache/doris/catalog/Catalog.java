@@ -156,7 +156,7 @@ import org.apache.doris.ha.BDBHA;
 import org.apache.doris.ha.FrontendNodeType;
 import org.apache.doris.ha.HAProtocol;
 import org.apache.doris.ha.MasterInfo;
-import org.apache.doris.http.meta.MetaBaseAction;
+import org.apache.doris.httpv2.meta.MetaBaseAction;
 import org.apache.doris.journal.JournalCursor;
 import org.apache.doris.journal.JournalEntity;
 import org.apache.doris.journal.bdbje.Timestamp;
@@ -295,7 +295,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
-
 import javax.annotation.Nullable;
 
 public class Catalog {
@@ -1531,7 +1530,7 @@ public class Catalog {
     private void getNewImage(Pair<String, Integer> helperNode) throws IOException {
         long localImageVersion = 0;
         Storage storage = new Storage(this.imageDir);
-        localImageVersion = storage.getImageSeq();
+        localImageVersion = storage.getLatestImageSeq();
 
         try {
             URL infoUrl = new URL("http://" + helperNode.first + ":" + Config.http_port + "/info");
@@ -1617,7 +1616,7 @@ public class Catalog {
             LOG.info("image does not exist: {}", curFile.getAbsolutePath());
             return;
         }
-        replayedJournalId.set(storage.getImageSeq());
+        replayedJournalId.set(storage.getLatestImageSeq());
         MetaReader.read(curFile, this);
     }
 
@@ -1950,7 +1949,8 @@ public class Catalog {
     }
 
     // Only called by checkpoint thread
-    public void saveImage() throws IOException {
+    // return the latest image file's absolute path
+    public String saveImage() throws IOException {
         // Write image.ckpt
         Storage storage = new Storage(this.imageDir);
         File curFile = storage.getImageFile(replayedJournalId.get());
@@ -1963,11 +1963,17 @@ public class Catalog {
             curFile.delete();
             throw new IOException();
         }
+        return curFile.getAbsolutePath();
     }
 
     public void saveImage(File curFile, long replayedJournalId) throws IOException {
-        if (!curFile.exists()) {
-            curFile.createNewFile();
+        if (curFile.exists()) {
+            if (!curFile.delete()) {
+                throw new IOException(curFile.getName() + " can not be deleted.");
+            }
+        }
+        if (!curFile.createNewFile()) {
+            throw new IOException(curFile.getName() + " can not be created.");
         }
         MetaWriter.write(curFile, this);
     }
@@ -3116,8 +3122,7 @@ public class Catalog {
                 }
                 TypeDef typeDef;
                 Expr resultExpr = resultExprs.get(i);
-                // varchar/char transfer to string
-                if (resultExpr.getType().isStringType()) {
+                if (resultExpr.getType().isStringType() && resultExpr.getType().getLength() < 0) {
                     typeDef = new TypeDef(Type.STRING);
                 } else {
                     typeDef = new TypeDef(resultExpr.getType());
@@ -3723,6 +3728,10 @@ public class Catalog {
         boolean isInMemory = PropertyAnalyzer.analyzeBooleanProp(properties, PropertyAnalyzer.PROPERTIES_INMEMORY, false);
         olapTable.setIsInMemory(isInMemory);
 
+        // set remote storage
+        String resourceName = PropertyAnalyzer.analyzeRemoteStorageResource(properties);
+        olapTable.setRemoteStorageResource(resourceName);
+
         TTabletType tabletType;
         try {
             tabletType = PropertyAnalyzer.analyzeTabletType(properties);
@@ -4246,6 +4255,13 @@ public class Catalog {
             // storage type
             sb.append(",\n\"").append(PropertyAnalyzer.PROPERTIES_STORAGE_FORMAT).append("\" = \"");
             sb.append(olapTable.getStorageFormat()).append("\"");
+
+            // remote storage resource
+            String remoteStorageResource = olapTable.getRemoteStorageResource();
+            if (!Strings.isNullOrEmpty(remoteStorageResource)) {
+                sb.append(",\n\"").append(PropertyAnalyzer.PROPERTIES_REMOTE_STORAGE_RESOURCE).append("\" = \"");
+                sb.append(remoteStorageResource).append("\"");
+            }
 
             sb.append("\n)");
         } else if (table.getType() == TableType.MYSQL) {
@@ -4980,7 +4996,8 @@ public class Catalog {
                         if (dataProperty.getStorageMedium() == TStorageMedium.SSD
                                 && dataProperty.getCooldownTimeMs() < currentTimeMs) {
                             // expire. change to HDD.
-                            partitionInfo.setDataProperty(partition.getId(), new DataProperty(TStorageMedium.HDD));
+                            DataProperty hddProperty = new DataProperty(TStorageMedium.HDD);
+                            partitionInfo.setDataProperty(partition.getId(), hddProperty);
                             storageMediumMap.put(partitionId, TStorageMedium.HDD);
                             LOG.debug("partition[{}-{}-{}] storage medium changed from SSD to HDD",
                                     dbId, tableId, partitionId);
@@ -4989,7 +5006,7 @@ public class Catalog {
                             ModifyPartitionInfo info =
                                     new ModifyPartitionInfo(db.getId(), olapTable.getId(),
                                             partition.getId(),
-                                            DataProperty.DEFAULT_DATA_PROPERTY,
+                                            hddProperty,
                                             ReplicaAllocation.NOT_SET,
                                             partitionInfo.getIsInMemory(partition.getId()));
                             editLog.logModifyPartition(info);
@@ -6097,7 +6114,7 @@ public class Catalog {
         idToDb.remove(infoSchemaDb.getId());
     }
 
-    public void replayDropCluster(ClusterInfo info) {
+    public void replayDropCluster(ClusterInfo info) throws DdlException {
         tryLock(true);
         try {
             unprotectDropCluster(info, true/* is replay */);
@@ -6797,7 +6814,7 @@ public class Catalog {
             // check partitions
             for (Map.Entry<String, Long> entry : origPartitions.entrySet()) {
                 Partition partition = copiedTbl.getPartition(entry.getValue());
-                if (partition == null || !partition.getName().equals(entry.getKey())) {
+                if (partition == null || !partition.getName().equalsIgnoreCase(entry.getKey())) {
                     throw new DdlException("Partition [" + entry.getKey() + "] is changed");
                 }
             }

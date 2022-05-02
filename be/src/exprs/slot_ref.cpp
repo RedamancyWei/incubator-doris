@@ -14,6 +14,9 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/apache/impala/blob/branch-2.9.0/be/src/exprs/slot-ref.cc
+// and modified by Doris
 
 #include "exprs/slot_ref.h"
 
@@ -63,7 +66,9 @@ Status SlotRef::prepare(const SlotDescriptor* slot_desc, const RowDescriptor& ro
     }
     _tuple_idx = row_desc.get_tuple_idx(slot_desc->parent());
     if (_tuple_idx == RowDescriptor::INVALID_IDX) {
-        return Status::InternalError(strings::Substitute("failed to get tuple idx with tuple id: $0, slot id: $1", slot_desc->parent(), _slot_id));
+        return Status::InternalError(
+                strings::Substitute("failed to get tuple idx with tuple id: $0, slot id: $1",
+                                    slot_desc->parent(), _slot_id));
     }
     _tuple_is_nullable = row_desc.tuple_is_nullable(_tuple_idx);
     _slot_offset = slot_desc->tuple_offset();
@@ -95,7 +100,9 @@ Status SlotRef::prepare(RuntimeState* state, const RowDescriptor& row_desc, Expr
     // TODO(marcel): get from runtime state
     _tuple_idx = row_desc.get_tuple_idx(slot_desc->parent());
     if (_tuple_idx == RowDescriptor::INVALID_IDX) {
-        return Status::InternalError(strings::Substitute("failed to get tuple idx when prepare with tuple id: $0, slot id: $1", slot_desc->parent(), _slot_id));
+        return Status::InternalError(strings::Substitute(
+                "failed to get tuple idx when prepare with tuple id: $0, slot id: $1",
+                slot_desc->parent(), _slot_id));
     }
     DCHECK(_tuple_idx != RowDescriptor::INVALID_IDX);
     _tuple_is_nullable = row_desc.tuple_is_nullable(_tuple_idx);

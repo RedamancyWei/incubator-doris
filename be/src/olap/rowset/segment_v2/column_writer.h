@@ -101,6 +101,8 @@ public:
         return append_nullable(&nullmap, data, 1);
     }
 
+    Status append(const uint8_t* nullmap, const void* data, size_t num_rows);
+
     Status append_nullable(const uint8_t* nullmap, const void* data, size_t num_rows);
 
     virtual Status append_nulls(size_t num_rows) = 0;
@@ -141,6 +143,10 @@ public:
 private:
     std::unique_ptr<Field> _field;
     bool _is_nullable;
+    std::vector<uint8_t> _null_bitmap;
+
+protected:
+    std::shared_ptr<MemTracker> _mem_tracker;
 };
 
 class FlushPageCallback {
@@ -161,7 +167,7 @@ public:
 
     Status init() override;
 
-    inline Status append_nulls(size_t num_rows) override;
+    Status append_nulls(size_t num_rows) override;
 
     Status finish_current_page() override;
 
@@ -275,7 +281,7 @@ public:
     Status finish() override;
     Status write_data() override;
     Status write_ordinal_index() override;
-    inline Status append_nulls(size_t num_rows) override;
+    Status append_nulls(size_t num_rows) override;
 
     Status finish_current_page() override;
 
@@ -302,10 +308,8 @@ public:
 
 private:
     Status put_extra_info_in_page(DataPageFooterPB* header) override;
-    inline Status write_null_column(size_t num_rows, bool is_null); // 写入num_rows个null标记
-    inline bool has_empty_items() const {
-        return _item_writer->get_next_rowid() == 0;
-    }
+    Status write_null_column(size_t num_rows, bool is_null); // 写入num_rows个null标记
+    bool has_empty_items() const { return _item_writer->get_next_rowid() == 0; }
 
 private:
     std::unique_ptr<ScalarColumnWriter> _length_writer;

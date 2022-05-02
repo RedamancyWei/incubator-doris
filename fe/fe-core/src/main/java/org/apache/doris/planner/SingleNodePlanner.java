@@ -14,6 +14,9 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/apache/impala/blob/branch-2.9.0/fe/src/main/java/org/apache/impala/SingleNodePlanner.java
+// and modified by Doris
 
 package org.apache.doris.planner;
 
@@ -1722,7 +1725,6 @@ public class SingleNodePlanner {
         scanNodeList.add(scanNode);
 
         scanNode.init(analyzer);
-
         return scanNode;
     }
 

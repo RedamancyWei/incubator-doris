@@ -15,8 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef DORIS_BE_SRC_OLAP_READER_H
-#define DORIS_BE_SRC_OLAP_READER_H
+#pragma once
 
 #include <gen_cpp/PaloInternalService_types.h>
 #include <thrift/protocol/TDebugProtocol.h>
@@ -63,6 +62,7 @@ class TabletReader {
         bool start_key_include = false;
         bool end_key_include = false;
     };
+
 public:
     // Params for Reader,
     // mainly include tablet, data version and fetch range.
@@ -108,23 +108,23 @@ public:
     virtual ~TabletReader();
 
     // Initialize TabletReader with tablet, data version and fetch range.
-    virtual OLAPStatus init(const ReaderParams& read_params);
+    virtual Status init(const ReaderParams& read_params);
 
     // Read next row with aggregation.
     // Return OLAP_SUCCESS and set `*eof` to false when next row is read into `row_cursor`.
     // Return OLAP_SUCCESS and set `*eof` to true when no more rows can be read.
     // Return others when unexpected error happens.
-    virtual OLAPStatus next_row_with_aggregation(RowCursor* row_cursor, MemPool* mem_pool,
-                                                 ObjectPool* agg_pool, bool* eof) = 0;
+    virtual Status next_row_with_aggregation(RowCursor* row_cursor, MemPool* mem_pool,
+                                             ObjectPool* agg_pool, bool* eof) = 0;
 
     // Read next block with aggregation.
     // Return OLAP_SUCCESS and set `*eof` to false when next block is read
     // Return OLAP_SUCCESS and set `*eof` to true when no more rows can be read.
     // Return others when unexpected error happens.
     // TODO: Rethink here we still need mem_pool and agg_pool?
-    virtual OLAPStatus next_block_with_aggregation(vectorized::Block* block, MemPool* mem_pool,
-                                                   ObjectPool* agg_pool, bool* eof) {
-        return OLAP_ERR_READER_INITIALIZE_ERROR;
+    virtual Status next_block_with_aggregation(vectorized::Block* block, MemPool* mem_pool,
+                                               ObjectPool* agg_pool, bool* eof) {
+        return Status::OLAPInternalError(OLAP_ERR_READER_INITIALIZE_ERROR);
     }
 
     uint64_t merged_rows() const { return _merged_rows; }
@@ -134,9 +134,7 @@ public:
                _stats.rows_vec_del_cond_filtered;
     }
 
-    void set_batch_size(int batch_size) {
-        _batch_size = batch_size;
-    }
+    void set_batch_size(int batch_size) { _batch_size = batch_size; }
 
     const OlapReaderStatistics& stats() const { return _stats; }
     OlapReaderStatistics* mutable_stats() { return &_stats; }
@@ -146,14 +144,14 @@ protected:
     friend class vectorized::VCollectIterator;
     friend class DeleteHandler;
 
-    OLAPStatus _init_params(const ReaderParams& read_params);
+    Status _init_params(const ReaderParams& read_params);
 
-    OLAPStatus _capture_rs_readers(const ReaderParams& read_params,
-                                   std::vector<RowsetReaderSharedPtr>* valid_rs_readers);
+    Status _capture_rs_readers(const ReaderParams& read_params,
+                               std::vector<RowsetReaderSharedPtr>* valid_rs_readers);
 
     bool _optimize_for_single_rowset(const std::vector<RowsetReaderSharedPtr>& rs_readers);
 
-    OLAPStatus _init_keys_param(const ReaderParams& read_params);
+    Status _init_keys_param(const ReaderParams& read_params);
 
     void _init_conditions_param(const ReaderParams& read_params);
 
@@ -175,9 +173,9 @@ protected:
     ColumnPredicate* _parse_to_predicate(
             const std::pair<std::string, std::shared_ptr<IBloomFilterFuncBase>>& bloom_filter);
 
-    OLAPStatus _init_delete_condition(const ReaderParams& read_params);
+    Status _init_delete_condition(const ReaderParams& read_params);
 
-    OLAPStatus _init_return_columns(const ReaderParams& read_params);
+    Status _init_return_columns(const ReaderParams& read_params);
     void _init_seek_columns();
 
     void _init_load_bf_columns(const ReaderParams& read_params);
@@ -230,5 +228,3 @@ protected:
 };
 
 } // namespace doris
-
-#endif // DORIS_BE_SRC_OLAP_READER_H

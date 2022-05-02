@@ -14,6 +14,9 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/apache/impala/blob/branch-2.9.0/be/src/runtime/string-value.h
+// and modified by Doris
 
 #ifndef DORIS_BE_RUNTIME_STRING_VALUE_H
 #define DORIS_BE_RUNTIME_STRING_VALUE_H
@@ -47,9 +50,8 @@ static inline int string_compare(const char* s1, int64_t n1, const char* s2, int
     while (len >= sse_util::CHARS_PER_128_BIT_REGISTER) {
         __m128i xmm0 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(s1));
         __m128i xmm1 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(s2));
-        int chars_match =
-                _mm_cmpestri(xmm0, sse_util::CHARS_PER_128_BIT_REGISTER, xmm1,
-                             sse_util::CHARS_PER_128_BIT_REGISTER, sse_util::STRCMP_MODE);
+        int chars_match = _mm_cmpestri(xmm0, sse_util::CHARS_PER_128_BIT_REGISTER, xmm1,
+                                       sse_util::CHARS_PER_128_BIT_REGISTER, sse_util::STRCMP_MODE);
         if (chars_match != sse_util::CHARS_PER_128_BIT_REGISTER) {
             return (unsigned char)s1[chars_match] - (unsigned char)s2[chars_match];
         }
@@ -105,7 +107,7 @@ struct StringValue {
     // this < other: -1
     // this == other: 0
     // this > other: 1
-    inline int compare(const StringValue& other) const {
+    int compare(const StringValue& other) const {
         int l = std::min(len, other.len);
 
         if (l == 0) {
@@ -123,7 +125,7 @@ struct StringValue {
     }
 
     // ==
-    inline bool eq(const StringValue& other) const {
+    bool eq(const StringValue& other) const {
         if (this->len != other.len) {
             return false;
         }
@@ -190,9 +192,7 @@ struct StringValue {
     };
 
     struct HashOfStringValue {
-        size_t operator()(const StringValue& v) const {
-            return HashUtil::hash(v.ptr, v.len, 0);
-        }
+        size_t operator()(const StringValue& v) const { return HashUtil::hash(v.ptr, v.len, 0); }
     };
 };
 

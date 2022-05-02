@@ -18,6 +18,7 @@
 package org.apache.doris.statistics;
 
 import org.apache.doris.catalog.Catalog;
+import org.apache.doris.common.DdlException;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -46,7 +47,7 @@ public abstract class StatisticsTask implements Callable<StatisticsTaskResult> {
         FAILED
     }
 
-    protected long id = Catalog.getCurrentCatalog().getNextId();;
+    protected long id = Catalog.getCurrentCatalog().getNextId();
     protected long jobId;
     protected StatsGranularityDesc granularityDesc;
     protected StatsCategoryDesc categoryDesc;
@@ -68,7 +69,7 @@ public abstract class StatisticsTask implements Callable<StatisticsTaskResult> {
     }
 
     public long getId() {
-        return this.id;
+        return id;
     }
 
     public void setId(long id) {
@@ -76,43 +77,35 @@ public abstract class StatisticsTask implements Callable<StatisticsTaskResult> {
     }
 
     public long getJobId() {
-        return this.jobId;
+        return jobId;
     }
 
     public StatsGranularityDesc getGranularityDesc() {
-        return this.granularityDesc;
+        return granularityDesc;
     }
 
     public StatsCategoryDesc getCategoryDesc() {
-        return this.categoryDesc;
+        return categoryDesc;
     }
 
     public List<StatsType> getStatsTypeList() {
-        return this.statsTypeList;
+        return statsTypeList;
     }
 
     public TaskState getTaskState() {
-        return this.taskState;
+        return taskState;
     }
 
     public long getCreateTime() {
-        return this.createTime;
+        return createTime;
     }
 
     public long getStartTime() {
-        return this.startTime;
-    }
-
-    public void setStartTime(long startTime) {
-        this.startTime = startTime;
+        return startTime;
     }
 
     public long getFinishTime() {
-        return this.finishTime;
-    }
-
-    public void setFinishTime(long finishTime) {
-        this.finishTime = finishTime;
+        return finishTime;
     }
 
     /**
@@ -124,24 +117,41 @@ public abstract class StatisticsTask implements Callable<StatisticsTaskResult> {
     @Override
     public abstract StatisticsTaskResult call() throws Exception;
 
-    public synchronized void updateTaskState(TaskState taskState) {
+    // please retain job lock firstly
+    public void updateTaskState(TaskState newState) throws DdlException {
+        LOG.info("To change statistics task(id={}) state from {} to {}", id, taskState, newState);
+        String errorMsg = "Invalid statistics task state transition from ";
+
         // PENDING -> RUNNING/FAILED
-        if (this.taskState == TaskState.PENDING) {
-            if (taskState == TaskState.RUNNING) {
-                this.taskState = TaskState.RUNNING;
-            } else if (taskState == TaskState.FAILED) {
-                this.taskState = TaskState.FAILED;
+        if (taskState == TaskState.PENDING) {
+            switch (newState) {
+                case RUNNING:
+                    startTime = System.currentTimeMillis();
+                    break;
+                case FAILED:
+                    finishTime = System.currentTimeMillis();
+                    break;
+                default:
+                    throw new DdlException(errorMsg + taskState + " to " + newState);
             }
-            return;
+        }
+        // RUNNING -> FINISHED/FAILED
+        else if (taskState == TaskState.RUNNING) {
+            switch (newState) {
+                case FINISHED:
+                case FAILED:
+                    finishTime = System.currentTimeMillis();
+                    break;
+                default:
+                    throw new DdlException(errorMsg + taskState + " to " + newState);
+            }
+        }
+        // unsupported state transition
+        else {
+            throw new DdlException(errorMsg + taskState + " to " + newState);
         }
 
-        // RUNNING -> FINISHED/FAILED
-        if (this.taskState == TaskState.RUNNING) {
-            if (taskState == TaskState.FINISHED) {
-                this.taskState = TaskState.FINISHED;
-            } else if (taskState == TaskState.FAILED) {
-                this.taskState = TaskState.FAILED;
-            }
-        }
+        LOG.info("Statistics job(id={}) state changed from {} to {}", id, taskState, newState);
+        taskState = newState;
     }
 }

@@ -15,13 +15,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include <boost/algorithm/string.hpp>
-
 #include "agent/cgroups_mgr.h"
 #include "common/config.h"
 #include "common/logging.h"
 #include "gen_cpp/BackendService.h"
-#include "gen_cpp/FrontendService.h"
 #include "gen_cpp/HeartbeatService_types.h"
 #include "gen_cpp/TExtDataSourceService.h"
 #include "gen_cpp/TPaloBrokerService.h"
@@ -55,11 +52,9 @@
 #include "runtime/tmp_file_mgr.h"
 #include "util/bfd_parser.h"
 #include "util/brpc_client_cache.h"
-#include "util/debug_util.h"
 #include "util/doris_metrics.h"
 #include "util/mem_info.h"
 #include "util/metrics.h"
-#include "util/network_util.h"
 #include "util/parse_util.h"
 #include "util/pretty_printer.h"
 #include "util/priority_thread_pool.hpp"
@@ -194,13 +189,14 @@ Status ExecEnv::_init_mem_tracker() {
         global_memory_limit_bytes = MemInfo::physical_mem();
     }
     MemTracker::get_process_tracker()->set_limit(global_memory_limit_bytes);
-    _query_pool_mem_tracker =
-            MemTracker::create_tracker(global_memory_limit_bytes, "QueryPool", MemTracker::get_process_tracker(),
-                                       MemTrackerLevel::OVERVIEW);
+    _query_pool_mem_tracker = MemTracker::create_tracker(global_memory_limit_bytes, "QueryPool",
+                                                         MemTracker::get_process_tracker(),
+                                                         MemTrackerLevel::OVERVIEW);
     REGISTER_HOOK_METRIC(query_mem_consumption,
                          [this]() { return _query_pool_mem_tracker->consumption(); });
-    _load_pool_mem_tracker = MemTracker::create_tracker(
-            global_memory_limit_bytes, "LoadPool", MemTracker::get_process_tracker(), MemTrackerLevel::OVERVIEW);
+    _load_pool_mem_tracker = MemTracker::create_tracker(global_memory_limit_bytes, "LoadPool",
+                                                        MemTracker::get_process_tracker(),
+                                                        MemTrackerLevel::OVERVIEW);
     REGISTER_HOOK_METRIC(load_mem_consumption,
                          [this]() { return _load_pool_mem_tracker->consumption(); });
     LOG(INFO) << "Using global memory limit: "

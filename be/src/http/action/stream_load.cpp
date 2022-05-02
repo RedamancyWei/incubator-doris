@@ -59,6 +59,7 @@
 #include "util/thrift_rpc_helper.h"
 #include "util/time.h"
 #include "util/uid_util.h"
+#include "common/consts.h"
 
 namespace doris {
 
@@ -262,11 +263,18 @@ Status StreamLoadAction::_on_header(HttpRequest* http_req, StreamLoadContext* ct
     }
 
     // get format of this put
-    if (!http_req->header(HTTP_COMPRESS_TYPE).empty() && boost::iequals(http_req->header(HTTP_FORMAT_KEY), "JSON")) {
+    if (!http_req->header(HTTP_COMPRESS_TYPE).empty() &&
+        boost::iequals(http_req->header(HTTP_FORMAT_KEY), "JSON")) {
         return Status::InternalError("compress data of JSON format is not supported.");
     }
-    ctx->format =
-            parse_format(http_req->header(HTTP_FORMAT_KEY), http_req->header(HTTP_COMPRESS_TYPE));
+    std::string format_str = http_req->header(HTTP_FORMAT_KEY);
+    if (boost::iequals(format_str, BeConsts::CSV_WITH_NAMES) ||
+        boost::iequals(format_str, BeConsts::CSV_WITH_NAMES_AND_TYPES)) {
+        ctx->header_type = format_str;
+        //treat as CSV
+        format_str = BeConsts::CSV;
+    }
+    ctx->format = parse_format(format_str, http_req->header(HTTP_COMPRESS_TYPE));
     if (ctx->format == TFileFormatType::FORMAT_UNKNOWN) {
         std::stringstream ss;
         ss << "unknown data format, format=" << http_req->header(HTTP_FORMAT_KEY);
@@ -346,8 +354,8 @@ void StreamLoadAction::on_chunk_data(HttpRequest* req) {
         bb->flip();
         auto st = ctx->body_sink->append(bb);
         if (!st.ok()) {
-            LOG(WARNING) << "append body content failed. errmsg=" << st.get_error_msg()
-                         << ", " << ctx->brief();
+            LOG(WARNING) << "append body content failed. errmsg=" << st.get_error_msg() << ", "
+                         << ctx->brief();
             ctx->status = st;
             return;
         }
@@ -381,6 +389,7 @@ Status StreamLoadAction::_process_put(HttpRequest* http_req, StreamLoadContext* 
     request.tbl = ctx->table;
     request.txnId = ctx->txn_id;
     request.formatType = ctx->format;
+    request.__set_header_type(ctx->header_type);
     request.__set_loadId(ctx->id.to_thrift());
     if (ctx->use_streaming) {
         auto pipe = std::make_shared<StreamLoadPipe>(1024 * 1024 /* max_buffered_bytes */,
@@ -500,7 +509,8 @@ Status StreamLoadAction::_process_put(HttpRequest* http_req, StreamLoadContext* 
 
     if (!http_req->header(HTTP_SEND_BATCH_PARALLELISM).empty()) {
         try {
-            request.__set_send_batch_parallelism(std::stoi(http_req->header(HTTP_SEND_BATCH_PARALLELISM)));
+            request.__set_send_batch_parallelism(
+                    std::stoi(http_req->header(HTTP_SEND_BATCH_PARALLELISM)));
         } catch (const std::invalid_argument& e) {
             return Status::InvalidArgument("Invalid send_batch_parallelism format");
         }
@@ -595,10 +605,12 @@ Status StreamLoadAction::_data_saved_path(HttpRequest* req, std::string* file_pa
 void StreamLoadAction::_sava_stream_load_record(StreamLoadContext* ctx, const std::string& str) {
     auto stream_load_recorder = StorageEngine::instance()->get_stream_load_recorder();
     if (stream_load_recorder != nullptr) {
-        std::string key = std::to_string(ctx->start_millis + ctx->load_cost_millis) + "_" + ctx->label;
+        std::string key =
+                std::to_string(ctx->start_millis + ctx->load_cost_millis) + "_" + ctx->label;
         auto st = stream_load_recorder->put(key, str);
         if (st.ok()) {
-            LOG(INFO) << "put stream_load_record rocksdb successfully. label: " << ctx->label << ", key: " << key;
+            LOG(INFO) << "put stream_load_record rocksdb successfully. label: " << ctx->label
+                      << ", key: " << key;
         }
     } else {
         LOG(WARNING) << "put stream_load_record rocksdb failed. stream_load_recorder is null.";

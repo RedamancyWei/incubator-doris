@@ -55,6 +55,7 @@ namespace doris::vectorized {
 template <typename T>
 class ColumnDictionary final : public COWHelper<IColumn, ColumnDictionary<T>> {
     static_assert(IsNumber<T>);
+
 private:
     friend class COWHelper<IColumn, ColumnDictionary>;
 
@@ -67,6 +68,7 @@ public:
     using value_type = T;
     using Container = PaddedPODArray<value_type>;
     using DictContainer = PaddedPODArray<StringValue>;
+    using HashValueContainer = PaddedPODArray<uint32_t>; // used for bloom filter
 
     bool is_column_dictionary() const override { return true; }
 
@@ -106,6 +108,7 @@ public:
     void clear() override {
         _codes.clear();
         _dict_code_converted = false;
+        _dict.clear_hash_values();
     }
 
     // TODO: Make dict memory usage more precise
@@ -120,7 +123,10 @@ public:
         LOG(FATAL) << "get_permutation not supported in ColumnDictionary";
     }
 
-    void reserve(size_t n) override { _codes.reserve(n); }
+    void reserve(size_t n) override {
+        _reserve_size = n;
+        _codes.reserve(n);
+    }
 
     const char* get_family_name() const override { return "ColumnDictionary"; }
 
@@ -248,6 +254,10 @@ public:
         return _dict.find_code_by_bound(value, greater, eq);
     }
 
+    void generate_hash_values() { _dict.generate_hash_values(); }
+
+    uint32_t get_hash_value(uint32_t idx) const { return _dict.get_hash_value(_codes[idx]); }
+
     phmap::flat_hash_set<int32_t> find_codes(
             const phmap::flat_hash_set<StringValue>& values) const {
         return _dict.find_codes(values);
@@ -259,15 +269,15 @@ public:
 
     bool is_dict_code_converted() const { return _dict_code_converted; }
 
-    ColumnPtr convert_to_predicate_column_if_dictionary() override {
+    MutableColumnPtr convert_to_predicate_column_if_dictionary() override {
         auto res = vectorized::PredicateColumnType<StringValue>::create();
-        size_t size = _codes.size();
-        res->reserve(size);
-        for (size_t i = 0; i < size; ++i) {
+        res->reserve(_reserve_size);
+        for (size_t i = 0; i < _codes.size(); ++i) {
             auto& code = reinterpret_cast<T&>(_codes[i]);
             auto value = _dict.get_value(code);
             res->insert_data(value.ptr, value.len);
         }
+        clear();
         _dict.clear();
         return res;
     }
@@ -281,18 +291,33 @@ public:
             _inverted_index.reserve(n);
         }
 
-        inline void insert_value(StringValue& value) {
+        void insert_value(StringValue& value) {
             _dict_data.push_back_without_reserve(value);
             _inverted_index[value] = _inverted_index.size();
         }
 
-        inline int32_t find_code(const StringValue& value) const {
+        int32_t find_code(const StringValue& value) const {
             auto it = _inverted_index.find(value);
             if (it != _inverted_index.end()) {
                 return it->second;
             }
             return -1;
         }
+
+        inline StringValue& get_value(T code) { return _dict_data[code]; }
+
+        inline void generate_hash_values() {
+            if (_hash_values.size() == 0) {
+                _hash_values.resize(_dict_data.size());
+                for (size_t i = 0; i < _dict_data.size(); i++) {
+                    auto& sv = _dict_data[i];
+                    uint32_t hash_val = HashUtil::murmur_hash3_32(sv.ptr, sv.len, 0);
+                    _hash_values[i] = hash_val;
+                }
+            }
+        }
+
+        inline uint32_t get_hash_value(T code) const { return _hash_values[code]; }
 
         // For > , code takes upper_bound - 1; For >= , code takes upper_bound
         // For < , code takes upper_bound; For <=, code takes upper_bound - 1
@@ -311,7 +336,7 @@ public:
         //  so upper_bound is the code 0 of b, then evaluate code < 0 and returns empty
         // If the predicate is col <= 'a' and upper_bound-1 is -1,
         //  then evaluate code <= -1 and returns empty
-        inline int32_t find_code_by_bound(const StringValue& value, bool greater, bool eq) const {
+        int32_t find_code_by_bound(const StringValue& value, bool greater, bool eq) const {
             auto code = find_code(value);
             if (code >= 0) {
                 return code;
@@ -321,7 +346,7 @@ public:
             return greater ? bound - greater + eq : bound - eq;
         }
 
-        inline phmap::flat_hash_set<int32_t> find_codes(
+        phmap::flat_hash_set<int32_t> find_codes(
                 const phmap::flat_hash_set<StringValue>& values) const {
             phmap::flat_hash_set<int32_t> code_set;
             for (const auto& value : values) {
@@ -333,13 +358,14 @@ public:
             return code_set;
         }
 
-        inline StringValue& get_value(T code) { return _dict_data[code]; }
-
         void clear() {
             _dict_data.clear();
             _inverted_index.clear();
             _code_convert_map.clear();
+            _hash_values.clear();
         }
+
+        void clear_hash_values() { _hash_values.clear(); }
 
         void sort() {
             size_t dict_size = _dict_data.size();
@@ -350,7 +376,7 @@ public:
             }
         }
 
-        inline T convert_code(const T& code) const { return _code_convert_map.find(code)->second; }
+        T convert_code(const T& code) const { return _code_convert_map.find(code)->second; }
 
         size_t byte_size() { return _dict_data.size() * sizeof(_dict_data[0]); }
 
@@ -362,9 +388,16 @@ public:
         phmap::flat_hash_map<StringValue, T, StringValue::HashOfStringValue> _inverted_index;
         // data page code -> sorted dict code, only used for range comparison predicate
         phmap::flat_hash_map<T, T> _code_convert_map;
+        // hash value of origin string , used for bloom filter
+        // It's a trade-off of space for performance
+        // But in TPC-DS 1GB q60,we see no significant improvement.
+        // This may because the magnitude of the data is not large enough(in q60, only about 80k rows data is filtered for largest table)
+        // So we may need more test here.
+        HashValueContainer _hash_values;
     };
 
 private:
+    size_t _reserve_size;
     bool _dict_inited = false;
     bool _dict_sorted = false;
     bool _dict_code_converted = false;
@@ -376,5 +409,7 @@ template class ColumnDictionary<uint8_t>;
 template class ColumnDictionary<uint16_t>;
 template class ColumnDictionary<uint32_t>;
 template class ColumnDictionary<int32_t>;
+
+using ColumnDictI32 = vectorized::ColumnDictionary<doris::vectorized::Int32>;
 
 } // namespace doris::vectorized

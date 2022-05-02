@@ -14,6 +14,9 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/apache/impala/blob/branch-2.9.0/fe/src/main/java/org/apache/impala/ScanNode.java
+// and modified by Doris
 
 package org.apache.doris.planner;
 
@@ -62,8 +65,9 @@ abstract public class ScanNode extends PlanNode {
     protected String sortColumn = null;
     protected Analyzer analyzer;
 
-    public ScanNode(PlanNodeId id, TupleDescriptor desc, String planNodeName) {
+    public ScanNode(PlanNodeId id, TupleDescriptor desc, String planNodeName, NodeType nodeType) {
         super(id, desc.getId().asList(), planNodeName);
+        super.nodeType = nodeType;
         this.desc = desc;
     }
 

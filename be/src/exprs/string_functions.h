@@ -14,6 +14,9 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/apache/impala/blob/branch-2.9.0/be/src/exprs/string-functions.h
+// and modified by Doris
 
 #ifndef DORIS_BE_SRC_QUERY_EXPRS_STRING_FUNCTIONS_H
 #define DORIS_BE_SRC_QUERY_EXPRS_STRING_FUNCTIONS_H
@@ -186,7 +189,7 @@ public:
                                         const doris_udf::StringVal& str);
     // The caller owns the returned regex. Returns nullptr if the pattern could not be compiled.
     static re2::RE2* compile_regex(const StringVal& pattern, std::string* error_str,
-                                const StringVal& match_parameter);
+                                   const StringVal& match_parameter);
 };
 } // namespace doris
 

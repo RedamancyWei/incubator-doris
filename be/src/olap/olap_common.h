@@ -15,8 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef DORIS_BE_SRC_OLAP_OLAP_COMMON_H
-#define DORIS_BE_SRC_OLAP_OLAP_COMMON_H
+#pragma once
 
 #include <netinet/in.h>
 
@@ -240,7 +239,7 @@ class Field;
 class WrapperField;
 using KeyRange = std::pair<WrapperField*, WrapperField*>;
 
-static const int GENERAL_DEBUG_COUNT = 4;
+static const int GENERAL_DEBUG_COUNT = 0;
 
 // ReaderStatistics used to collect statistics when scan data from storage
 struct OlapReaderStatistics {
@@ -389,5 +388,3 @@ struct RowsetId {
 };
 
 } // namespace doris
-
-#endif // DORIS_BE_SRC_OLAP_OLAP_COMMON_H

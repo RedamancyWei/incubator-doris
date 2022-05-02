@@ -14,6 +14,9 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/apache/impala/blob/branch-2.9.0/be/src/exec/exchange-node.cc
+// and modified by Doris
 
 #include "exec/exchange_node.h"
 
@@ -57,6 +60,7 @@ Status ExchangeNode::init(const TPlanNode& tnode, RuntimeState* state) {
 
 Status ExchangeNode::prepare(RuntimeState* state) {
     RETURN_IF_ERROR(ExecNode::prepare(state));
+    SCOPED_SWITCH_TASK_THREAD_LOCAL_MEM_TRACKER(mem_tracker());
     _convert_row_batch_timer = ADD_TIMER(runtime_profile(), "ConvertRowBatchTime");
     // TODO: figure out appropriate buffer size
     DCHECK_GT(_num_senders, 0);
@@ -75,6 +79,8 @@ Status ExchangeNode::prepare(RuntimeState* state) {
 
 Status ExchangeNode::open(RuntimeState* state) {
     SCOPED_TIMER(_runtime_profile->total_time_counter());
+    SCOPED_SWITCH_TASK_THREAD_LOCAL_MEM_TRACKER(mem_tracker());
+    ADD_THREAD_LOCAL_MEM_TRACKER(_stream_recvr->mem_tracker());
     RETURN_IF_ERROR(ExecNode::open(state));
     if (_is_merging) {
         RETURN_IF_ERROR(_sort_exec_exprs.open(state));
@@ -129,6 +135,7 @@ Status ExchangeNode::fill_input_row_batch(RuntimeState* state) {
 Status ExchangeNode::get_next(RuntimeState* state, RowBatch* output_batch, bool* eos) {
     RETURN_IF_ERROR(exec_debug_action(TExecNodePhase::GETNEXT));
     SCOPED_TIMER(_runtime_profile->total_time_counter());
+    SCOPED_SWITCH_TASK_THREAD_LOCAL_EXISTED_MEM_TRACKER(mem_tracker());
 
     if (reached_limit()) {
         _stream_recvr->transfer_all_resources(output_batch);

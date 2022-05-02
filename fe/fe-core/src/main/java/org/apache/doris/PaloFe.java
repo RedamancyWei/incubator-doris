@@ -22,11 +22,12 @@ import org.apache.doris.common.CommandLineOptions;
 import org.apache.doris.common.Config;
 import org.apache.doris.common.LdapConfig;
 import org.apache.doris.common.Log4jConfig;
+import org.apache.doris.common.MetaReader;
 import org.apache.doris.common.ThreadPoolManager;
 import org.apache.doris.common.Version;
 import org.apache.doris.common.util.JdkUtils;
 import org.apache.doris.common.util.NetUtils;
-import org.apache.doris.http.HttpServer;
+import org.apache.doris.httpv2.HttpServer;
 import org.apache.doris.journal.bdbje.BDBDebugger;
 import org.apache.doris.journal.bdbje.BDBTool;
 import org.apache.doris.journal.bdbje.BDBToolOptions;
@@ -65,6 +66,9 @@ public class PaloFe {
 
     // entrance for doris frontend
     public static void start(String dorisHomeDir, String pidDir, String[] args) {
+    	if (System.getenv("DORIS_LOG_TO_STDERR") != null) {
+    		Log4jConfig.foreground = true;
+    	}
         if (Strings.isNullOrEmpty(dorisHomeDir)) {
             System.err.println("env DORIS_HOME is not set.");
             return;
@@ -134,25 +138,16 @@ public class PaloFe {
 
             feServer.start();
 
-            if (!Config.enable_http_server_v2) {
-                HttpServer httpServer = new HttpServer(
-                        Config.http_port,
-                        Config.http_max_line_length,
-                        Config.http_max_header_size,
-                        Config.http_max_chunk_size
-                );
-                httpServer.setup();
-                httpServer.start();
-            } else {
-                org.apache.doris.httpv2.HttpServer httpServer2 = new org.apache.doris.httpv2.HttpServer();
-                httpServer2.setPort(Config.http_port);
-                httpServer2.setMaxHttpPostSize(Config.jetty_server_max_http_post_size);
-                httpServer2.setAcceptors(Config.jetty_server_acceptors);
-                httpServer2.setSelectors(Config.jetty_server_selectors);
-                httpServer2.setWorkers(Config.jetty_server_workers);
-                httpServer2.start(dorisHomeDir);
-            }
-
+            HttpServer httpServer = new HttpServer();
+            httpServer.setPort(Config.http_port);
+            httpServer.setMaxHttpPostSize(Config.jetty_server_max_http_post_size);
+            httpServer.setAcceptors(Config.jetty_server_acceptors);
+            httpServer.setSelectors(Config.jetty_server_selectors);
+            httpServer.setWorkers(Config.jetty_server_workers);
+            httpServer.setMaxThreads(Config.jetty_threadPool_maxThreads);
+            httpServer.setMinThreads(Config.jetty_threadPool_minThreads);
+            httpServer.start();
+            
             qeService.start();
 
             ThreadPoolManager.registerAllThreadPoolMetric();
@@ -189,6 +184,8 @@ public class PaloFe {
      *      Print the version of Palo Frontend
      * -h --helper
      *      Specify the helper node when joining a bdb je replication group
+     * -i --image
+     *      Check if the specified image is valid
      * -b --bdb
      *      Run bdbje debug tools
      *
@@ -212,6 +209,7 @@ public class PaloFe {
         Options options = new Options();
         options.addOption("v", "version", false, "Print the version of Palo Frontend");
         options.addOption("h", "helper", true, "Specify the helper node when joining a bdb je replication group");
+        options.addOption("i", "image", true, "Check if the specified image is valid");
         options.addOption("b", "bdb", false, "Run bdbje debug tools");
         options.addOption("l", "listdb", false, "List databases in bdbje");
         options.addOption("d", "db", true, "Specify a database in bdbje");
@@ -231,7 +229,7 @@ public class PaloFe {
 
         // version
         if (cmd.hasOption('v') || cmd.hasOption("version")) {
-            return new CommandLineOptions(true, "", null);
+            return new CommandLineOptions(true, "", null, "");
         }
         // helper
         if (cmd.hasOption('h') || cmd.hasOption("helper")) {
@@ -240,14 +238,23 @@ public class PaloFe {
                 System.err.println("Missing helper node");
                 System.exit(-1);
             }
-            return new CommandLineOptions(false, helperNode, null);
+            return new CommandLineOptions(false, helperNode, null, "");
         }
-
+        // image
+        if (cmd.hasOption('i') || cmd.hasOption("image")) {
+            // get image path
+            String imagePath = cmd.getOptionValue("image");
+            if (Strings.isNullOrEmpty(imagePath)) {
+                System.err.println("imagePath is not set");
+                System.exit(-1);
+            }
+            return new CommandLineOptions(false, "", null, imagePath);
+        }
         if (cmd.hasOption('b') || cmd.hasOption("bdb")) {
             if (cmd.hasOption('l') || cmd.hasOption("listdb")) {
                 // list bdb je databases
                 BDBToolOptions bdbOpts = new BDBToolOptions(true, "", false, "", "", 0);
-                return new CommandLineOptions(false, "", bdbOpts);
+                return new CommandLineOptions(false, "", bdbOpts, "");
             }
             if (cmd.hasOption('d') || cmd.hasOption("db")) {
                 // specify a database
@@ -258,7 +265,7 @@ public class PaloFe {
                 }
                 if (cmd.hasOption('s') || cmd.hasOption("stat")) {
                     BDBToolOptions bdbOpts = new BDBToolOptions(false, dbName, true, "", "", 0);
-                    return new CommandLineOptions(false, "", bdbOpts);
+                    return new CommandLineOptions(false, "", bdbOpts, "");
                 }
                 String fromKey = "";
                 String endKey = "";
@@ -287,7 +294,7 @@ public class PaloFe {
                 }
 
                 BDBToolOptions bdbOpts = new BDBToolOptions(false, dbName, false, fromKey, endKey, metaVersion);
-                return new CommandLineOptions(false, "", bdbOpts);
+                return new CommandLineOptions(false, "", bdbOpts, "");
 
             } else {
                 System.err.println("Invalid options when running bdb je tools");
@@ -296,7 +303,7 @@ public class PaloFe {
         }
 
         // helper node is null, means no helper node is specified
-        return new CommandLineOptions(false, null, null);
+        return new CommandLineOptions(false, null, null, "");
     }
 
     private static void checkCommandLineOptions(CommandLineOptions cmdLineOpts) {
@@ -313,6 +320,23 @@ public class PaloFe {
                 System.exit(0);
             } else {
                 System.exit(-1);
+            }
+        } else if (cmdLineOpts.runImageTool()) {
+            File imageFile = new File(cmdLineOpts.getImagePath());
+            if (!imageFile.exists()) {
+                System.out.println("image does not exist: " + imageFile.getAbsolutePath() + " . Please put an absolute path instead");
+                System.exit(-1);
+            } else {
+                System.out.println("Start to load image: ");
+                try {
+                    MetaReader.read(imageFile, Catalog.getCurrentCatalog());
+                    System.out.println("Load image success. Image file " + cmdLineOpts.getImagePath() + " is valid");
+                } catch (Exception e) {
+                    System.out.println("Load image failed. Image file " + cmdLineOpts.getImagePath() + " is invalid");
+                    e.printStackTrace();
+                } finally {
+                    System.exit(0);
+                }
             }
         }
 

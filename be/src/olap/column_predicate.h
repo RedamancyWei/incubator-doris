@@ -15,8 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef DORIS_BE_SRC_OLAP_COLUMN_PREDICATE_H
-#define DORIS_BE_SRC_OLAP_COLUMN_PREDICATE_H
+#pragma once
 
 #include <roaring/roaring.hh>
 
@@ -42,7 +41,7 @@ enum class PredicateType {
     GT = 5,
     GE = 6,
     IN_LIST = 7,
-    NO_IN_LIST = 8,
+    NOT_IN_LIST = 8,
     IS_NULL = 9,
     NOT_IS_NULL = 10,
     BF = 11, // BloomFilter
@@ -86,13 +85,9 @@ public:
     virtual void evaluate_vec(vectorized::IColumn& column, uint16_t size, bool* flags) const {};
     uint32_t column_id() const { return _column_id; }
 
-    virtual void set_dict_code_if_necessary(vectorized::IColumn& column) { }
-
 protected:
     uint32_t _column_id;
     bool _opposite;
 };
 
 } //namespace doris
-
-#endif //DORIS_BE_SRC_OLAP_COLUMN_PREDICATE_H

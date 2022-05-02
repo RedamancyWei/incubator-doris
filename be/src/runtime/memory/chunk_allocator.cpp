@@ -17,11 +17,11 @@
 
 #include "runtime/memory/chunk_allocator.h"
 
-#include <atomic>
+#include <sanitizer/asan_interface.h>
+
 #include <list>
 #include <mutex>
 
-#include "gutil/dynamic_annotations.h"
 #include "runtime/mem_tracker.h"
 #include "runtime/memory/chunk.h"
 #include "runtime/memory/system_allocator.h"
@@ -119,13 +119,10 @@ ChunkAllocator::ChunkAllocator(size_t reserve_limit)
           _arenas(CpuInfo::get_max_num_cores()) {
     _mem_tracker =
             MemTracker::create_tracker(-1, "ChunkAllocator", nullptr, MemTrackerLevel::OVERVIEW);
-    SCOPED_SWITCH_THREAD_LOCAL_MEM_TRACKER(_mem_tracker);
+    SCOPED_SWITCH_THREAD_LOCAL_MEM_TRACKER_END_CLEAR(_mem_tracker);
     for (int i = 0; i < _arenas.size(); ++i) {
         _arenas[i].reset(new ChunkArena());
     }
-    // After the ChunkAllocator is created in the main thread, the main thread will not switch to the
-    // chunk allocator mem tracker again, so manually clear the untracked mem in tls.
-    thread_local_ctx.get()->_thread_mem_tracker_mgr->clear_untracked_mems();
 
     _chunk_allocator_metric_entity =
             DorisMetrics::instance()->metric_registry()->register_entity("chunk_allocator");
@@ -139,8 +136,7 @@ ChunkAllocator::ChunkAllocator(size_t reserve_limit)
 
 Status ChunkAllocator::allocate(size_t size, Chunk* chunk, MemTracker* tracker, bool check_limits) {
     MemTracker* reset_tracker =
-            tracker ? tracker
-                    : thread_local_ctx.get()->_thread_mem_tracker_mgr->mem_tracker().get();
+            tracker ? tracker : tls_ctx()->_thread_mem_tracker_mgr->mem_tracker().get();
     // In advance, transfer the memory ownership of allocate from ChunkAllocator::tracker to the parameter tracker.
     // Next, if the allocate is successful, it will exit normally;
     // if the allocate fails, return this part of the memory to the parameter tracker.
@@ -183,7 +179,7 @@ Status ChunkAllocator::allocate(size_t size, Chunk* chunk, MemTracker* tracker, 
         chunk->data = SystemAllocator::allocate(size);
         // The allocated chunk is consumed in the tls mem tracker, we want to consume in the ChunkAllocator tracker,
         // transfer memory ownership. TODO(zxy) replace with switch tls tracker
-        thread_local_ctx.get()->_thread_mem_tracker_mgr->mem_tracker()->transfer_to(_mem_tracker.get(), size);
+        tls_ctx()->_thread_mem_tracker_mgr->mem_tracker()->transfer_to(_mem_tracker.get(), size);
     }
     chunk_pool_system_alloc_count->increment(1);
     chunk_pool_system_alloc_cost_ns->increment(cost_ns);
@@ -213,9 +209,8 @@ void ChunkAllocator::free(const Chunk& chunk, MemTracker* tracker) {
                 // it was consumed in the parameter tracker, so if the tls mem tracker and the parameter
                 // tracker are different, transfer memory ownership.
                 if (tracker)
-                    tracker->transfer_to(
-                            thread_local_ctx.get()->_thread_mem_tracker_mgr->mem_tracker().get(),
-                            chunk.size);
+                    tracker->transfer_to(tls_ctx()->_thread_mem_tracker_mgr->mem_tracker().get(),
+                                         chunk.size);
             }
             chunk_pool_system_free_count->increment(1);
             chunk_pool_system_free_cost_ns->increment(cost_ns);
@@ -228,8 +223,8 @@ void ChunkAllocator::free(const Chunk& chunk, MemTracker* tracker) {
     if (tracker) {
         tracker->transfer_to(_mem_tracker.get(), chunk.size);
     } else {
-        thread_local_ctx.get()->_thread_mem_tracker_mgr->mem_tracker()->transfer_to(
-                _mem_tracker.get(), chunk.size);
+        tls_ctx()->_thread_mem_tracker_mgr->mem_tracker()->transfer_to(_mem_tracker.get(),
+                                                                       chunk.size);
     }
     _arenas[chunk.core_id]->push_free_chunk(chunk.data, chunk.size);
 }

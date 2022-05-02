@@ -27,7 +27,7 @@
 namespace doris::vectorized {
 
 VAssertNumRowsNode::VAssertNumRowsNode(ObjectPool* pool, const TPlanNode& tnode,
-                                     const DescriptorTbl& descs)
+                                       const DescriptorTbl& descs)
         : ExecNode(pool, tnode, descs),
           _desired_num_rows(tnode.assert_num_rows_node.desired_num_rows),
           _subquery_string(tnode.assert_num_rows_node.subquery_string) {
@@ -49,7 +49,7 @@ Status VAssertNumRowsNode::open(RuntimeState* state) {
 Status VAssertNumRowsNode::get_next(RuntimeState* state, Block* block, bool* eos) {
     RETURN_IF_ERROR(exec_debug_action(TExecNodePhase::GETNEXT));
     SCOPED_TIMER(_runtime_profile->total_time_counter());
-    child(0)->get_next(state, block, eos);
+    RETURN_IF_ERROR(child(0)->get_next(state, block, eos));
     _num_rows_returned += block->rows();
     bool assert_res = false;
     switch (_assertion) {
@@ -96,4 +96,4 @@ Status VAssertNumRowsNode::get_next(RuntimeState* state, Block* block, bool* eos
     return Status::OK();
 }
 
-} // namespace doris
+} // namespace doris::vectorized

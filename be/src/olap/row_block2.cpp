@@ -236,11 +236,12 @@ Status RowBlockV2::_copy_data_to_column(int cid,
                 value |= *(unsigned char*)(ptr + 1);
                 value <<= 8;
                 value |= *(unsigned char*)(ptr);
-                vectorized::VecDateTimeValue date;
-                date.from_olap_date(value);
+                vectorized::VecDateTimeValue date =
+                        vectorized::VecDateTimeValue::create_from_olap_date(value);
                 (column_int)->insert_data(reinterpret_cast<char*>(&date), 0);
-            } else
+            } else {
                 column_int->insert_default();
+            }
         }
         break;
     }
@@ -253,9 +254,9 @@ Status RowBlockV2::_copy_data_to_column(int cid,
                 auto ptr = reinterpret_cast<const char*>(column_block(cid).cell_ptr(row_idx));
 
                 uint64_t value = *reinterpret_cast<const uint64_t*>(ptr);
-                vectorized::VecDateTimeValue data;
-                data.from_olap_datetime(value);
-                (column_int)->insert_data(reinterpret_cast<char*>(&data), 0);
+                vectorized::VecDateTimeValue datetime =
+                        vectorized::VecDateTimeValue::create_from_olap_datetime(value);
+                (column_int)->insert_data(reinterpret_cast<char*>(&datetime), 0);
             } else {
                 column_int->insert_default();
             }
@@ -288,7 +289,7 @@ Status RowBlockV2::_copy_data_to_column(int cid,
 
         auto& offsets_col = column_array->get_offsets();
         offsets_col.reserve(_selected_size);
-        uint32_t offset = 0;
+        uint32_t offset = offsets_col.back();
         for (uint16_t j = 0; j < _selected_size; ++j) {
             uint16_t row_idx = _selection_vector[j];
             auto cv = reinterpret_cast<const CollectionValue*>(column_block(cid).cell_ptr(row_idx));
@@ -354,8 +355,6 @@ Status RowBlockV2::_copy_data_to_column(int cid,
 Status RowBlockV2::_append_data_to_column(const ColumnVectorBatch* batch, size_t start,
                                           uint32_t len,
                                           doris::vectorized::MutableColumnPtr& origin_column) {
-    constexpr auto MAX_SIZE_OF_VEC_STRING = 1024l * 1024;
-
     auto* column = origin_column.get();
     uint32_t selected_size = len;
     bool nullable_mark_array[selected_size];
@@ -458,11 +457,12 @@ Status RowBlockV2::_append_data_to_column(const ColumnVectorBatch* batch, size_t
             if (!nullable_mark_array[j]) {
                 uint32_t row_idx = j + start;
                 auto slice = reinterpret_cast<const Slice*>(batch->cell_ptr(row_idx));
-                if (LIKELY(slice->size <= MAX_SIZE_OF_VEC_STRING)) {
+                if (LIKELY(slice->size <= config::string_type_length_soft_limit_bytes)) {
                     column_string->insert_data(slice->data, slice->size);
                 } else {
                     return Status::NotSupported(
-                            "Not support string len over than 1MB in vec engine.");
+                            "Not support string len over than "
+                            "`string_type_length_soft_limit_bytes` in vec engine.");
                 }
             } else {
                 column_string->insert_default();
@@ -498,11 +498,12 @@ Status RowBlockV2::_append_data_to_column(const ColumnVectorBatch* batch, size_t
                 value |= *(unsigned char*)(ptr + 1);
                 value <<= 8;
                 value |= *(unsigned char*)(ptr);
-                vectorized::VecDateTimeValue date;
-                date.from_olap_date(value);
+                vectorized::VecDateTimeValue date =
+                        vectorized::VecDateTimeValue::create_from_olap_date(value);
                 (column_int)->insert_data(reinterpret_cast<char*>(&date), 0);
-            } else
+            } else {
                 column_int->insert_default();
+            }
         }
         break;
     }
@@ -515,8 +516,9 @@ Status RowBlockV2::_append_data_to_column(const ColumnVectorBatch* batch, size_t
                 auto ptr = reinterpret_cast<const char*>(batch->cell_ptr(row_idx));
 
                 uint64_t value = *reinterpret_cast<const uint64_t*>(ptr);
-                vectorized::VecDateTimeValue data(value);
-                (column_int)->insert_data(reinterpret_cast<char*>(&data), 0);
+                vectorized::VecDateTimeValue datetime =
+                        vectorized::VecDateTimeValue::create_from_olap_datetime(value);
+                (column_int)->insert_data(reinterpret_cast<char*>(&datetime), 0);
             } else {
                 column_int->insert_default();
             }

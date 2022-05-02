@@ -14,6 +14,9 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/apache/impala/blob/branch-2.9.0/be/src/runtime/mem-tracker.cpp
+// and modified by Doris
 
 #include "runtime/mem_tracker.h"
 
@@ -25,7 +28,6 @@
 #include "gutil/once.h"
 #include "runtime/exec_env.h"
 #include "runtime/runtime_state.h"
-#include "runtime/thread_context.h"
 #include "service/backend_options.h"
 #include "util/pretty_printer.h"
 #include "util/string_util.h"
@@ -58,6 +60,20 @@ MemTracker* MemTracker::get_raw_process_tracker() {
     return raw_process_tracker;
 }
 
+// Track memory for all brpc server responses.
+static std::shared_ptr<MemTracker> brpc_server_tracker;
+static GoogleOnceType brpc_server_tracker_once = GOOGLE_ONCE_INIT;
+
+void MemTracker::create_brpc_server_tracker() {
+    brpc_server_tracker = MemTracker::create_tracker(-1, "Brpc", get_process_tracker(),
+                                                     MemTrackerLevel::OVERVIEW);
+}
+
+std::shared_ptr<MemTracker> MemTracker::get_brpc_server_tracker() {
+    GoogleOnceInit(&brpc_server_tracker_once, &MemTracker::create_brpc_server_tracker);
+    return brpc_server_tracker;
+}
+
 void MemTracker::list_process_trackers(std::vector<std::shared_ptr<MemTracker>>* trackers) {
     trackers->clear();
     std::deque<std::shared_ptr<MemTracker>> to_process;
@@ -86,7 +102,8 @@ std::shared_ptr<MemTracker> MemTracker::create_tracker(int64_t byte_limit, const
                                                        const std::shared_ptr<MemTracker>& parent,
                                                        MemTrackerLevel level,
                                                        RuntimeProfile* profile) {
-    std::shared_ptr<MemTracker> reset_parent = parent ? parent : thread_local_ctx.get()->_thread_mem_tracker_mgr->mem_tracker();
+    std::shared_ptr<MemTracker> reset_parent =
+            parent ? parent : tls_ctx()->_thread_mem_tracker_mgr->mem_tracker();
     DCHECK(reset_parent);
 
     std::shared_ptr<MemTracker> tracker(
@@ -100,7 +117,8 @@ std::shared_ptr<MemTracker> MemTracker::create_tracker(int64_t byte_limit, const
 std::shared_ptr<MemTracker> MemTracker::create_virtual_tracker(
         int64_t byte_limit, const std::string& label, const std::shared_ptr<MemTracker>& parent,
         MemTrackerLevel level) {
-   std::shared_ptr<MemTracker> reset_parent = parent ? parent : thread_local_ctx.get()->_thread_mem_tracker_mgr->mem_tracker();
+    std::shared_ptr<MemTracker> reset_parent =
+            parent ? parent : tls_ctx()->_thread_mem_tracker_mgr->mem_tracker();
     DCHECK(reset_parent);
 
     std::shared_ptr<MemTracker> tracker(
@@ -119,7 +137,8 @@ MemTracker::MemTracker(int64_t byte_limit, const std::string& label,
                        RuntimeProfile* profile)
         : _limit(byte_limit),
           _label(label),
-          _id(_label + std::to_string(GetCurrentTimeMicros()) + std::to_string(rand())),
+          // Not 100% sure the id is unique. This is generated because it is faster than converting to int after hash.
+          _id((GetCurrentTimeMicros() % 1000000) * 100 + _label.length()),
           _parent(parent),
           _level(level) {
     if (profile == nullptr) {

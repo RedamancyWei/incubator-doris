@@ -14,6 +14,9 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/apache/impala/blob/branch-2.9.0/fe/src/main/java/org/apache/impala/DistributedPlanner.java
+// and modified by Doris
 
 package org.apache.doris.planner;
 
@@ -96,12 +99,10 @@ public class DistributedPlanner {
             Preconditions.checkState(!queryStmt.hasOffset());
             isPartitioned = true;
         }
-        long perNodeMemLimit = ctx_.getQueryOptions().mem_limit;
         if (LOG.isDebugEnabled()) {
             LOG.debug("create plan fragments");
-            LOG.debug("memlimit=" + Long.toString(perNodeMemLimit));
         }
-        createPlanFragments(singleNodePlan, isPartitioned, perNodeMemLimit, fragments);
+        createPlanFragments(singleNodePlan, isPartitioned, fragments);
         return fragments;
     }
 
@@ -181,8 +182,7 @@ public class DistributedPlanner {
      * partitioned; the partition function is derived from the inputs.
      */
     private PlanFragment createPlanFragments(
-            PlanNode root, boolean isPartitioned,
-            long perNodeMemLimit, ArrayList<PlanFragment> fragments) throws UserException {
+            PlanNode root, boolean isPartitioned, ArrayList<PlanFragment> fragments) throws UserException {
         ArrayList<PlanFragment> childFragments = Lists.newArrayList();
         for (PlanNode child : root.getChildren()) {
             // allow child fragments to be partitioned, unless they contain a limit clause
@@ -193,7 +193,7 @@ public class DistributedPlanner {
             // TODO()
             // if (root instanceof SubplanNode && child == root.getChild(1)) continue;
             childFragments.add(
-                    createPlanFragments(child, childIsPartitioned, perNodeMemLimit, fragments));
+                    createPlanFragments(child, childIsPartitioned, fragments));
         }
 
         PlanFragment result = null;
@@ -204,8 +204,8 @@ public class DistributedPlanner {
             result = createTableFunctionFragment(root, childFragments.get(0));
         } else if (root instanceof HashJoinNode) {
             Preconditions.checkState(childFragments.size() == 2);
-            result = createHashJoinFragment((HashJoinNode) root, childFragments.get(1),
-                    childFragments.get(0), perNodeMemLimit, fragments);
+            result = createHashJoinFragment((HashJoinNode) root,
+                    childFragments.get(1), childFragments.get(0), fragments);
         } else if (root instanceof CrossJoinNode) {
             result = createCrossJoinFragment((CrossJoinNode) root, childFragments.get(1),
                     childFragments.get(0));
@@ -213,8 +213,6 @@ public class DistributedPlanner {
             result = createSelectNodeFragment((SelectNode) root, childFragments);
         } else if (root instanceof SetOperationNode) {
             result = createSetOperationNodeFragment((SetOperationNode) root, childFragments, fragments);
-        } else if (root instanceof MergeNode) {
-            result = createMergeNodeFragment((MergeNode) root, childFragments, fragments);
         } else if (root instanceof AggregationNode) {
             result = createAggregationFragment((AggregationNode) root, childFragments.get(0), fragments);
         } else if (root instanceof SortNode) {
@@ -306,9 +304,9 @@ public class DistributedPlanner {
      * This function is mainly used to choose the most suitable distributed method for the 'node',
      * and transform it into PlanFragment.
      */
-    private PlanFragment createHashJoinFragment(HashJoinNode node, PlanFragment rightChildFragment,
-                                                PlanFragment leftChildFragment, long perNodeMemLimit,
-                                                ArrayList<PlanFragment> fragments)
+    private PlanFragment createHashJoinFragment(
+            HashJoinNode node, PlanFragment rightChildFragment,
+            PlanFragment leftChildFragment, ArrayList<PlanFragment> fragments)
             throws UserException {
         List<String> reason = Lists.newArrayList();
         if (canColocateJoin(node, leftChildFragment, rightChildFragment, reason)) {
@@ -352,16 +350,16 @@ public class DistributedPlanner {
         // - or if it's cheaper and we weren't explicitly told to do a partitioned join
         // - and we're not doing a full or right outer join (those require the left-hand
         //   side to be partitioned for correctness)
-        // - and the expected size of the hash tbl doesn't exceed perNodeMemLimit
+        // - and the expected size of the hash tbl doesn't exceed autoBroadcastThreshold
         // we set partition join as default when broadcast join cost equals partition join cost
+
         if (node.getJoinOp() != JoinOperator.RIGHT_OUTER_JOIN && node.getJoinOp() != JoinOperator.FULL_OUTER_JOIN) {
             if (node.getInnerRef().isBroadcastJoin()) {
                 // respect user join hint
                 doBroadcast = true;
-            } else if (!node.getInnerRef().isPartitionJoin()
-                    && joinCostEvaluation.isBroadcastCostSmaller()
-                    && (perNodeMemLimit == 0
-                    || joinCostEvaluation.constructHashTableSpace() <= perNodeMemLimit)) {
+            } else if (!node.getInnerRef().isPartitionJoin() && joinCostEvaluation.isBroadcastCostSmaller()
+                    && joinCostEvaluation.constructHashTableSpace()
+                    <= ctx_.getRootAnalyzer().getAutoBroadcastJoinThreshold()) {
                 doBroadcast = true;
             } else {
                 doBroadcast = false;
@@ -690,67 +688,6 @@ public class DistributedPlanner {
         connectChildFragment(node, 1, leftChildFragment, rightChildFragment);
         leftChildFragment.setPlanRoot(node);
         return leftChildFragment;
-    }
-
-    /**
-     * Creates an unpartitioned fragment that merges the outputs of all of its children (with a single ExchangeNode),
-     * corresponding to the 'mergeNode' of the non-distributed plan. Each of the child fragments receives a MergeNode as
-     * a new plan root (with the child fragment's plan tree as its only input), so that each child fragment's output is
-     * mapped onto the MergeNode's result tuple id. TODO: if this is implementing a UNION DISTINCT, the parent of the
-     * mergeNode is a duplicate-removing AggregationNode, which might make sense to apply to the children as well, in
-     * order to reduce the amount of data that needs to be sent to the parent; augment the planner to decide whether
-     * that would reduce the runtime. TODO: since the fragment that does the merge is unpartitioned, it can absorb all
-     * child fragments that are also unpartitioned
-     */
-    private PlanFragment createMergeNodeFragment(MergeNode mergeNode,
-                                                 ArrayList<PlanFragment> childFragments,
-                                                 ArrayList<PlanFragment> fragments)
-            throws UserException {
-        Preconditions.checkState(mergeNode.getChildren().size() == childFragments.size());
-
-        // If the mergeNode only has constant exprs, return it in an unpartitioned fragment.
-        if (mergeNode.getChildren().isEmpty()) {
-            Preconditions.checkState(!mergeNode.getConstExprLists().isEmpty());
-            return new PlanFragment(ctx_.getNextFragmentId(), mergeNode, DataPartition.UNPARTITIONED);
-        }
-
-        // create an ExchangeNode to perform the merge operation of mergeNode;
-        // the ExchangeNode retains the generic PlanNode parameters of mergeNode
-        ExchangeNode exchNode = new ExchangeNode(ctx_.getNextNodeId(), mergeNode, true);
-        exchNode.setNumInstances(1);
-        exchNode.init(ctx_.getRootAnalyzer());
-        PlanFragment parentFragment =
-                new PlanFragment(ctx_.getNextFragmentId(), exchNode, DataPartition.UNPARTITIONED);
-
-        // we don't expect to be paralleling a MergeNode that was inserted solely
-        // to evaluate conjuncts (ie, that doesn't explicitly materialize its output)
-        Preconditions.checkState(mergeNode.getTupleIds().size() == 1);
-
-        for (int i = 0; i < childFragments.size(); ++i) {
-            PlanFragment childFragment = childFragments.get(i);
-            // create a clone of mergeNode; we want to keep the limit and conjuncts
-            MergeNode childMergeNode = new MergeNode(ctx_.getNextNodeId(), mergeNode);
-            List<Expr> resultExprs = Expr.cloneList(mergeNode.getResultExprLists().get(i), null);
-            childMergeNode.addChild(childFragment.getPlanRoot(), resultExprs);
-            childFragment.setPlanRoot(childMergeNode);
-            childFragment.setDestination(exchNode);
-        }
-
-        // Add an unpartitioned child fragment with a MergeNode for the constant exprs.
-        if (!mergeNode.getConstExprLists().isEmpty()) {
-            MergeNode childMergeNode = new MergeNode(ctx_.getNextNodeId(), mergeNode);
-            childMergeNode.init(ctx_.getRootAnalyzer());
-            childMergeNode.getConstExprLists().addAll(mergeNode.getConstExprLists());
-            // Clear original constant exprs to make sure nobody else picks them up.
-            mergeNode.getConstExprLists().clear();
-            PlanFragment childFragment =
-                    new PlanFragment(ctx_.getNextFragmentId(), childMergeNode, DataPartition.UNPARTITIONED);
-            childFragment.setPlanRoot(childMergeNode);
-            childFragment.setDestination(exchNode);
-            childFragments.add(childFragment);
-            fragments.add(childFragment);
-        }
-        return parentFragment;
     }
 
     /**

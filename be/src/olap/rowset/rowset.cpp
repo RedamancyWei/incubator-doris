@@ -21,7 +21,8 @@
 
 namespace doris {
 
-Rowset::Rowset(const TabletSchema* schema, const FilePathDesc& rowset_path_desc, RowsetMetaSharedPtr rowset_meta)
+Rowset::Rowset(const TabletSchema* schema, const FilePathDesc& rowset_path_desc,
+               RowsetMetaSharedPtr rowset_meta)
         : _schema(schema),
           _rowset_path_desc(rowset_path_desc),
           _rowset_meta(std::move(rowset_meta)),
@@ -36,11 +37,11 @@ Rowset::Rowset(const TabletSchema* schema, const FilePathDesc& rowset_path_desc,
     }
 }
 
-OLAPStatus Rowset::load(bool use_cache) {
+Status Rowset::load(bool use_cache) {
     // if the state is ROWSET_UNLOADING it means close() is called
     // and the rowset is already loaded, and the resource is not closed yet.
     if (_rowset_state_machine.rowset_state() == ROWSET_LOADED) {
-        return OLAP_SUCCESS;
+        return Status::OK();
     }
     {
         // before lock, if rowset state is ROWSET_UNLOADING, maybe it is doing do_close in release
@@ -53,10 +54,11 @@ OLAPStatus Rowset::load(bool use_cache) {
         }
     }
     // load is done
-    VLOG_CRITICAL << "rowset is loaded. " << rowset_id() << ", rowset version:" << rowset_meta()->version()
-              << ", state from ROWSET_UNLOADED to ROWSET_LOADED. tabletid:"
-              << _rowset_meta->tablet_id();
-    return OLAP_SUCCESS;
+    VLOG_CRITICAL << "rowset is loaded. " << rowset_id()
+                  << ", rowset version:" << rowset_meta()->version()
+                  << ", state from ROWSET_UNLOADED to ROWSET_LOADED. tabletid:"
+                  << _rowset_meta->tablet_id();
+    return Status::OK();
 }
 
 void Rowset::make_visible(Version version) {

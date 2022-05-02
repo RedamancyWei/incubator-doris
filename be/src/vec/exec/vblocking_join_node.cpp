@@ -22,15 +22,16 @@
 #include "exprs/expr.h"
 #include "gen_cpp/PlanNodes_types.h"
 #include "runtime/runtime_state.h"
-#include "runtime/thread_context.h"
 #include "util/runtime_profile.h"
 
 namespace doris::vectorized {
 
 VBlockingJoinNode::VBlockingJoinNode(const std::string& node_name, const TJoinOp::type join_op,
-                                   ObjectPool* pool, const TPlanNode& tnode,
-                                   const DescriptorTbl& descs)
-        : ExecNode(pool, tnode, descs), _node_name(node_name), _join_op(join_op),
+                                     ObjectPool* pool, const TPlanNode& tnode,
+                                     const DescriptorTbl& descs)
+        : ExecNode(pool, tnode, descs),
+          _node_name(node_name),
+          _join_op(join_op),
           _left_side_eos(false) {}
 
 Status VBlockingJoinNode::init(const TPlanNode& tnode, RuntimeState* state) {
@@ -40,6 +41,7 @@ Status VBlockingJoinNode::init(const TPlanNode& tnode, RuntimeState* state) {
 Status VBlockingJoinNode::prepare(RuntimeState* state) {
     SCOPED_TIMER(_runtime_profile->total_time_counter());
     RETURN_IF_ERROR(ExecNode::prepare(state));
+    SCOPED_SWITCH_TASK_THREAD_LOCAL_MEM_TRACKER(mem_tracker());
 
     _build_pool.reset(new MemPool(mem_tracker().get()));
     _build_timer = ADD_TIMER(runtime_profile(), "BuildTime");
@@ -76,8 +78,9 @@ void VBlockingJoinNode::build_side_thread(RuntimeState* state, std::promise<Stat
 }
 
 Status VBlockingJoinNode::open(RuntimeState* state) {
-    RETURN_IF_ERROR(ExecNode::open(state));
     SCOPED_TIMER(_runtime_profile->total_time_counter());
+    SCOPED_SWITCH_TASK_THREAD_LOCAL_MEM_TRACKER(mem_tracker());
+    RETURN_IF_ERROR(ExecNode::open(state));
 
     RETURN_IF_CANCELLED(state);
 
@@ -90,7 +93,8 @@ Status VBlockingJoinNode::open(RuntimeState* state) {
     std::promise<Status> build_side_status;
 
     add_runtime_exec_option("Join Build-Side Prepared Asynchronously");
-    std::thread(bind(&VBlockingJoinNode::build_side_thread, this, state, &build_side_status)).detach();
+    std::thread(bind(&VBlockingJoinNode::build_side_thread, this, state, &build_side_status))
+            .detach();
 
     // Open the left child so that it may perform any initialisation in parallel.
     // Don't exit even if we see an error, we still need to wait for the build thread
@@ -139,4 +143,4 @@ void VBlockingJoinNode::debug_string(int indentation_level, std::stringstream* o
     *out << ")";
 }
 
-} // namespace doris
+} // namespace doris::vectorized

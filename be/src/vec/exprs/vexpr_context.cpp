@@ -17,6 +17,7 @@
 
 #include "vec/exprs/vexpr_context.h"
 
+#include "runtime/thread_context.h"
 #include "udf/udf_internal.h"
 #include "vec/exprs/vexpr.h"
 
@@ -40,6 +41,7 @@ doris::Status VExprContext::prepare(doris::RuntimeState* state,
                                     const std::shared_ptr<doris::MemTracker>& tracker) {
     _prepared = true;
     _mem_tracker = tracker;
+    SCOPED_SWITCH_THREAD_LOCAL_MEM_TRACKER(_mem_tracker);
     _pool.reset(new MemPool(_mem_tracker.get()));
     return _root->prepare(state, row_desc, this);
 }
@@ -49,6 +51,7 @@ doris::Status VExprContext::open(doris::RuntimeState* state) {
     if (_opened) {
         return Status::OK();
     }
+    SCOPED_SWITCH_THREAD_LOCAL_MEM_TRACKER(_mem_tracker);
     _opened = true;
     // Fragment-local state is only initialized for original contexts. Clones inherit the
     // original's fragment state and only need to have thread-local state initialized.
@@ -65,6 +68,7 @@ void VExprContext::close(doris::RuntimeState* state) {
 
     for (int i = 0; i < _fn_contexts.size(); ++i) {
         _fn_contexts[i]->impl()->close();
+        delete _fn_contexts[i];
     }
     // _pool can be NULL if Prepare() was never called
     if (_pool != NULL) {
@@ -77,6 +81,7 @@ doris::Status VExprContext::clone(RuntimeState* state, VExprContext** new_ctx) {
     DCHECK(_prepared);
     DCHECK(_opened);
     DCHECK(*new_ctx == nullptr);
+    SCOPED_SWITCH_THREAD_LOCAL_MEM_TRACKER(_mem_tracker);
 
     *new_ctx = state->obj_pool()->add(new VExprContext(_root));
     (*new_ctx)->_pool.reset(new MemPool(_pool->mem_tracker()));

@@ -39,6 +39,15 @@ BaseScanner::BaseScanner(RuntimeState* state, RuntimeProfile* profile,
           _counter(counter),
           _src_tuple(nullptr),
           _src_tuple_row(nullptr),
+#if BE_TEST
+          _mem_tracker(new MemTracker()),
+#else
+          _mem_tracker(MemTracker::create_tracker(
+                  -1, state->query_type() == TQueryType::LOAD
+                              ? "BaseScanner:" + std::to_string(state->load_job_id())
+                              : "BaseScanner:Select")),
+#endif
+          _mem_pool(std::make_unique<MemPool>(_mem_tracker.get())),
           _dest_tuple_desc(nullptr),
           _pre_filter_texprs(pre_filter_texprs),
           _strict_mode(false),
@@ -49,13 +58,6 @@ BaseScanner::BaseScanner(RuntimeState* state, RuntimeProfile* profile,
           _materialize_timer(nullptr),
           _success(false),
           _scanner_eof(false) {
-#ifndef BE_TEST
-    _mem_pool.reset(new MemPool(state->query_type() == TQueryType::LOAD
-                                        ? "BaseScanner:" + std::to_string(state->load_job_id())
-                                        : "BaseScanner:Select"));
-#else
-    _mem_pool.reset(new MemPool());
-#endif
 }
 
 Status BaseScanner::open() {
@@ -154,7 +156,18 @@ Status BaseScanner::init_expr_ctxes() {
     return Status::OK();
 }
 
-Status BaseScanner::fill_dest_tuple(Tuple* dest_tuple, MemPool* mem_pool) {
+Status BaseScanner::fill_dest_tuple(Tuple* dest_tuple, MemPool* mem_pool, bool* fill_tuple) {
+    RETURN_IF_ERROR(_fill_dest_tuple(dest_tuple, mem_pool));
+    if (_success) {
+        free_expr_local_allocations();
+        *fill_tuple = true;
+    } else {
+        *fill_tuple = false;
+    }
+    return Status::OK();
+}
+
+Status BaseScanner::_fill_dest_tuple(Tuple* dest_tuple, MemPool* mem_pool) {
     // filter src tuple by preceding filter first
     if (!ExecNode::eval_conjuncts(&_pre_filter_ctxs[0], _pre_filter_ctxs.size(), _src_tuple_row)) {
         _counter->num_rows_unselected++;

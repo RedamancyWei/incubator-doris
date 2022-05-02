@@ -21,7 +21,7 @@
 #include <sstream>
 
 #include "common/object_pool.h"
-#include "exec/broker_scanner.h"
+#include "vec/exec/vbroker_scanner.h"
 #include "exec/json_scanner.h"
 #include "exec/orc_scanner.h"
 #include "exec/parquet_scanner.h"
@@ -30,7 +30,6 @@
 #include "runtime/dpp_sink_internal.h"
 #include "runtime/row_batch.h"
 #include "runtime/runtime_state.h"
-#include "runtime/thread_context.h"
 #include "util/runtime_profile.h"
 
 namespace doris {
@@ -61,6 +60,7 @@ Status BrokerScanNode::init(const TPlanNode& tnode, RuntimeState* state) {
 Status BrokerScanNode::prepare(RuntimeState* state) {
     VLOG_QUERY << "BrokerScanNode prepare";
     RETURN_IF_ERROR(ScanNode::prepare(state));
+    SCOPED_SWITCH_TASK_THREAD_LOCAL_MEM_TRACKER(mem_tracker());
     // get tuple desc
     _runtime_state = state;
     _tuple_desc = state->desc_tbl().get_tuple_descriptor(_tuple_id);
@@ -88,6 +88,7 @@ Status BrokerScanNode::prepare(RuntimeState* state) {
 
 Status BrokerScanNode::open(RuntimeState* state) {
     SCOPED_TIMER(_runtime_profile->total_time_counter());
+    SCOPED_SWITCH_TASK_THREAD_LOCAL_MEM_TRACKER(mem_tracker());
     RETURN_IF_ERROR(ExecNode::open(state));
     RETURN_IF_ERROR(exec_debug_action(TExecNodePhase::OPEN));
     RETURN_IF_CANCELLED(state);
@@ -108,6 +109,7 @@ Status BrokerScanNode::start_scanners() {
 
 Status BrokerScanNode::get_next(RuntimeState* state, RowBatch* row_batch, bool* eos) {
     SCOPED_TIMER(_runtime_profile->total_time_counter());
+    SCOPED_SWITCH_TASK_THREAD_LOCAL_EXISTED_MEM_TRACKER(mem_tracker());
     // check if CANCELLED.
     if (state->is_cancelled()) {
         std::unique_lock<std::mutex> l(_batch_queue_lock);
@@ -227,18 +229,24 @@ std::unique_ptr<BaseScanner> BrokerScanNode::create_scanner(const TBrokerScanRan
         break;
     case TFileFormatType::FORMAT_ORC:
         scan = new ORCScanner(_runtime_state, runtime_profile(), scan_range.params,
-                              scan_range.ranges, scan_range.broker_addresses,
-                              _pre_filter_texprs, counter);
+                              scan_range.ranges, scan_range.broker_addresses, _pre_filter_texprs,
+                              counter);
         break;
     case TFileFormatType::FORMAT_JSON:
         scan = new JsonScanner(_runtime_state, runtime_profile(), scan_range.params,
-                               scan_range.ranges, scan_range.broker_addresses,
-                               _pre_filter_texprs, counter);
+                               scan_range.ranges, scan_range.broker_addresses, _pre_filter_texprs,
+                               counter);
         break;
     default:
-        scan = new BrokerScanner(_runtime_state, runtime_profile(), scan_range.params,
-                                 scan_range.ranges, scan_range.broker_addresses,
-                                 _pre_filter_texprs, counter);
+        if (_vectorized) {
+            scan = new vectorized::VBrokerScanner(
+                    _runtime_state, runtime_profile(), scan_range.params, scan_range.ranges,
+                    scan_range.broker_addresses, _pre_filter_texprs, counter);
+        } else {
+            scan = new BrokerScanner(_runtime_state, runtime_profile(), scan_range.params,
+                                     scan_range.ranges, scan_range.broker_addresses,
+                                     _pre_filter_texprs, counter);
+        }
     }
     std::unique_ptr<BaseScanner> scanner(scan);
     return scanner;
@@ -254,8 +262,7 @@ Status BrokerScanNode::scanner_scan(const TBrokerScanRange& scan_range,
 
     while (!scanner_eof) {
         // Fill one row batch
-        std::shared_ptr<RowBatch> row_batch(
-                new RowBatch(row_desc(), _runtime_state->batch_size()));
+        std::shared_ptr<RowBatch> row_batch(new RowBatch(row_desc(), _runtime_state->batch_size()));
 
         // create new tuple buffer for row_batch
         MemPool* tuple_pool = row_batch->tuple_data_pool();
@@ -274,7 +281,7 @@ Status BrokerScanNode::scanner_scan(const TBrokerScanRange& scan_range,
             }
 
             // This row batch has been filled up, and break this
-            if (row_batch->is_full() || row_batch->is_full_uncommited() ) {
+            if (row_batch->is_full() || row_batch->is_full_uncommited()) {
                 break;
             }
 
@@ -291,7 +298,7 @@ Status BrokerScanNode::scanner_scan(const TBrokerScanRange& scan_range,
                 continue;
             }
 
-            // if read row succeed, but fill dest tuple fail, we need to increase # of uncommitted rows, 
+            // if read row succeed, but fill dest tuple fail, we need to increase # of uncommitted rows,
             // once reach the capacity of row batch, will transfer the row batch to next operator to release memory
             if (!tuple_fill) {
                 row_batch->increase_uncommitted_rows();

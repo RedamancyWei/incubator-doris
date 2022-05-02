@@ -20,15 +20,19 @@ package org.apache.doris.statistics;
 import org.apache.doris.analysis.AnalyzeStmt;
 import org.apache.doris.catalog.Catalog;
 import org.apache.doris.common.AnalysisException;
+import org.apache.doris.common.DdlException;
 
-import com.clearspring.analytics.util.Lists;
+import com.google.common.base.Strings;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /***
  * Used to store statistics job info,
@@ -46,7 +50,9 @@ public class StatisticsJob {
         CANCELLED
     }
 
-    private long id = Catalog.getCurrentCatalog().getNextId();
+    protected final ReentrantReadWriteLock lock = new ReentrantReadWriteLock(true);
+
+    private final long id = Catalog.getCurrentCatalog().getNextId();
 
     /**
      * to be collected database stats.
@@ -63,15 +69,12 @@ public class StatisticsJob {
      */
     private final Map<Long, List<String>> tableIdToColumnName;
 
-    /**
-     * timeout of a statistics task
-     */
-    private long taskTimeout;
+    private final Map<String, String> properties;
 
     /**
      * to be executed tasks.
      */
-    private List<StatisticsTask> tasks = Lists.newArrayList();
+    private final List<StatisticsTask> tasks = Lists.newArrayList();
 
     private JobState jobState = JobState.PENDING;
     private final List<String> errorMsgs = Lists.newArrayList();
@@ -83,42 +86,52 @@ public class StatisticsJob {
 
     public StatisticsJob(Long dbId,
                          Set<Long> tblIds,
-                         Map<Long, List<String>> tableIdToColumnName) {
+                         Map<Long, List<String>> tableIdToColumnName,
+                         Map<String, String> properties) {
         this.dbId = dbId;
         this.tblIds = tblIds;
         this.tableIdToColumnName = tableIdToColumnName;
+        this.properties = properties == null ? Maps.newHashMap() : properties;
+    }
+
+    public void readLock() {
+        lock.readLock().lock();
+    }
+
+    public void readUnlock() {
+        lock.readLock().unlock();
+    }
+
+    private void writeLock() {
+        lock.writeLock().lock();
+    }
+
+    private void writeUnlock() {
+        lock.writeLock().unlock();
     }
 
     public long getId() {
-        return this.id;
-    }
-
-    public void setId(long id) {
-        this.id = id;
+        return id;
     }
 
     public long getDbId() {
-        return this.dbId;
+        return dbId;
     }
 
     public Set<Long> getTblIds() {
-        return this.tblIds;
+        return tblIds;
     }
 
     public Map<Long, List<String>> getTableIdToColumnName() {
-        return this.tableIdToColumnName;
+        return tableIdToColumnName;
     }
 
-    public long getTaskTimeout() {
-        return taskTimeout;
+    public Map<String, String> getProperties() {
+        return properties;
     }
 
     public List<StatisticsTask> getTasks() {
-        return this.tasks;
-    }
-
-    public void setTasks(List<StatisticsTask> tasks) {
-        this.tasks = tasks;
+        return tasks;
     }
 
     public List<String> getErrorMsgs() {
@@ -126,77 +139,109 @@ public class StatisticsJob {
     }
 
     public JobState getJobState() {
-        return this.jobState;
+        return jobState;
     }
 
     public long getCreateTime() {
-        return this.createTime;
+        return createTime;
     }
 
     public long getStartTime() {
-        return this.startTime;
-    }
-
-    public void setStartTime(long startTime) {
-        this.startTime = startTime;
+        return startTime;
     }
 
     public long getFinishTime() {
-        return this.finishTime;
-    }
-
-    public void setFinishTime(long finishTime) {
-        this.finishTime = finishTime;
+        return finishTime;
     }
 
     public int getProgress() {
-        return this.progress;
+        return progress;
     }
 
-    public void setProgress(int progress) {
-        this.progress = progress;
-    }
-
-    private void setOptional(AnalyzeStmt stmt) {
-        if (stmt.getTaskTimeout() != -1) {
-            this.taskTimeout = stmt.getTaskTimeout();
+    public void updateJobState(JobState newState) throws DdlException {
+        LOG.info("To change statistics job(id={}) state from {} to {}", id, jobState, newState);
+        writeLock();
+        JobState fromState = jobState;
+        try {
+            unprotectedUpdateJobState(newState);
+        } catch (DdlException e) {
+            LOG.warn(e.getMessage(), e);
+            throw e;
+        } finally {
+            writeUnlock();
         }
+        LOG.info("Statistics job(id={}) state changed from {} to {}", id, fromState, jobState);
     }
 
-    public synchronized void updateJobState(JobState jobState) {
-        // PENDING -> SCHEDULING/FAILED/CANCELLED
-        if (this.jobState == JobState.PENDING) {
-            if (jobState == JobState.SCHEDULING) {
-                this.jobState = JobState.SCHEDULING;
-            } else if (jobState == JobState.FAILED) {
-                this.jobState = JobState.FAILED;
-            } else if (jobState == JobState.CANCELLED) {
-                this.jobState = JobState.CANCELLED;
+    private void unprotectedUpdateJobState(JobState newState) throws DdlException {
+        // PENDING -> PENDING/SCHEDULING/FAILED/CANCELLED
+        if (jobState == JobState.PENDING) {
+            switch (newState) {
+                case PENDING:
+                case SCHEDULING:
+                    break;
+                case FAILED:
+                case CANCELLED:
+                    finishTime = System.currentTimeMillis();
+                    break;
+                default:
+                    throw new DdlException("Invalid job state transition from " + jobState + " to " + newState);
             }
-            return;
         }
-
         // SCHEDULING -> RUNNING/FAILED/CANCELLED
-        if (this.jobState == JobState.SCHEDULING) {
-            if (jobState == JobState.RUNNING) {
-                this.jobState = JobState.RUNNING;
-            } else if (jobState == JobState.FAILED) {
-                this.jobState = JobState.FAILED;
-            } else if (jobState == JobState.CANCELLED) {
-                this.jobState = JobState.CANCELLED;
+        else if (jobState == JobState.SCHEDULING) {
+            switch (newState) {
+                case RUNNING:
+                    startTime = System.currentTimeMillis();
+                    break;
+                case FAILED:
+                case CANCELLED:
+                    finishTime = System.currentTimeMillis();
+                    break;
+                default:
+                    throw new DdlException("Invalid job state transition from " + jobState + " to " + newState);
             }
-            return;
         }
-
         // RUNNING -> FINISHED/FAILED/CANCELLED
-        if (this.jobState == JobState.RUNNING) {
-            if (jobState == JobState.FINISHED) {
-                this.jobState = JobState.FINISHED;
-            } else if (jobState == JobState.FAILED) {
-                this.jobState = JobState.FAILED;
-            } else if (jobState == JobState.CANCELLED) {
-                this.jobState = JobState.CANCELLED;
+        else if (jobState == JobState.RUNNING) {
+            switch (newState) {
+                case FINISHED:
+                case FAILED:
+                case CANCELLED:
+                    // set finish time
+                    finishTime = System.currentTimeMillis();
+                    break;
+                default:
+                    throw new DdlException("Invalid job state transition from " + jobState + " to " + newState);
             }
+        } else {
+            // TODO
+            throw new DdlException("Invalid job state transition from " + jobState + " to " + newState);
+        }
+        jobState = newState;
+    }
+
+    public void updateJobInfoByTaskId(Long taskId, String errorMsg) throws DdlException {
+        writeLock();
+        try {
+            for (StatisticsTask task : tasks) {
+                if (taskId == task.getId()) {
+                    if (Strings.isNullOrEmpty(errorMsg)) {
+                        progress += 1;
+                        if (progress == tasks.size()) {
+                            unprotectedUpdateJobState(StatisticsJob.JobState.FINISHED);
+                        }
+                        task.updateTaskState(StatisticsTask.TaskState.FINISHED);
+                    } else {
+                        errorMsgs.add(errorMsg);
+                        task.updateTaskState(StatisticsTask.TaskState.FAILED);
+                        unprotectedUpdateJobState(StatisticsJob.JobState.FAILED);
+                    }
+                    return;
+                }
+            }
+        } finally {
+            writeUnlock();
         }
     }
 
@@ -210,8 +255,7 @@ public class StatisticsJob {
         long dbId = analyzeStmt.getDbId();
         Map<Long, List<String>> tableIdToColumnName = analyzeStmt.getTableIdToColumnName();
         Set<Long> tblIds = analyzeStmt.getTblIds();
-        StatisticsJob statisticsJob = new StatisticsJob(dbId, tblIds, tableIdToColumnName);
-        statisticsJob.setOptional(analyzeStmt);
-        return statisticsJob;
+        Map<String, String> properties = analyzeStmt.getProperties();
+        return new StatisticsJob(dbId, tblIds, tableIdToColumnName, properties);
     }
 }

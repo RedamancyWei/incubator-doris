@@ -15,8 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef DORIS_BE_SRC_OLAP_UTILS_H
-#define DORIS_BE_SRC_OLAP_UTILS_H
+#pragma once
 
 #include <fcntl.h>
 #include <pthread.h>
@@ -77,17 +76,16 @@ private:
 // @param separator 分隔符
 // @param result 切分结果
 template <typename T>
-OLAPStatus split_string(const std::string& base, const T separator,
-                        std::vector<std::string>* result) {
+Status split_string(const std::string& base, const T separator, std::vector<std::string>* result) {
     if (!result) {
-        return OLAP_ERR_OTHER_ERROR;
+        return Status::OLAPInternalError(OLAP_ERR_OTHER_ERROR);
     }
 
     // 处理base为空的情况
     // 在删除功能中，当varchar类型列的过滤条件为空时，会出现这种情况
     if (base.size() == 0) {
         result->push_back("");
-        return OLAP_SUCCESS;
+        return Status::OK();
     }
 
     size_t offset = 0;
@@ -102,7 +100,7 @@ OLAPStatus split_string(const std::string& base, const T separator,
         }
     }
 
-    return OLAP_SUCCESS;
+    return Status::OK();
 }
 
 template <typename T>
@@ -117,11 +115,11 @@ void _destruct_array(const void* array, void*) {
 
 // 根据压缩类型的不同，执行压缩。dest_buf_len是dest_buf的最大长度，
 // 通过指针返回的written_len是实际写入的长度。
-OLAPStatus olap_compress(const char* src_buf, size_t src_len, char* dest_buf, size_t dest_len,
-                         size_t* written_len, OLAPCompressionType compression_type);
+Status olap_compress(const char* src_buf, size_t src_len, char* dest_buf, size_t dest_len,
+                     size_t* written_len, OLAPCompressionType compression_type);
 
-OLAPStatus olap_decompress(const char* src_buf, size_t src_len, char* dest_buf, size_t dest_len,
-                           size_t* written_len, OLAPCompressionType compression_type);
+Status olap_decompress(const char* src_buf, size_t src_len, char* dest_buf, size_t dest_len,
+                       size_t* written_len, OLAPCompressionType compression_type);
 
 // 计算adler32的包装函数
 // 第一次使用的时候第一个参数传宏ADLER32_INIT, 之后的调用传上次计算的结果
@@ -133,7 +131,7 @@ uint32_t olap_adler32(uint32_t adler, const char* buf, size_t len);
 uint32_t olap_crc32(uint32_t crc32, const char* buf, size_t len);
 
 // 获取系统当前时间，并将时间转换为字符串
-OLAPStatus gen_timestamp_string(std::string* out_string);
+Status gen_timestamp_string(std::string* out_string);
 
 enum ComparatorEnum {
     COMPARATOR_LESS = 0,
@@ -193,7 +191,7 @@ unsigned int crc32c_lut(char const* b, unsigned int off, unsigned int len, unsig
 
 bool check_datapath_rw(const std::string& path);
 
-OLAPStatus read_write_test_file(const std::string& test_file_path);
+Status read_write_test_file(const std::string& test_file_path);
 
 //转换两个list
 template <typename T1, typename T2>
@@ -219,10 +217,14 @@ private:
     static __thread char _buf[BUF_SIZE];
 };
 
-inline bool is_io_error(OLAPStatus status) {
-    return (((OLAP_ERR_IO_ERROR == status || OLAP_ERR_READ_UNENOUGH == status) && errno == EIO) ||
-            OLAP_ERR_CHECKSUM_ERROR == status || OLAP_ERR_FILE_DATA_ERROR == status ||
-            OLAP_ERR_TEST_FILE_ERROR == status || OLAP_ERR_ROWBLOCK_READ_INFO_ERROR == status);
+inline bool is_io_error(Status status) {
+    return (((Status::OLAPInternalError(OLAP_ERR_IO_ERROR) == status ||
+              Status::OLAPInternalError(OLAP_ERR_READ_UNENOUGH) == status) &&
+             errno == EIO) ||
+            Status::OLAPInternalError(OLAP_ERR_CHECKSUM_ERROR) == status ||
+            Status::OLAPInternalError(OLAP_ERR_FILE_DATA_ERROR) == status ||
+            Status::OLAPInternalError(OLAP_ERR_TEST_FILE_ERROR) == status ||
+            Status::OLAPInternalError(OLAP_ERR_ROWBLOCK_READ_INFO_ERROR) == status);
 }
 
 #define ENDSWITH(str, suffix) ((str).rfind(suffix) == (str).size() - strlen(suffix))
@@ -315,5 +317,3 @@ bool valid_bool(const std::string& value_str);
     } while (0)
 
 } // namespace doris
-
-#endif // DORIS_BE_SRC_OLAP_UTILS_H

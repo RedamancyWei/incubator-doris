@@ -17,6 +17,8 @@
 
 #include "runtime/thread_mem_tracker_mgr.h"
 
+#include "runtime/exec_env.h"
+#include "runtime/fragment_mgr.h"
 #include "runtime/mem_tracker_task_pool.h"
 #include "service/backend_options.h"
 
@@ -25,6 +27,7 @@ namespace doris {
 void ThreadMemTrackerMgr::attach_task(const std::string& cancel_msg, const std::string& task_id,
                                       const TUniqueId& fragment_instance_id,
                                       const std::shared_ptr<MemTracker>& mem_tracker) {
+    DCHECK(switch_count == 0) << print_debug_string();
     _task_id = task_id;
     _fragment_instance_id = fragment_instance_id;
     _consume_err_cb.cancel_msg = cancel_msg;
@@ -37,31 +40,22 @@ void ThreadMemTrackerMgr::attach_task(const std::string& cancel_msg, const std::
         _temp_task_mem_tracker =
                 ExecEnv::GetInstance()->task_pool_mem_tracker_registry()->get_task_mem_tracker(
                         task_id);
-        update_tracker(_temp_task_mem_tracker);
+        update_tracker<false>(_temp_task_mem_tracker);
     } else {
-        update_tracker(mem_tracker);
+        update_tracker<false>(mem_tracker);
     }
 }
 
 void ThreadMemTrackerMgr::detach_task() {
+    DCHECK(switch_count == 0) << print_debug_string();
     _task_id = "";
     _fragment_instance_id = TUniqueId();
     _consume_err_cb.init();
     clear_untracked_mems();
-    _tracker_id = "process";
-    // The following memory changes for the two map operations of _untracked_mems and _mem_trackers
-    // will be re-recorded in _untracked_mem.
-    _untracked_mems.clear();
-    _untracked_mems["process"] = 0;
-    _mem_trackers.clear();
-    _mem_trackers["process"] = MemTracker::get_process_tracker();
+    init();
 }
 
 void ThreadMemTrackerMgr::exceeded_cancel_task(const std::string& cancel_details) {
-    _temp_task_mem_tracker =
-            ExecEnv::GetInstance()->task_pool_mem_tracker_registry()->get_task_mem_tracker(
-                    _task_id);
-    DCHECK(_temp_task_mem_tracker);
     if (_fragment_instance_id != TUniqueId()) {
         ExecEnv::GetInstance()->fragment_mgr()->cancel(
                 _fragment_instance_id, PPlanFragmentCancelReason::MEMORY_LIMIT_EXCEED,
@@ -72,7 +66,8 @@ void ThreadMemTrackerMgr::exceeded_cancel_task(const std::string& cancel_details
 
 void ThreadMemTrackerMgr::exceeded(int64_t mem_usage, Status st) {
     auto rst = _mem_trackers[_tracker_id]->mem_limit_exceeded(
-            nullptr, "In TCMalloc Hook, " + _consume_err_cb.cancel_msg, mem_usage, st);
+            nullptr, fmt::format("In TCMalloc Hook, {}", _consume_err_cb.cancel_msg), mem_usage,
+            st);
     if (_consume_err_cb.cb_func != nullptr) {
         _consume_err_cb.cb_func();
     }

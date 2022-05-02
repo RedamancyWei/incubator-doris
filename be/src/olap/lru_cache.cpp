@@ -344,7 +344,7 @@ Cache::Handle* LRUCache::insert(const CacheKey& key, uint32_t hash, void* value,
     return reinterpret_cast<Cache::Handle*>(e);
 }
 
-void LRUCache::erase(const CacheKey& key, uint32_t hash, MemTracker* tracker) {
+void LRUCache::erase(const CacheKey& key, uint32_t hash) {
     LRUHandle* e = nullptr;
     bool last_ref = false;
     {
@@ -443,15 +443,12 @@ ShardedLRUCache::ShardedLRUCache(const std::string& name, size_t total_capacity,
         : _name(name),
           _last_id(1),
           _mem_tracker(MemTracker::create_tracker(-1, name, nullptr, MemTrackerLevel::OVERVIEW)) {
-    SCOPED_SWITCH_THREAD_LOCAL_MEM_TRACKER(_mem_tracker);
+    SCOPED_SWITCH_THREAD_LOCAL_MEM_TRACKER_END_CLEAR(_mem_tracker);
     const size_t per_shard = (total_capacity + (kNumShards - 1)) / kNumShards;
     for (int s = 0; s < kNumShards; s++) {
         _shards[s] = new LRUCache(type);
         _shards[s]->set_capacity(per_shard);
     }
-    // After the lru cache is created in the main thread, the main thread will not switch to the
-    // lru cache mem tracker again, so manually clear the untracked mem in tls.
-    thread_local_ctx.get()->_thread_mem_tracker_mgr->clear_untracked_mems();
 
     _entity = DorisMetrics::instance()->metric_registry()->register_entity(
             std::string("lru_cache:") + name, {{"name", name}});
@@ -478,8 +475,7 @@ Cache::Handle* ShardedLRUCache::insert(const CacheKey& key, void* value, size_t 
                                        CachePriority priority) {
     // The memory of the parameter value should be recorded in the tls mem tracker,
     // transfer the memory ownership of the value to ShardedLRUCache::_mem_tracker.
-    thread_local_ctx.get()->_thread_mem_tracker_mgr->mem_tracker()->transfer_to(_mem_tracker.get(),
-                                                                                charge);
+    tls_ctx()->_thread_mem_tracker_mgr->mem_tracker()->transfer_to(_mem_tracker.get(), charge);
     SCOPED_SWITCH_THREAD_LOCAL_MEM_TRACKER(_mem_tracker);
     const uint32_t hash = _hash_slice(key);
     return _shards[_shard(hash)]->insert(key, hash, value, charge, deleter, priority);
@@ -499,7 +495,7 @@ void ShardedLRUCache::release(Handle* handle) {
 void ShardedLRUCache::erase(const CacheKey& key) {
     SCOPED_SWITCH_THREAD_LOCAL_MEM_TRACKER(_mem_tracker);
     const uint32_t hash = _hash_slice(key);
-    _shards[_shard(hash)]->erase(key, hash, _mem_tracker.get());
+    _shards[_shard(hash)]->erase(key, hash);
 }
 
 void* ShardedLRUCache::value(Handle* handle) {

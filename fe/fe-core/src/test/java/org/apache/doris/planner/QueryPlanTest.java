@@ -476,18 +476,6 @@ public class QueryPlanTest {
         Assert.assertTrue(explainString.contains("OUTPUT EXPRS:`id` | `id2`"));
         Assert.assertTrue(explainString.contains("0:OlapScanNode"));
 
-        queryStr = "explain insert into test.bitmap_table select id, to_bitmap(id2) from test.bitmap_table_2;";
-        explainString = UtFrameUtils.getSQLPlanOrErrorMsg(connectContext, queryStr);
-        Assert.assertTrue(explainString.contains("OLAP TABLE SINK"));
-        Assert.assertTrue(explainString.contains("OUTPUT EXPRS:`id` | to_bitmap(CAST(`id2` AS CHARACTER))"));
-        Assert.assertTrue(explainString.contains("0:OlapScanNode"));
-
-        queryStr = "explain insert into test.bitmap_table select id, bitmap_hash(id2) from test.bitmap_table_2;";
-        explainString = UtFrameUtils.getSQLPlanOrErrorMsg(connectContext, queryStr);
-        Assert.assertTrue(explainString.contains("OLAP TABLE SINK"));
-        Assert.assertTrue(explainString.contains("OUTPUT EXPRS:`id` | bitmap_hash(CAST(`id2` AS CHARACTER))"));
-        Assert.assertTrue(explainString.contains("0:OlapScanNode"));
-
         queryStr = "explain insert into test.bitmap_table select id, id from test.bitmap_table_2;";
         String errorMsg = UtFrameUtils.getSQLPlanOrErrorMsg(connectContext, queryStr);
         Assert.assertTrue(errorMsg.contains("bitmap column require the function return type is BITMAP"));
@@ -615,6 +603,25 @@ public class QueryPlanTest {
         sql = "SHOW VARIABLES LIKE 'lower_case_%'; SHOW VARIABLES LIKE 'sql_mode'";
         List<StatementBase> stmts = UtFrameUtils.parseAndAnalyzeStmts(sql, connectContext);
         Assert.assertEquals(2, stmts.size());
+
+        // disable cast hll/bitmap to string
+        testHLLQueryPlan(
+                "select cast(id2 as varchar) from test.hll_table;",
+                "Invalid type cast of `id2` from HLL to VARCHAR(*)"
+        );
+        testBitmapQueryPlan(
+                "select cast(id2 as varchar) from test.bitmap_table;",
+                "Invalid type cast of `id2` from BITMAP to VARCHAR(*)"
+        );
+        // disable implicit cast hll/bitmap to string
+        testHLLQueryPlan(
+                "select length(id2) from test.hll_table;",
+                "No matching function with signature: length(hll)"
+        );
+        testBitmapQueryPlan(
+                "select length(id2) from test.bitmap_table;",
+                "No matching function with signature: length(bitmap)"
+        );
     }
 
     @Test
@@ -1985,6 +1992,7 @@ public class QueryPlanTest {
         ExplainTest explainTest = new ExplainTest();
         explainTest.before(connectContext);
         explainTest.testExplainInsertInto();
+        explainTest.testExplainVerboseInsertInto();
         explainTest.testExplainSelect();
         explainTest.testExplainVerboseSelect();
         explainTest.testExplainConcatSelect();
@@ -2081,7 +2089,7 @@ public class QueryPlanTest {
                 "\"storage_medium\" = \"HDD\",\n" +
                 "\"storage_format\" = \"V2\"\n" +
                 ");\n");
-        String queryStr = "EXPLAIN INSERT INTO result_exprs\n" +
+        String queryStr = "EXPLAIN VERBOSE INSERT INTO result_exprs\n" +
                 "SELECT a.aid,\n" +
                 "       b.bid\n" +
                 "FROM\n" +
@@ -2090,6 +2098,7 @@ public class QueryPlanTest {
                 "  (SELECT 4 AS bid)b ON (a.aid=b.bid)\n";
         String explainString = UtFrameUtils.getSQLPlanOrErrorMsg(connectContext, queryStr);
         Assert.assertFalse(explainString.contains("OUTPUT EXPRS:3 | 4"));
+        System.out.println(explainString);
         Assert.assertTrue(explainString.contains("OUTPUT EXPRS:CAST(`a`.`aid` AS INT) | 4"));
     }
 
@@ -2112,4 +2121,38 @@ public class QueryPlanTest {
         String explainString = UtFrameUtils.getSQLPlanOrErrorMsg(connectContext, sql);
         Assert.assertTrue(explainString.contains("1 | 10 | 1 | 1 | 1"));
     }
+
+    @Test
+    public void testOutJoinWithOnFalse() throws Exception {
+        connectContext.setDatabase("default_cluster:test");
+        createTable("create table out_join_1\n" +
+                "(\n" +
+                "    k1 int,\n" +
+                "    v int\n" +
+                ")\n" +
+                "DISTRIBUTED BY HASH(k1) BUCKETS 10\n" +
+                "PROPERTIES(\"replication_num\" = \"1\");");
+
+        createTable("create table out_join_2\n" +
+                "(\n" +
+                "    k1 int,\n" +
+                "    v int\n" +
+                ")\n" +
+                "DISTRIBUTED BY HASH(k1) BUCKETS 10\n" +
+                "PROPERTIES(\"replication_num\" = \"1\");");
+
+        String sql = "explain select * from out_join_1 left join out_join_2 on out_join_1.k1 = out_join_2.k1 and 1=2;";
+        String explainString = UtFrameUtils.getSQLPlanOrErrorMsg(connectContext, sql);
+        Assert.assertFalse(explainString.contains("non-equal LEFT OUTER JOIN is not supported"));
+
+        sql = "explain select * from out_join_1 right join out_join_2 on out_join_1.k1 = out_join_2.k1 and 1=2;";
+        explainString = UtFrameUtils.getSQLPlanOrErrorMsg(connectContext, sql);
+        Assert.assertFalse(explainString.contains("non-equal RIGHT OUTER JOIN is not supported"));
+
+        sql = "explain select * from out_join_1 full join out_join_2 on out_join_1.k1 = out_join_2.k1 and 1=2;";
+        explainString = UtFrameUtils.getSQLPlanOrErrorMsg(connectContext, sql);
+        Assert.assertFalse(explainString.contains("non-equal FULL OUTER JOIN is not supported"));
+
+    }
+
 }

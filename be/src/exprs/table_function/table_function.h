@@ -30,6 +30,8 @@ namespace doris {
 // Currently, the memory allocated from table function is from malloc directly.
 class TableFunctionState {};
 
+constexpr auto COMBINATOR_SUFFIX_OUTER = "_outer";
+
 class ExprContext;
 class TupleRow;
 class TableFunction {
@@ -98,6 +100,17 @@ public:
         _vexpr_context = vexpr_context;
     }
 
+    bool is_outer() const { return _is_outer; }
+    void set_outer() {
+        if (is_outer()) {
+            return;
+        }
+        _is_outer = true;
+        _fn_name += COMBINATOR_SUFFIX_OUTER;
+    }
+
+    bool current_empty() const { return _is_current_empty; }
+
 protected:
     std::string _fn_name;
     ExprContext* _expr_context = nullptr;
@@ -111,6 +124,7 @@ protected:
     int64_t _cur_offset = 0;
     // the size of current result
     int64_t _cur_size = 0;
+    // set _is_outer to false for explode function, and should not return tuple while array is null or empty
+    bool _is_outer = false;
 };
-
 } // namespace doris

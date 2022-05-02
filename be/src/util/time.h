@@ -14,6 +14,9 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/apache/impala/blob/branch-2.9.0/be/src/util/time.h
+// and modified by Doris
 
 #ifndef DORIS_BE_UTIL_TIME_H
 #define DORIS_BE_UTIL_TIME_H
@@ -24,7 +27,7 @@
 #include <string>
 
 #define NANOS_PER_SEC 1000000000ll
-#define NANOS_PER_MILLIS  1000000ll
+#define NANOS_PER_MILLIS 1000000ll
 #define NANOS_PER_MICRO 1000ll
 #define MICROS_PER_SEC 1000000ll
 #define MICROS_PER_MILLI 1000ll

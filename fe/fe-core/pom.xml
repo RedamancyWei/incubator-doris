@@ -688,9 +688,9 @@ under the License.
                             <goal>run</goal>
                         </goals>
                         <configuration>
-                            <protocCommand>${doris.thirdparty}/installed/bin/protoc</protocCommand>
+                            <!--protocCommand>${doris.thirdparty}/installed/bin/protoc</protocCommand-->
                             <!-->You can use following protocArtifact instead of protocCommand, so that you don't need to install protobuf tools<-->
-                            <!--protocArtifact>com.google.protobuf:protoc:${protobuf.version}</protocArtifact-->
+                            <protocArtifact>com.google.protobuf:protoc:${protobuf.version}</protocArtifact>
                             <protocVersion>${protobuf.version}</protocVersion>
                             <inputDirectories>
                                 <include>${doris.home}/gensrc/proto</include>
@@ -785,28 +785,6 @@ under the License.
                         <maxmem>1024m</maxmem>
                     </check>
                 </configuration>
-            </plugin>
-            <!-- for FE java code style checking -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-checkstyle-plugin</artifactId>
-                <version>3.1.0</version>
-                <configuration>
-                    <configLocation>checkstyle.xml</configLocation>
-                    <encoding>UTF-8</encoding>
-                    <consoleOutput>true</consoleOutput>
-                    <failsOnError>true</failsOnError>
-                    <linkXRef>false</linkXRef>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>validate</id>
-                        <phase>validate</phase>
-                        <goals>
-                            <goal>check</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
             <!-- clean fe/target dir before building -->
             <plugin>

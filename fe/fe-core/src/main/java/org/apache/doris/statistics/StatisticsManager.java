@@ -41,18 +41,18 @@ import java.util.List;
 import java.util.Map;
 
 public class StatisticsManager {
-    private final static Logger LOG = LogManager.getLogger(StatisticsTaskScheduler.class);
+    private final static Logger LOG = LogManager.getLogger(StatisticsManager.class);
 
-    private final Statistics statistics;
+    private Statistics statistics;
 
     public StatisticsManager() {
-        this.statistics = new Statistics();
+        statistics = new Statistics();
     }
 
     public void alterTableStatistics(AlterTableStatsStmt stmt)
             throws AnalysisException {
         Table table = validateTableName(stmt.getTableName());
-        this.statistics.updateTableStats(table.getId(), stmt.getProperties());
+        statistics.updateTableStats(table.getId(), stmt.getStatsTypeToValue());
     }
 
     public void alterColumnStatistics(AlterColumnStatsStmt stmt) throws AnalysisException {
@@ -63,7 +63,7 @@ public class StatisticsManager {
             ErrorReport.reportAnalysisException(ErrorCode.ERR_BAD_FIELD_ERROR, columnName, table.getName());
         }
         // match type and column value
-        this.statistics.updateColumnStats(table.getId(), columnName, column.getType(), stmt.getProperties());
+        statistics.updateColumnStats(table.getId(), columnName, column.getType(), stmt.getStatsTypeToValue());
     }
 
     public List<List<String>> showTableStatsList(String dbName, String tableName)
@@ -111,7 +111,7 @@ public class StatisticsManager {
         }
         // get stats
         List<List<String>> result = Lists.newArrayList();
-        Map<String, ColumnStats> nameToColumnStats = this.statistics.getColumnStats(table.getId());
+        Map<String, ColumnStats> nameToColumnStats = statistics.getColumnStats(table.getId());
         if (nameToColumnStats == null) {
             throw new AnalysisException("There is no column statistics in this table:" + table.getName());
         }
@@ -125,7 +125,7 @@ public class StatisticsManager {
     }
 
     private List<String> showTableStats(Table table) throws AnalysisException {
-        TableStats tableStats = this.statistics.getTableStats(table.getId());
+        TableStats tableStats = statistics.getTableStats(table.getId());
         if (tableStats == null) {
             throw new AnalysisException("There is no statistics in this table:" + table.getName());
         }
@@ -139,8 +139,8 @@ public class StatisticsManager {
         StatsCategoryDesc categoryDesc = taskResult.getCategoryDesc();
         validateTableAndColumn(categoryDesc);
         long tblId = categoryDesc.getTableId();
-        Map<String, String> statsNameToValue = taskResult.getStatsNameToValue();
-        this.statistics.updateTableStats(tblId, statsNameToValue);
+        Map<StatsType, String> statsTypeToValue = taskResult.getStatsTypeToValue();
+        statistics.updateTableStats(tblId, statsTypeToValue);
     }
 
     public void alterColumnStatistics(StatisticsTaskResult taskResult) throws AnalysisException {
@@ -152,8 +152,8 @@ public class StatisticsManager {
         Table table = db.getTableOrAnalysisException(tblId);
         String columnName = categoryDesc.getColumnName();
         Type columnType = table.getColumn(columnName).getType();
-        Map<String, String> statsNameToValue = taskResult.getStatsNameToValue();
-        this.statistics.updateColumnStats(tblId, columnName, columnType, statsNameToValue);
+        Map<StatsType, String> statsTypeToValue = taskResult.getStatsTypeToValue();
+        statistics.updateColumnStats(tblId, columnName, columnType, statsTypeToValue);
     }
 
     private Table validateTableName(TableName dbTableName) throws AnalysisException {
@@ -177,5 +177,9 @@ public class StatisticsManager {
                 throw new AnalysisException("Column " + columnName + " does not exist in table " + table.getName());
             }
         }
+    }
+
+    public Statistics getStatistics() {
+        return statistics;
     }
 }

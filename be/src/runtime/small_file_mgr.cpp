@@ -20,8 +20,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include <boost/algorithm/string/classification.hpp> // boost::is_any_of
-#include <boost/algorithm/string/predicate.hpp>      // boost::algorithm::starts_with
+#include <boost/algorithm/string/predicate.hpp> // boost::algorithm::starts_with
 #include <sstream>
 
 #include "common/status.h"
