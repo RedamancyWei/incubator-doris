@@ -29,8 +29,9 @@ import com.google.common.collect.Maps;
 import java.util.List;
 import java.util.Map;
 
-/*
-A statistics task that directly collects statistics by reading FE meta.
+/**
+ * A statistics task that directly collects statistics by reading FE meta.
+ * e.g. for fixed-length types such as Int type and Long type we get their size from metadata.
  */
 public class MetaStatisticsTask extends StatisticsTask {
 
@@ -44,7 +45,7 @@ public class MetaStatisticsTask extends StatisticsTask {
     @Override
     public StatisticsTaskResult call() throws Exception {
         Map<StatsType, String> statsTypeToValue = Maps.newHashMap();
-        List<StatsType> statsTypeList = this.getStatsTypeList();
+        List<StatsType> statsTypeList = getStatsTypeList();
 
         for (StatsType statsType : statsTypeList) {
             switch (statsType) {
@@ -59,15 +60,15 @@ public class MetaStatisticsTask extends StatisticsTask {
                     getColSize(statsType, statsTypeToValue);
                     break;
                 default:
-                    throw new DdlException("unsupported type(" + statsType + ").");
+                    throw new DdlException("Unsupported statistics type(" + statsType + ").");
             }
         }
 
-        return new StatisticsTaskResult(this.granularityDesc, this.categoryDesc, statsTypeToValue);
+        return new StatisticsTaskResult(granularityDesc, categoryDesc, statsTypeToValue);
     }
 
     private void getRowCount(StatsType statsType, Map<StatsType, String> statsTypeToValue) throws DdlException {
-        StatsCategoryDesc categoryDesc = this.getCategoryDesc();
+        StatsCategoryDesc categoryDesc = getCategoryDesc();
         long dbId = categoryDesc.getDbId();
         long tableId = categoryDesc.getTableId();
         Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbId);
@@ -77,7 +78,7 @@ public class MetaStatisticsTask extends StatisticsTask {
     }
 
     private void getDataSize(StatsType statsType, Map<StatsType, String> statsTypeToValue) throws DdlException {
-        StatsCategoryDesc categoryDesc = this.getCategoryDesc();
+        StatsCategoryDesc categoryDesc = getCategoryDesc();
         long dbId = categoryDesc.getDbId();
         long tableId = categoryDesc.getTableId();
         Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbId);
@@ -87,14 +88,14 @@ public class MetaStatisticsTask extends StatisticsTask {
     }
 
     private void getColSize(StatsType statsType, Map<StatsType, String> statsTypeToValue) throws DdlException {
-        StatsCategoryDesc categoryDesc = this.getCategoryDesc();
+        StatsCategoryDesc categoryDesc = getCategoryDesc();
         long dbId = categoryDesc.getDbId();
         Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbId);
         long tableId = categoryDesc.getTableId();
         Table table = db.getTableOrDdlException(tableId);
         String columnName = categoryDesc.getColumnName();
         Column column = table.getColumn(columnName);
-        int typeSize = column.getDataType().getOlapColumnIndexSize();
+        int typeSize = column.getDataType().getSlotSize();
         statsTypeToValue.put(statsType, String.valueOf(typeSize));
     }
 }
