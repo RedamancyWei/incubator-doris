@@ -17,47 +17,48 @@
 
 package org.apache.doris.statistics;
 
-public class StatsCategoryDesc {
-    public enum StatsCategory {
-        TABLE,
-        COLUMN
+import java.util.List;
+
+public class StatisticsDesc {
+    private StatsCategory category;
+
+    private StatsGranularity granularity;
+
+    private List<StatsType> statsTypes;
+
+    public StatisticsDesc() {
     }
 
-    private StatsCategory category;
-    private long dbId;
-    private long tableId;
-    private String columnName;
+    public StatisticsDesc(StatsCategory category,
+                          StatsGranularity granularity,
+                          List<StatsType> statsTypes) {
+        this.category = category;
+        this.granularity = granularity;
+        this.statsTypes = statsTypes;
+    }
 
     public StatsCategory getCategory() {
-        return this.category;
+        return category;
     }
 
     public void setCategory(StatsCategory category) {
         this.category = category;
     }
 
-    public long getDbId() {
-        return this.dbId;
+    public StatsGranularity getGranularity() {
+        return granularity;
     }
 
-    public void setDbId(long dbId) {
-        this.dbId = dbId;
+    public void setGranularity(StatsGranularity granularity) {
+        this.granularity = granularity;
     }
 
-    public long getTableId() {
-        return this.tableId;
+    public List<StatsType> getStatsTypes() {
+        return statsTypes;
     }
 
-    public void setTableId(long tableId) {
-        this.tableId = tableId;
-    }
-
-    public String getColumnName() {
-        return this.columnName;
-    }
-
-    public void setColumnName(String columnName) {
-        this.columnName = columnName;
+    public void setStatsTypes(List<StatsType> statsTypes) {
+        this.statsTypes = statsTypes;
     }
 }
 

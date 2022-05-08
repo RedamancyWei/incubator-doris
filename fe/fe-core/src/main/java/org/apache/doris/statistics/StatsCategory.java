@@ -17,24 +17,31 @@
 
 package org.apache.doris.statistics;
 
-public class StatsGranularityDesc {
-    public enum StatsGranularity {
+public class StatsCategory {
+    public enum Category {
         TABLE,
-        PARTITION,
-        TABLET
+        COLUMN
     }
 
-    private StatsGranularity granularity;
+    private Category category;
+    private long dbId;
     private long tableId;
-    private long partitionId;
-    private long tabletId;
+    private String columnName;
 
-    public StatsGranularity getGranularity() {
-        return this.granularity;
+    public Category getCategory() {
+        return this.category;
     }
 
-    public void setGranularity(StatsGranularity granularity) {
-        this.granularity = granularity;
+    public void setCategory(Category category) {
+        this.category = category;
+    }
+
+    public long getDbId() {
+        return this.dbId;
+    }
+
+    public void setDbId(long dbId) {
+        this.dbId = dbId;
     }
 
     public long getTableId() {
@@ -45,20 +52,12 @@ public class StatsGranularityDesc {
         this.tableId = tableId;
     }
 
-    public long getPartitionId() {
-        return this.partitionId;
+    public String getColumnName() {
+        return this.columnName;
     }
 
-    public void setPartitionId(long partitionId) {
-        this.partitionId = partitionId;
-    }
-
-    public long getTabletId() {
-        return this.tabletId;
-    }
-
-    public void setTabletId(long tabletId) {
-        this.tabletId = tabletId;
+    public void setColumnName(String columnName) {
+        this.columnName = columnName;
     }
 }
 

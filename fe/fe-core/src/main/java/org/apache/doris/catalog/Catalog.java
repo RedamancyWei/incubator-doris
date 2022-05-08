@@ -225,7 +225,7 @@ import org.apache.doris.qe.VariableMgr;
 import org.apache.doris.resource.Tag;
 import org.apache.doris.service.FrontendOptions;
 import org.apache.doris.statistics.StatisticsJobManager;
-import org.apache.doris.statistics.StatisticsJobScheduler;
+import org.apache.doris.statistics.StatisticsJobSchedulerBak;
 import org.apache.doris.statistics.StatisticsManager;
 import org.apache.doris.statistics.StatisticsTaskScheduler;
 import org.apache.doris.system.Backend;
@@ -420,7 +420,7 @@ public class Catalog {
     // statistics
     private StatisticsManager statisticsManager;
     private StatisticsJobManager statisticsJobManager;
-    private StatisticsJobScheduler statisticsJobScheduler;
+    private StatisticsJobSchedulerBak statisticsJobScheduler;
     private StatisticsTaskScheduler statisticsTaskScheduler;
 
     private PaloAuth auth;
@@ -582,7 +582,7 @@ public class Catalog {
         // statistics
         this.statisticsManager = new StatisticsManager();
         this.statisticsJobManager = new StatisticsJobManager();
-        this.statisticsJobScheduler = new StatisticsJobScheduler();
+        this.statisticsJobScheduler = new StatisticsJobSchedulerBak();
         this.statisticsTaskScheduler = new StatisticsTaskScheduler();
 
         this.auth = new PaloAuth();
@@ -750,7 +750,7 @@ public class Catalog {
         return statisticsJobManager;
     }
 
-    public StatisticsJobScheduler getStatisticsJobScheduler() {
+    public StatisticsJobSchedulerBak getStatisticsJobScheduler() {
         return statisticsJobScheduler;
     }
 

@@ -26,7 +26,6 @@ import org.apache.doris.common.ThreadPoolManager;
 import org.apache.doris.common.util.MasterDaemon;
 import org.apache.doris.statistics.StatisticsJob.JobState;
 import org.apache.doris.statistics.StatisticsTask.TaskState;
-import org.apache.doris.statistics.StatsCategoryDesc.StatsCategory;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -160,12 +159,12 @@ public class StatisticsTaskScheduler extends MasterDaemon {
 
                         try {
                             StatisticsTaskResult taskResult = future.get(timeout, TimeUnit.SECONDS);
-                            StatsCategoryDesc categoryDesc = taskResult.getCategoryDesc();
-                            StatsCategory category = categoryDesc.getCategory();
-                            if (category == StatsCategory.TABLE) {
+                            StatsCategory categoryDesc = taskResult.getCategoryDesc();
+                            StatsCategory.Category category = categoryDesc.getCategory();
+                            if (category == StatsCategory.Category.TABLE) {
                                 // update table statistics
                                 statsManager.alterTableStatistics(taskResult);
-                            } else if (category == StatsCategory.COLUMN) {
+                            } else if (category == StatsCategory.Category.COLUMN) {
                                 // update column statistics
                                 statsManager.alterColumnStatistics(taskResult);
                             }

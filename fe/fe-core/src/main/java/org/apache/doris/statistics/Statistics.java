@@ -36,7 +36,7 @@ import java.util.Map;
  */
 public class Statistics {
 
-    private Map<Long, TableStats> idToTableStats = Maps.newConcurrentMap();
+    private final Map<Long, TableStats> idToTableStats = Maps.newConcurrentMap();
 
     public void updateTableStats(long tableId, Map<StatsType, String> statsTypeToValue)
             throws AnalysisException {

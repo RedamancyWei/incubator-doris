@@ -17,26 +17,20 @@
 
 package org.apache.doris.statistics;
 
+import java.util.List;
 import java.util.Map;
 
 public class StatisticsTaskResult {
-    private final StatsGranularityDesc granularityDesc;
-    private final StatsCategoryDesc categoryDesc;
+    private final List<StatsCategory> categories;
     private final Map<StatsType, String> statsTypeToValue;
 
-    public StatisticsTaskResult(StatsGranularityDesc granularityDesc, StatsCategoryDesc categoryDesc,
-                                Map<StatsType, String> statsTypeToValue) {
-        this.granularityDesc = granularityDesc;
-        this.categoryDesc = categoryDesc;
+    public StatisticsTaskResult(List<StatsCategory> categories, Map<StatsType, String> statsTypeToValue) {
+        this.categories = categories;
         this.statsTypeToValue = statsTypeToValue;
     }
 
-    public StatsGranularityDesc getGranularityDesc() {
-        return granularityDesc;
-    }
-
-    public StatsCategoryDesc getCategoryDesc() {
-        return categoryDesc;
+    public List<StatsCategory> getCategories() {
+        return categories;
     }
 
     public Map<StatsType, String> getStatsTypeToValue() {

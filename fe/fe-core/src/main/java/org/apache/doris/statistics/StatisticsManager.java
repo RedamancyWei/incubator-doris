@@ -136,7 +136,7 @@ public class StatisticsManager {
     }
 
     public void alterTableStatistics(StatisticsTaskResult taskResult) throws AnalysisException {
-        StatsCategoryDesc categoryDesc = taskResult.getCategoryDesc();
+        StatsCategory categoryDesc = taskResult.getCategoryDesc();
         validateTableAndColumn(categoryDesc);
         long tblId = categoryDesc.getTableId();
         Map<StatsType, String> statsTypeToValue = taskResult.getStatsTypeToValue();
@@ -144,7 +144,7 @@ public class StatisticsManager {
     }
 
     public void alterColumnStatistics(StatisticsTaskResult taskResult) throws AnalysisException {
-        StatsCategoryDesc categoryDesc = taskResult.getCategoryDesc();
+        StatsCategory categoryDesc = taskResult.getCategoryDesc();
         validateTableAndColumn(categoryDesc);
         long dbId = categoryDesc.getDbId();
         long tblId = categoryDesc.getTableId();
@@ -164,7 +164,7 @@ public class StatisticsManager {
         return db.getTableOrAnalysisException(tableName);
     }
 
-    private void validateTableAndColumn(StatsCategoryDesc categoryDesc) throws AnalysisException {
+    private void validateTableAndColumn(StatsCategory categoryDesc) throws AnalysisException {
         long dbId = categoryDesc.getDbId();
         long tblId = categoryDesc.getTableId();
         String columnName = categoryDesc.getColumnName();
