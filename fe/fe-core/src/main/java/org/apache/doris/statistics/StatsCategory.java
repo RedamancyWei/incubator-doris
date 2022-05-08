@@ -20,13 +20,16 @@ package org.apache.doris.statistics;
 public class StatsCategory {
     public enum Category {
         TABLE,
+        PARTITION,
         COLUMN
     }
 
     private Category category;
     private long dbId;
     private long tableId;
+    private long partitionId;
     private String columnName;
+    private String statsValue;
 
     public Category getCategory() {
         return this.category;
@@ -52,12 +55,28 @@ public class StatsCategory {
         this.tableId = tableId;
     }
 
+    public long getPartitionId() {
+        return partitionId;
+    }
+
+    public void setPartitionId(long partitionId) {
+        this.partitionId = partitionId;
+    }
+
     public String getColumnName() {
         return this.columnName;
     }
 
     public void setColumnName(String columnName) {
         this.columnName = columnName;
+    }
+
+    public String getStatsValue() {
+        return statsValue;
+    }
+
+    public void setStatsValue(String statsValue) {
+        this.statsValue = statsValue;
     }
 }
 

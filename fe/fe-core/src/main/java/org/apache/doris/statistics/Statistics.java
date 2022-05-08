@@ -19,10 +19,15 @@ package org.apache.doris.statistics;
 
 import org.apache.doris.catalog.Type;
 import org.apache.doris.common.AnalysisException;
+import org.apache.doris.common.DdlException;
+
+import org.jetbrains.annotations.NotNull;
 
 import com.google.common.collect.Maps;
 
 import java.util.Map;
+
+import javax.annotation.Nullable;
 
 /**
  * There are the statistics of all of tables.
@@ -48,27 +53,61 @@ public class Statistics {
         tableStats.updateTableStats(statsTypeToValue);
     }
 
-    public void updateColumnStats(long tableId, String columnName, Type columnType,
-                                  Map<StatsType, String> statsTypeToValue)
-            throws AnalysisException {
+    public void updateTableStats(long tableId, StatsType statsType, String value) throws AnalysisException {
         TableStats tableStats = idToTableStats.get(tableId);
         if (tableStats == null) {
             tableStats = new TableStats();
             idToTableStats.put(tableId, tableStats);
         }
-        tableStats.updateColumnStats(columnName, columnType, statsTypeToValue);
+        tableStats.updateTableStats(statsType, value);
+    }
+
+    public void updatePartitionStats(long tableId, long partitionId, StatsType statsType, String value)
+        throws AnalysisException {
+        PartitionStats partitionStat = getPartitionStats(tableId, partitionId);
+        partitionStat.updatePartitionStats(statsType, value);
+    }
+
+    public void updateColumnStats(long tableId, long partitionId, String columnName, Type columnType,
+                                  Map<StatsType, String> statsTypeToValue)
+            throws AnalysisException {
+        PartitionStats partitionStat = getPartitionStats(tableId, partitionId);
+        partitionStat.updateColumnStats(columnName, columnType, statsTypeToValue);
+    }
+
+    // (tblId, partitionId, colName, statsType, value);
+    public void updateColumnStats(long tableId, long partitionId, String columnName, Type columnType, StatsType statsType, String value)
+        throws AnalysisException {
+        PartitionStats partitionStat = getPartitionStats(tableId, partitionId);
+        partitionStat.updateColumnStats(columnName, columnType, statsType, value);
     }
 
     public TableStats getTableStats(long tableId) {
         return idToTableStats.get(tableId);
     }
 
-    public Map<String, ColumnStats> getColumnStats(long tableId) {
-        TableStats tableStats = getTableStats(tableId);
+    @NotNull
+    private PartitionStats getPartitionStats(long tableId, long partitionId) {
+        TableStats tableStats = idToTableStats.get(tableId);
         if (tableStats == null) {
-            return null;
+            tableStats = new TableStats();
+            idToTableStats.put(tableId, tableStats);
         }
-        return tableStats.getNameToColumnStats();
+        Map<Long, PartitionStats> partitionStats = tableStats.getIdToPartitionStats();
+        PartitionStats partitionStat = partitionStats.get(partitionId);
+        if (partitionStat == null) {
+            partitionStat = new PartitionStats();
+            partitionStats.put(partitionId, partitionStat);
+        }
+        return partitionStat;
+    }
+
+    public Map<String, ColumnStats> getColumnStats(long tableId, @Nullable Long partitionId) {
+        if (partitionId == null) {
+            partitionId = tableId;
+        }
+        PartitionStats partitionStat = getPartitionStats(tableId, partitionId);
+        return partitionStat.getNameToColumnStats();
     }
 
     // TODO: mock statistics need to be removed in the future

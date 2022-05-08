@@ -21,19 +21,17 @@ import java.util.List;
 import java.util.Map;
 
 public class StatisticsTaskResult {
-    private final List<StatsCategory> categories;
-    private final Map<StatsType, String> statsTypeToValue;
+    private Map<StatsType, List<StatsCategory>> statsTypeToValue;
 
-    public StatisticsTaskResult(List<StatsCategory> categories, Map<StatsType, String> statsTypeToValue) {
-        this.categories = categories;
+    public StatisticsTaskResult(Map<StatsType, List<StatsCategory>> statsTypeToValue) {
         this.statsTypeToValue = statsTypeToValue;
     }
 
-    public List<StatsCategory> getCategories() {
-        return categories;
+    public Map<StatsType, List<StatsCategory>> getStatsTypeToValue() {
+        return statsTypeToValue;
     }
 
-    public Map<StatsType, String> getStatsTypeToValue() {
-        return statsTypeToValue;
+    public void setStatsTypeToValue(Map<StatsType, List<StatsCategory>> statsTypeToValue) {
+        this.statsTypeToValue = statsTypeToValue;
     }
 }

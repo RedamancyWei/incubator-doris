@@ -20,6 +20,7 @@ package org.apache.doris.analysis;
 import org.apache.doris.catalog.Catalog;
 import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.Database;
+import org.apache.doris.catalog.OlapTable;
 import org.apache.doris.catalog.Table;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.Config;
@@ -79,6 +80,7 @@ public class AnalyzeStmt extends DdlStmt {
     // after analyzed
     private long dbId;
     private final Set<Long> tblIds = Sets.newHashSet();
+    private final Map<Long, List<Long>> tblIdToPid = Maps.newHashMap();
 
     public AnalyzeStmt(TableName dbTableName, List<String> columns, Map<String, String> properties) {
         this.dbTableName = dbTableName;
@@ -121,6 +123,23 @@ public class AnalyzeStmt extends DdlStmt {
         }
 
         return tables;
+    }
+
+    public Map<Long, List<Long>> getTblIdToPid() throws AnalysisException {
+        Preconditions.checkArgument(isAnalyzed(),
+            "The columns must be obtained after the parsing is complete");
+        for (Table table : getTables()) {
+            table.readLock();
+            try {
+                OlapTable olapTable = (OlapTable) table;
+                List<Long> partitionIds = olapTable.getPartitionIds();
+                tblIdToPid.put(table.getId(), partitionIds);
+            }
+            finally {
+                table.readUnlock();
+            }
+        }
+        return tblIdToPid;
     }
 
     public Map<Long, List<String>> getTableIdToColumnName() throws AnalysisException {

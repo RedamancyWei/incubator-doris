@@ -159,15 +159,7 @@ public class StatisticsTaskScheduler extends MasterDaemon {
 
                         try {
                             StatisticsTaskResult taskResult = future.get(timeout, TimeUnit.SECONDS);
-                            StatsCategory categoryDesc = taskResult.getCategoryDesc();
-                            StatsCategory.Category category = categoryDesc.getCategory();
-                            if (category == StatsCategory.Category.TABLE) {
-                                // update table statistics
-                                statsManager.alterTableStatistics(taskResult);
-                            } else if (category == StatsCategory.Category.COLUMN) {
-                                // update column statistics
-                                statsManager.alterColumnStatistics(taskResult);
-                            }
+                            statsManager.updateStatistics(taskResult);
                         } catch (AnalysisException | TimeoutException | ExecutionException
                                 | InterruptedException | CancellationException e) {
                             errorMsg = e.getMessage();

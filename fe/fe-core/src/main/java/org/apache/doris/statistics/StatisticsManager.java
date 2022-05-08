@@ -23,16 +23,20 @@ import org.apache.doris.analysis.TableName;
 import org.apache.doris.catalog.Catalog;
 import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.Database;
+import org.apache.doris.catalog.OlapTable;
 import org.apache.doris.catalog.Table;
 import org.apache.doris.catalog.Type;
 import org.apache.doris.common.AnalysisException;
+import org.apache.doris.common.DdlException;
 import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.ErrorReport;
 import org.apache.doris.mysql.privilege.PrivPredicate;
 import org.apache.doris.qe.ConnectContext;
+import org.apache.doris.statistics.StatsCategory.Category;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -49,6 +53,10 @@ public class StatisticsManager {
         statistics = new Statistics();
     }
 
+    public Statistics getStatistics() {
+        return statistics;
+    }
+
     public void alterTableStatistics(AlterTableStatsStmt stmt)
             throws AnalysisException {
         Table table = validateTableName(stmt.getTableName());
@@ -63,7 +71,7 @@ public class StatisticsManager {
             ErrorReport.reportAnalysisException(ErrorCode.ERR_BAD_FIELD_ERROR, columnName, table.getName());
         }
         // match type and column value
-        statistics.updateColumnStats(table.getId(), columnName, column.getType(), stmt.getStatsTypeToValue());
+        statistics.updateColumnStats(table.getId(), table.getId(), columnName, column.getType(), stmt.getStatsTypeToValue());
     }
 
     public List<List<String>> showTableStatsList(String dbName, String tableName)
@@ -111,7 +119,7 @@ public class StatisticsManager {
         }
         // get stats
         List<List<String>> result = Lists.newArrayList();
-        Map<String, ColumnStats> nameToColumnStats = statistics.getColumnStats(table.getId());
+        Map<String, ColumnStats> nameToColumnStats = statistics.getColumnStats(table.getId(), null);
         if (nameToColumnStats == null) {
             throw new AnalysisException("There is no column statistics in this table:" + table.getName());
         }
@@ -135,31 +143,45 @@ public class StatisticsManager {
         return row;
     }
 
-    public void alterTableStatistics(StatisticsTaskResult taskResult) throws AnalysisException {
-        StatsCategory categoryDesc = taskResult.getCategoryDesc();
-        validateTableAndColumn(categoryDesc);
-        long tblId = categoryDesc.getTableId();
-        Map<StatsType, String> statsTypeToValue = taskResult.getStatsTypeToValue();
-        statistics.updateTableStats(tblId, statsTypeToValue);
-    }
+    public void updateStatistics(StatisticsTaskResult taskResult) throws AnalysisException {
+        Map<StatsType, List<StatsCategory>> statsTypeToValue = taskResult.getStatsTypeToValue();
 
-    public void alterColumnStatistics(StatisticsTaskResult taskResult) throws AnalysisException {
-        StatsCategory categoryDesc = taskResult.getCategoryDesc();
-        validateTableAndColumn(categoryDesc);
-        long dbId = categoryDesc.getDbId();
-        long tblId = categoryDesc.getTableId();
-        Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(dbId);
-        Table table = db.getTableOrAnalysisException(tblId);
-        String columnName = categoryDesc.getColumnName();
-        Type columnType = table.getColumn(columnName).getType();
-        Map<StatsType, String> statsTypeToValue = taskResult.getStatsTypeToValue();
-        statistics.updateColumnStats(tblId, columnName, columnType, statsTypeToValue);
+        for (Map.Entry<StatsType, List<StatsCategory>> entry : statsTypeToValue.entrySet()) {
+            StatsType statsType = entry.getKey();
+            List<StatsCategory> statsCategories = entry.getValue();
+
+            for (StatsCategory category : statsCategories) {
+                validateTableAndColumn(category);
+                long tblId = category.getTableId();
+                String value = category.getStatsValue();
+
+                switch (category.getCategory()) {
+                    case TABLE:
+                        statistics.updateTableStats(tblId, statsType, value);
+                        break;
+                    case PARTITION:
+                        long partitionId1 = category.getPartitionId();
+                        statistics.updatePartitionStats(tblId, partitionId1, statsType, value);
+                        break;
+                    case COLUMN:
+                        Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(category.getDbId());
+                        OlapTable tbl = (OlapTable) db.getTableOrAnalysisException(tblId);
+                        long partitionId2 = category.getPartitionId();
+                        String colName = category.getColumnName();
+                        Column column = tbl.getColumn(colName);
+                        Type columnType = column.getType();
+                        statistics.updateColumnStats(tblId, partitionId2, colName, columnType, statsType, value);
+                        break;
+                    default:
+                        throw new AnalysisException("Unknown stats category: " + category.getCategory());
+                }
+            }
+        }
     }
 
     private Table validateTableName(TableName dbTableName) throws AnalysisException {
         String dbName = dbTableName.getDb();
         String tableName = dbTableName.getTbl();
-
         Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(dbName);
         return db.getTableOrAnalysisException(tableName);
     }
@@ -177,9 +199,5 @@ public class StatisticsManager {
                 throw new AnalysisException("Column " + columnName + " does not exist in table " + table.getName());
             }
         }
-    }
-
-    public Statistics getStatistics() {
-        return statistics;
     }
 }

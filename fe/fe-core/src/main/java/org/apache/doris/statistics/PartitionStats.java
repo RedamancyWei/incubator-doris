@@ -21,12 +21,12 @@ import org.apache.doris.catalog.Type;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.util.Util;
 
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
+
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 
 
 /**
@@ -49,7 +49,7 @@ import java.util.function.Predicate;
  * For example:
  * "@rowCount = 1000" means that the row count is 1000 in the whole table.
  */
-public class TableStats {
+public class PartitionStats {
 
     public static final StatsType DATA_SIZE = StatsType.DATA_SIZE;
     public static final StatsType ROW_COUNT = StatsType.ROW_COUNT;
@@ -59,9 +59,9 @@ public class TableStats {
 
     private long rowCount = -1;
     private long dataSize = -1;
-    private Map<Long, PartitionStats> idToPartitionStats = Maps.newConcurrentMap();
+    private Map<String, ColumnStats> nameToColumnStats = Maps.newConcurrentMap();
 
-    public void updateTableStats(Map<StatsType, String> statsTypeToValue) throws AnalysisException {
+    public void updatePartitionStats(Map<StatsType, String> statsTypeToValue) throws AnalysisException {
         for (Map.Entry<StatsType, String> entry : statsTypeToValue.entrySet()) {
             StatsType statsType = entry.getKey();
             if (statsType == ROW_COUNT) {
@@ -74,7 +74,7 @@ public class TableStats {
         }
     }
 
-    public void updateTableStats(StatsType statsType, String value) throws AnalysisException {
+    public void updatePartitionStats(StatsType statsType, String value) throws AnalysisException {
         if (statsType == ROW_COUNT) {
             rowCount = Util.getLongPropertyOrDefault(value, rowCount,
                 DESIRED_ROW_COUNT_PRED, ROW_COUNT + " should >= -1");
@@ -84,15 +84,23 @@ public class TableStats {
         }
     }
 
-    public void updatePartitionStats(long partitionId, PartitionStats partitionStats2)
+    public void updateColumnStats(String columnName, Type columnType, Map<StatsType, String> statsTypeToValue)
             throws AnalysisException {
-
-        PartitionStats partitionStats = idToPartitionStats.get(partitionId);
-        if (partitionStats == null) {
-            partitionStats = new PartitionStats();
-            idToPartitionStats.put(partitionId, partitionStats);
+        ColumnStats columnStats = nameToColumnStats.get(columnName);
+        if (columnStats == null) {
+            columnStats = new ColumnStats();
+            nameToColumnStats.put(columnName, columnStats);
         }
-        partitionStats.updateTableStats(statsTypeToValue);
+        columnStats.updateStats(columnType, statsTypeToValue);
+    }
+
+    public void updateColumnStats(String columnName, Type columnType, StatsType statsType, String value) throws AnalysisException {
+        ColumnStats columnStats = nameToColumnStats.get(columnName);
+        if (columnStats == null) {
+            columnStats = new ColumnStats();
+            nameToColumnStats.put(columnName, columnStats);
+        }
+        columnStats.updateStats(columnType, statsType, value);
     }
 
     public List<String> getShowInfo() {
@@ -102,8 +110,8 @@ public class TableStats {
         return result;
     }
 
-    public Map<Long, PartitionStats> getIdToPartitionStats() {
-        return idToPartitionStats;
+    public Map<String, ColumnStats> getNameToColumnStats() {
+        return nameToColumnStats;
     }
 
     public long getRowCount() {

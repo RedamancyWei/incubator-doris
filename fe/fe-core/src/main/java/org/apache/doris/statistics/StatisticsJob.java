@@ -65,6 +65,11 @@ public class StatisticsJob {
     private final Set<Long> tblIds;
 
     /**
+     * to be collected partition stats.
+     */
+    private final Map<Long, List<Long>> tblIdToPid;
+
+    /**
      * to be collected column stats.
      */
     private final Map<Long, List<String>> tableIdToColumnName;
@@ -86,10 +91,12 @@ public class StatisticsJob {
 
     public StatisticsJob(Long dbId,
                          Set<Long> tblIds,
+                         Map<Long, List<Long>> tblIdToPid,
                          Map<Long, List<String>> tableIdToColumnName,
                          Map<String, String> properties) {
         this.dbId = dbId;
         this.tblIds = tblIds;
+        this.tblIdToPid = tblIdToPid;
         this.tableIdToColumnName = tableIdToColumnName;
         this.properties = properties == null ? Maps.newHashMap() : properties;
     }
@@ -120,6 +127,10 @@ public class StatisticsJob {
 
     public Set<Long> getTblIds() {
         return tblIds;
+    }
+
+    public Map<Long, List<Long>> getTblIdToPid() {
+        return tblIdToPid;
     }
 
     public Map<Long, List<String>> getTableIdToColumnName() {
@@ -251,11 +262,12 @@ public class StatisticsJob {
      * tableId: [t1]
      * tableIdToColumnName <t1, [c1,c2,c3]>
      */
-    public static StatisticsJob fromAnalyzeStmt(AnalyzeStmt analyzeStmt) throws AnalysisException {
-        long dbId = analyzeStmt.getDbId();
-        Map<Long, List<String>> tableIdToColumnName = analyzeStmt.getTableIdToColumnName();
-        Set<Long> tblIds = analyzeStmt.getTblIds();
-        Map<String, String> properties = analyzeStmt.getProperties();
-        return new StatisticsJob(dbId, tblIds, tableIdToColumnName, properties);
+    public static StatisticsJob fromAnalyzeStmt(AnalyzeStmt stmt) throws AnalysisException {
+        long dbId = stmt.getDbId();
+        Set<Long> tblIds = stmt.getTblIds();
+        Map<Long, List<Long>> tblIdToPid = stmt.getTblIdToPid();
+        Map<Long, List<String>> tableIdToColumnName = stmt.getTableIdToColumnName();
+        Map<String, String> properties = stmt.getProperties();
+        return new StatisticsJob(dbId, tblIds,tblIdToPid, tableIdToColumnName, properties);
     }
 }

@@ -17,7 +17,6 @@
 
 package org.apache.doris.statistics;
 
-import com.google.common.collect.Maps;
 import org.apache.doris.catalog.Catalog;
 import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.Database;
@@ -30,6 +29,9 @@ import org.apache.doris.common.DdlException;
 import java.util.List;
 import java.util.Map;
 
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+
 /**
  * A statistics task that directly collects statistics by reading FE meta.
  * e.g. for fixed-length types such as Int type and Long type we get their size from metadata.
@@ -41,7 +43,7 @@ public class MetaStatisticsTask extends StatisticsTask {
 
     @Override
     public StatisticsTaskResult call() throws Exception {
-        Map<StatsType, String> statsTypeToValue = Maps.newHashMap();
+        Map<StatsType, List<StatsCategory>> statsTypeToValue = Maps.newHashMap();
 
         for (StatisticsDesc statsDesc : statsDescs) {
             StatsCategory category = statsDesc.getCategory();
@@ -52,13 +54,16 @@ public class MetaStatisticsTask extends StatisticsTask {
                 switch (statsType) {
                     case MAX_SIZE:
                     case AVG_SIZE:
-                        getColSize(category, statsType, statsTypeToValue);
+                        getColSize(category);
+                        statsTypeToValue.getOrDefault(statsType, Lists.newArrayList()).add(category);
                         break;
                     case ROW_COUNT:
-                        getRowCount(category, granularity, statsType, statsTypeToValue);
+                        getRowCount(category, granularity);
+                        statsTypeToValue.getOrDefault(statsType, Lists.newArrayList()).add(category);
                         break;
                     case DATA_SIZE:
-                        getDataSize(category, granularity, statsType, statsTypeToValue);
+                        getDataSize(category, granularity);
+                        statsTypeToValue.getOrDefault(statsType, Lists.newArrayList()).add(category);
                         break;
                     default:
                         throw new DdlException("Unsupported statistics type(" + statsType + ").");
@@ -66,13 +71,11 @@ public class MetaStatisticsTask extends StatisticsTask {
             }
         }
 
-        return new StatisticsTaskResult(statsDescs, statsTypeToValue);
+        return new StatisticsTaskResult(statsTypeToValue);
     }
 
     private void getRowCount(StatsCategory category,
-                             StatsGranularity statsGranularity,
-                             StatsType statsType,
-                             Map<StatsType, String> statsTypeToValue) throws DdlException {
+                             StatsGranularity statsGranularity) throws DdlException {
         long dbId = category.getDbId();
         long tableId = category.getTableId();
         Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbId);
@@ -82,26 +85,19 @@ public class MetaStatisticsTask extends StatisticsTask {
         switch (granularity) {
             case TABLE:
                 long tblRowCount = olapTable.getRowCount();
-                statsTypeToValue.put(statsType, String.valueOf(tblRowCount));
+                category.setStatsValue(String.valueOf(tblRowCount));
                 break;
             case PARTITION:
-                Partition pPartition = olapTable.getPartition(statsGranularity.getPartitionId());
-                long ptRowCount = pPartition.getBaseIndex().getRowCount();
-                // if the same stats type is used in multiple partitions, merge the row count value.
-                String ptValue = statsTypeToValue.getOrDefault(statsType, "0");
-                ptRowCount = Long.parseLong(ptValue) + ptRowCount;
-                statsTypeToValue.put(statsType, String.valueOf(ptRowCount));
+                Partition partition1 = olapTable.getPartition(statsGranularity.getPartitionId());
+                long ptRowCount = partition1.getBaseIndex().getRowCount();
+                category.setStatsValue(String.valueOf(ptRowCount));
                 break;
             case TABLET:
-                Partition tPartition = olapTable.getPartition(statsGranularity.getPartitionId());
-                Tablet tablet = tPartition.getBaseIndex().getTablet(statsGranularity.getTabletId());
+                Partition partition2 = olapTable.getPartition(statsGranularity.getPartitionId());
+                Tablet tablet = partition2.getBaseIndex().getTablet(statsGranularity.getTabletId());
                 boolean singleReplica = tablet.getReplicas().size() == 1;
                 long tabletRowCount = tablet.getRowCount(singleReplica);
-                statsTypeToValue.put(statsType, String.valueOf(tabletRowCount));
-                // if the same stats type is used in multiple tablet, merge the row count value.
-                String defaultValue1 = statsTypeToValue.getOrDefault(statsType, "0");
-                tabletRowCount = Long.parseLong(defaultValue1) + tabletRowCount;
-                statsTypeToValue.put(statsType, String.valueOf(tabletRowCount));
+                category.setStatsValue(String.valueOf(tabletRowCount));
                 break;
             default:
                 throw new DdlException("Unsupported granularity(" + granularity + ").");
@@ -109,9 +105,7 @@ public class MetaStatisticsTask extends StatisticsTask {
     }
 
     private void getDataSize(StatsCategory category,
-                             StatsGranularity statsGranularity,
-                             StatsType statsType,
-                             Map<StatsType, String> statsTypeToValue) throws DdlException {
+                             StatsGranularity statsGranularity) throws DdlException {
 
         long dbId = category.getDbId();
         long tableId = category.getTableId();
@@ -122,42 +116,33 @@ public class MetaStatisticsTask extends StatisticsTask {
         switch (granularity) {
             case TABLE:
                 long tblDataSize = olapTable.getDataSize();
-                statsTypeToValue.put(statsType, String.valueOf(tblDataSize));
+                category.setStatsValue(String.valueOf(tblDataSize));
                 break;
             case PARTITION:
-                Partition pPartition = olapTable.getPartition(statsGranularity.getPartitionId());
-                long pDataSize = pPartition.getBaseIndex().getDataSize();
-                // if the same stats type is used in multiple partitions, merge the row count value.
-                String pValue = statsTypeToValue.getOrDefault(statsType, "0");
-                pDataSize = Long.parseLong(pValue) + pDataSize;
-                statsTypeToValue.put(statsType, String.valueOf(pDataSize));
+                Partition partition1 = olapTable.getPartition(statsGranularity.getPartitionId());
+                long dataSize1 = partition1.getBaseIndex().getDataSize();
+                category.setStatsValue(String.valueOf(dataSize1));
                 break;
             case TABLET:
-                Partition tPartition = olapTable.getPartition(statsGranularity.getPartitionId());
-                Tablet tablet = tPartition.getBaseIndex().getTablet(statsGranularity.getTabletId());
+                Partition partition2 = olapTable.getPartition(statsGranularity.getPartitionId());
+                Tablet tablet = partition2.getBaseIndex().getTablet(statsGranularity.getTabletId());
                 boolean singleReplica = tablet.getReplicas().size() == 1;
-                long tDataSize = tablet.getDataSize(singleReplica);
-                statsTypeToValue.put(statsType, String.valueOf(tDataSize));
-                // if the same stats type is used in multiple tablet, merge the row count value.
-                String tValue = statsTypeToValue.getOrDefault(statsType, "0");
-                tDataSize = Long.parseLong(tValue) + tDataSize;
-                statsTypeToValue.put(statsType, String.valueOf(tDataSize));
+                long dataSize2 = tablet.getDataSize(singleReplica);
+                category.setStatsValue(String.valueOf(dataSize2));
                 break;
             default:
                 throw new DdlException("Unsupported granularity(" + granularity + ").");
         }
     }
 
-    private void getColSize(StatsCategory category,
-                            StatsType statsType,
-                            Map<StatsType, String> statsTypeToValue) throws DdlException {
+    private void getColSize(StatsCategory category) throws DdlException {
         long dbId = category.getDbId();
         Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbId);
         long tableId = category.getTableId();
         Table table = db.getTableOrDdlException(tableId);
         String columnName = category.getColumnName();
         Column column = table.getColumn(columnName);
-        int typeSize = column.getDataType().getSlotSize();
-        statsTypeToValue.put(statsType, String.valueOf(typeSize));
+        int colSize = column.getDataType().getSlotSize();
+        category.setStatsValue(String.valueOf(colSize));
     }
 }

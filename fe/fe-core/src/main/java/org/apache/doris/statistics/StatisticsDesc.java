@@ -26,9 +26,6 @@ public class StatisticsDesc {
 
     private List<StatsType> statsTypes;
 
-    public StatisticsDesc() {
-    }
-
     public StatisticsDesc(StatsCategory category,
                           StatsGranularity granularity,
                           List<StatsType> statsTypes) {
