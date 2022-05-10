@@ -35,7 +35,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 
 import java.util.List;
-import java.util.Map;
 import java.util.function.Predicate;
 
 
@@ -76,38 +75,6 @@ public class ColumnStats {
     private LiteralExpr minValue;
     private LiteralExpr maxValue;
 
-    public void updateStats(Type columnType, Map<StatsType, String> statsNameToValue) throws AnalysisException {
-        for (Map.Entry<StatsType, String> entry : statsNameToValue.entrySet()) {
-            StatsType statsType = entry.getKey();
-            switch (statsType) {
-                case NDV:
-                    ndv = Util.getLongPropertyOrDefault(entry.getValue(), ndv,
-                            DESIRED_NDV_PRED, NDV + " should >= -1");
-                    break;
-                case AVG_SIZE:
-                    avgSize = Util.getFloatPropertyOrDefault(entry.getValue(), avgSize,
-                            DESIRED_AVG_SIZE_PRED, AVG_SIZE + " should (>=0) or (=-1)");
-                    break;
-                case MAX_SIZE:
-                    maxSize = Util.getLongPropertyOrDefault(entry.getValue(), maxSize,
-                            DESIRED_MAX_SIZE_PRED, MAX_SIZE + " should >=-1");
-                    break;
-                case NUM_NULLS:
-                    numNulls = Util.getLongPropertyOrDefault(entry.getValue(), numNulls,
-                            DESIRED_NUM_NULLS_PRED, NUM_NULLS + " should >=-1");
-                    break;
-                case MIN_VALUE:
-                    minValue = validateColumnValue(columnType, entry.getValue());
-                    break;
-                case MAX_VALUE:
-                    maxValue = validateColumnValue(columnType, entry.getValue());
-                    break;
-                default:
-                    throw new AnalysisException("Unknown stats type: " + statsType);
-            }
-        }
-    }
-
     public void updateStats(Type columnType, StatsType statsType, String value) throws AnalysisException {
         switch (statsType) {
             case NDV:
@@ -136,7 +103,6 @@ public class ColumnStats {
                 throw new AnalysisException("Unknown stats type: " + statsType);
         }
     }
-
 
     public List<String> getShowInfo() {
         List<String> result = Lists.newArrayList();

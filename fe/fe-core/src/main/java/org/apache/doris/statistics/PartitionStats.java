@@ -21,34 +21,31 @@ import org.apache.doris.catalog.Type;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.util.Util;
 
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
-
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 
 
 /**
  * There are the statistics of partition.
  * The partition stats are mainly used to provide input for the Optimizer's cost model.
- *
  * The description of partition stats are following:
  * 1. @rowCount: The row count of partition.
  * 2. @dataSize: The data size of partition.
  * 3. @nameToColumnStats: <@String columnName, @ColumnStats columnStats>
- *      Each column in the Table will have corresponding @ColumnStats.
- *      Those @ColumnStats are recorded in @nameToColumnStats form of MAP.
- *      This facilitates the optimizer to quickly find the corresponding
- *      @ColumnStats based on the column name.
+ * Each column in the Table will have corresponding @ColumnStats.
+ * Those @ColumnStats are recorded in @nameToColumnStats form of MAP.
+ * This facilitates the optimizer to quickly find the corresponding
  *
+ * @ColumnStats based on the column name.
  * @rowCount: The row count of partition.
  * @dataSize: The data size of partition.
- *
  * The granularity of the statistics is whole partition.
  * For example:
  * "@rowCount = 1000" means that the row count is 1000 in the whole partition.
- *
  * Note: when users do not use Partition to build a table, the system will automatically generate
  * a un-visible Partition with the same name as the table name. so for non-partitioned table, we'll use the table id.
  */
@@ -67,21 +64,32 @@ public class PartitionStats {
     public void updatePartitionStats(StatsType statsType, String value) throws AnalysisException {
         if (statsType == ROW_COUNT) {
             rowCount = Util.getLongPropertyOrDefault(value, rowCount,
-                DESIRED_ROW_COUNT_PRED, ROW_COUNT + " should >= -1");
+                    DESIRED_ROW_COUNT_PRED, ROW_COUNT + " should >= -1");
         } else if (statsType == DATA_SIZE) {
             dataSize = Util.getLongPropertyOrDefault(value, dataSize,
-                DESIRED_DATA_SIZE_PRED, DATA_SIZE + " should >= -1");
+                    DESIRED_DATA_SIZE_PRED, DATA_SIZE + " should >= -1");
         }
     }
 
     public void updateColumnStats(String columnName, Type columnType, StatsType statsType, String value)
             throws AnalysisException {
+        ColumnStats columnStats = getNotNullColumnStats(columnName);
+        columnStats.updateStats(columnType, statsType, value);
+    }
+
+    /**
+     * If column stats is not exist, create a new one.
+     *
+     * @param columnName column name
+     * @return @ColumnStats
+     */
+    public ColumnStats getNotNullColumnStats(String columnName) {
         ColumnStats columnStats = nameToColumnStats.get(columnName);
         if (columnStats == null) {
             columnStats = new ColumnStats();
             nameToColumnStats.put(columnName, columnStats);
         }
-        columnStats.updateStats(columnType, statsType, value);
+        return columnStats;
     }
 
     public List<String> getShowInfo() {

@@ -67,7 +67,7 @@ public class StatisticsJob {
     /**
      * to be collected partition stats.
      */
-    private final Map<Long, List<Long>> tblIdToPid;
+    private final Map<Long, List<String>> tableIdToPartitionName;
 
     /**
      * to be collected column stats.
@@ -91,12 +91,12 @@ public class StatisticsJob {
 
     public StatisticsJob(Long dbId,
                          Set<Long> tblIds,
-                         Map<Long, List<Long>> tblIdToPid,
+                         Map<Long, List<String>> tblIdToPartitionName,
                          Map<Long, List<String>> tableIdToColumnName,
                          Map<String, String> properties) {
         this.dbId = dbId;
         this.tblIds = tblIds;
-        this.tblIdToPid = tblIdToPid;
+        this.tableIdToPartitionName = tblIdToPartitionName;
         this.tableIdToColumnName = tableIdToColumnName;
         this.properties = properties == null ? Maps.newHashMap() : properties;
     }
@@ -129,10 +129,9 @@ public class StatisticsJob {
         return tblIds;
     }
 
-    public Map<Long, List<Long>> getTblIdToPid() {
-        return tblIdToPid;
+    public Map<Long, List<String>> getTableIdToPartitionName() {
+        return tableIdToPartitionName;
     }
-
     public Map<Long, List<String>> getTableIdToColumnName() {
         return tableIdToColumnName;
     }
@@ -265,9 +264,9 @@ public class StatisticsJob {
     public static StatisticsJob fromAnalyzeStmt(AnalyzeStmt stmt) throws AnalysisException {
         long dbId = stmt.getDbId();
         Set<Long> tblIds = stmt.getTblIds();
-        Map<Long, List<Long>> tblIdToPid = stmt.getTblIdToPid();
+        Map<Long, List<String>> tableIdToPartitionName = stmt.getTableIdToPartitionName();
         Map<Long, List<String>> tableIdToColumnName = stmt.getTableIdToColumnName();
         Map<String, String> properties = stmt.getProperties();
-        return new StatisticsJob(dbId, tblIds,tblIdToPid, tableIdToColumnName, properties);
+        return new StatisticsJob(dbId, tblIds, tableIdToPartitionName, tableIdToColumnName, properties);
     }
 }

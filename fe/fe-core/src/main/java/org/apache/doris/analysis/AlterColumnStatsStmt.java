@@ -18,6 +18,9 @@
 package org.apache.doris.analysis;
 
 import org.apache.doris.catalog.Catalog;
+import org.apache.doris.catalog.Database;
+import org.apache.doris.catalog.Partition;
+import org.apache.doris.catalog.Table;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.ErrorReport;
@@ -27,6 +30,7 @@ import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.statistics.ColumnStats;
 import org.apache.doris.statistics.StatsType;
 
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 
@@ -45,14 +49,28 @@ public class AlterColumnStatsStmt extends DdlStmt {
             .build();
 
     private TableName tableName;
+    private String partitionName;
     private String columnName;
     private Map<String, String> properties;
     public final Map<StatsType, String> statsTypeToValue = Maps.newHashMap();
 
-    public AlterColumnStatsStmt(TableName tableName, String columnName, Map<String, String> properties) {
+    public AlterColumnStatsStmt(TableName tableName, String partitionName, String columnName, Map<String, String> properties) {
         this.tableName = tableName;
+        this.partitionName = partitionName;
         this.columnName = columnName;
         this.properties = properties;
+    }
+
+    public TableName getTableName() {
+        return tableName;
+    }
+
+    public String getColumnName() {
+        return columnName;
+    }
+
+    public String getPartitionName() {
+        return partitionName;
     }
 
     @Override
@@ -74,19 +92,22 @@ public class AlterColumnStatsStmt extends DdlStmt {
                     ConnectContext.get().getRemoteIP(),
                     tableName.getDb() + ": " + tableName.getTbl());
         }
+
+        // check partition
+        if (!Strings.isNullOrEmpty(partitionName)) {
+            Database db = analyzer.getCatalog().getDbOrAnalysisException(tableName.getDb());
+            Table table = db.getTableOrAnalysisException(tableName.getTbl());
+            Partition partition = table.getPartition(partitionName);
+            if (partition == null) {
+                ErrorReport.reportAnalysisException(ErrorCode.ERR_UNKNOWN_PARTITION, partitionName);
+            }
+        }
+
         // get statsTypeToValue
         properties.forEach((key, value) -> {
             StatsType statsType = StatsType.fromString(key);
             statsTypeToValue.put(statsType, value);
         });
-    }
-
-    public TableName getTableName() {
-        return tableName;
-    }
-
-    public String getColumnName() {
-        return columnName;
     }
 
     public Map<StatsType, String> getStatsTypeToValue() {

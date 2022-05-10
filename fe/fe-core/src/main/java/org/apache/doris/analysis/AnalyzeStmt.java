@@ -65,13 +65,13 @@ public class AnalyzeStmt extends DdlStmt {
     private static final Logger LOG = LogManager.getLogger(AnalyzeStmt.class);
 
     // time to wait for collect  statistics
-    public static final String CBO_STATISTICS_TASK_TIMEOUT_SEC = "cbo_statistics_task_timeout_sec";
+    private static final String CBO_STATISTICS_TASK_TIMEOUT_SEC = "cbo_statistics_task_timeout_sec";
 
     private static final ImmutableSet<String> PROPERTIES_SET = new ImmutableSet.Builder<String>()
             .add(CBO_STATISTICS_TASK_TIMEOUT_SEC)
             .build();
 
-    public static final Predicate<Long> DESIRED_TASK_TIMEOUT_SEC = (v) -> v > 0L;
+    private static final Predicate<Long> DESIRED_TASK_TIMEOUT_SEC = (v) -> v > 0L;
 
     private final TableName dbTableName;
     private final List<String> columnNames;
@@ -80,8 +80,6 @@ public class AnalyzeStmt extends DdlStmt {
     // after analyzed
     private long dbId;
     private final Set<Long> tblIds = Sets.newHashSet();
-    // table id -> List<partition id>
-    private final Map<Long, List<Long>> tblIdToPid = Maps.newHashMap();
 
     public AnalyzeStmt(TableName dbTableName, List<String> columns, Map<String, String> properties) {
         this.dbTableName = dbTableName;
@@ -126,21 +124,23 @@ public class AnalyzeStmt extends DdlStmt {
         return tables;
     }
 
-    public Map<Long, List<Long>> getTblIdToPid() throws AnalysisException {
+    public Map<Long, List<String>> getTableIdToPartitionName() throws AnalysisException {
         Preconditions.checkArgument(isAnalyzed(),
-            "The partitionIds must be obtained after the parsing is complete");
+                "The partitionIds must be obtained after the parsing is complete");
+        Map<Long, List<String>> tableIdToPartitionName = Maps.newHashMap();
+
         for (Table table : getTables()) {
             table.readLock();
             try {
                 OlapTable olapTable = (OlapTable) table;
-                List<Long> partitionIds = olapTable.getPartitionIds();
-                tblIdToPid.put(table.getId(), partitionIds);
+                List<String> partitionNames = Lists.newArrayList(olapTable.getPartitionNames());
+                tableIdToPartitionName.put(table.getId(), partitionNames);
             }
             finally {
                 table.readUnlock();
             }
         }
-        return tblIdToPid;
+        return tableIdToPartitionName;
     }
 
     public Map<Long, List<String>> getTableIdToColumnName() throws AnalysisException {

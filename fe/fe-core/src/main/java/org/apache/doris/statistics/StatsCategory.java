@@ -27,7 +27,7 @@ public class StatsCategory {
     private Category category;
     private long dbId;
     private long tableId;
-    private long partitionId;
+    private String partitionName;
     private String columnName;
     private String statsValue;
 
@@ -55,12 +55,12 @@ public class StatsCategory {
         this.tableId = tableId;
     }
 
-    public long getPartitionId() {
-        return partitionId;
+    public String getPartitionName() {
+        return partitionName;
     }
 
-    public void setPartitionId(long partitionId) {
-        this.partitionId = partitionId;
+    public void setPartitionName(String partitionName) {
+        this.partitionName = partitionName;
     }
 
     public String getColumnName() {

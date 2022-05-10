@@ -18,6 +18,9 @@
 package org.apache.doris.analysis;
 
 import org.apache.doris.catalog.Catalog;
+import org.apache.doris.catalog.Database;
+import org.apache.doris.catalog.Partition;
+import org.apache.doris.catalog.Table;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.ErrorReport;
@@ -27,6 +30,7 @@ import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.statistics.StatsType;
 import org.apache.doris.statistics.TableStats;
 
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 
@@ -41,12 +45,18 @@ public class AlterTableStatsStmt extends DdlStmt {
             .build();
 
     private TableName tableName;
+    private String  partitionName;
     private Map<String, String> properties;
     public final Map<StatsType, String> statsTypeToValue = Maps.newHashMap();
 
-    public AlterTableStatsStmt(TableName tableName, Map<String, String> properties) {
+    public AlterTableStatsStmt(TableName tableName, String  partitionName, Map<String, String> properties) {
         this.tableName = tableName;
+        this.partitionName = partitionName;
         this.properties = properties;
+    }
+
+    public String getPartitionName() {
+        return partitionName;
     }
 
     @Override
@@ -68,6 +78,17 @@ public class AlterTableStatsStmt extends DdlStmt {
                     ConnectContext.get().getRemoteIP(),
                     tableName.getDb() + ": " + tableName.getTbl());
         }
+
+        // check partition
+        if (!Strings.isNullOrEmpty(partitionName)) {
+            Database db = analyzer.getCatalog().getDbOrAnalysisException(tableName.getDb());
+            Table table = db.getTableOrAnalysisException(tableName.getTbl());
+            Partition partition = table.getPartition(partitionName);
+            if (partition == null) {
+                ErrorReport.reportAnalysisException(ErrorCode.ERR_UNKNOWN_PARTITION, partitionName);
+            }
+        }
+
         // get statsTypeToValue
         properties.forEach((key, value) -> {
             StatsType statsType = StatsType.fromString(key);

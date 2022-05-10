@@ -17,7 +17,6 @@
 
 package org.apache.doris.statistics;
 
-import com.google.common.collect.Lists;
 import org.apache.doris.catalog.Catalog;
 import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.Database;
@@ -25,17 +24,20 @@ import org.apache.doris.catalog.KeysType;
 import org.apache.doris.catalog.OlapTable;
 import org.apache.doris.catalog.Partition;
 import org.apache.doris.catalog.Table;
+import org.apache.doris.catalog.Tablet;
 import org.apache.doris.catalog.Type;
 import org.apache.doris.common.Config;
 import org.apache.doris.common.DdlException;
 import org.apache.doris.common.util.MasterDaemon;
 
+import com.google.common.collect.Lists;
 import com.google.common.collect.Queues;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -51,6 +53,19 @@ import java.util.Set;
  */
 public class StatisticsJobScheduler extends MasterDaemon {
     private static final Logger LOG = LogManager.getLogger(StatisticsJobScheduler.class);
+
+    /**
+     * If the table row-count is greater than the maximum number of Be scans for a single BE,
+     * we'll divide subtasks by partition. relevant values(3700000000L&600000000L) are derived from test.
+     * COUNT_MAX_SCAN_PER_TASK is for count(expr), NDV_MAX_SCAN_PER_TASK is for min(c1)/max(c1)/ndv(c1).
+     */
+    private static final long COUNT_MAX_SCAN_PER_TASK = 3700000000L;
+    private static final long NDV_MAX_SCAN_PER_TASK = 600000000L;
+
+    /**
+     * if the table row count is greater than the value, use sampleSqlTask instead of SqlTask.
+     */
+    private static final int MIN_SAMPLE_ROWS = 200000;
 
     /**
      * Different statistics need to be collected for the jobs submitted by users.
@@ -118,7 +133,7 @@ public class StatisticsJobScheduler extends MasterDaemon {
      * <p>
      * Eventually, we will get several subtasks of the following types:
      *
-     * @throws DdlException DdlException
+     * @throws DdlException exception
      * @see MetaStatisticsTask
      * @see SampleSQLStatisticsTask
      * @see SQLStatisticsTask
@@ -130,7 +145,7 @@ public class StatisticsJobScheduler extends MasterDaemon {
         for (Long tblId : tblIds) {
             Optional<Table> table = db.getTable(tblId);
             if (!table.isPresent()) {
-                LOG.warn("Table {} not found", tblId);
+                LOG.warn("Table(id={}) not found in the database {}", tblId, db.getFullName());
                 continue;
             }
             OlapTable tbl = (OlapTable) table.get();
@@ -142,39 +157,44 @@ public class StatisticsJobScheduler extends MasterDaemon {
         }
     }
 
-    private void getStatsTaskByPartition(StatisticsJob job, long tblId) throws DdlException {
+    private void getStatsTaskByPartition(StatisticsJob job, long tableId) throws DdlException {
         Database db = Catalog.getCurrentCatalog().getDbOrDdlException(job.getDbId());
-        OlapTable tbl = (OlapTable) db.getTableOrDdlException(tblId);
+        OlapTable tbl = (OlapTable) db.getTableOrDdlException(tableId);
 
         Map<Long, List<String>> tblIdToColName = job.getTableIdToColumnName();
-        List<String> colNames = tblIdToColName.get(tblId);
+        List<String> colNames = tblIdToColName.get(tableId);
 
-        Map<Long, List<Long>> tblIdToPid = job.getTblIdToPid();
-        List<Long> partitionIds = tblIdToPid.get(tblId);
+        Map<Long, List<String>> tblIdToPartitionName = job.getTableIdToPartitionName();
+        List<String> partitionNames = tblIdToPartitionName.get(tableId);
 
-        for (Long pid : partitionIds) {
-            Partition partition = tbl.getPartition(pid);
+        List<Long> backendIds = Catalog.getCurrentSystemInfo().getBackendIds(true);
+
+        for (String partitionName : partitionNames) {
+            Partition partition = tbl.getPartition(partitionName);
             if (partition == null) {
-                LOG.warn("Partition {} not found in the table {}", pid, tbl.getName());
+                LOG.info("Partition {} not found in the table {}", partitionName, tbl.getName());
                 continue;
             }
+
+            long partitionId = partition.getId();
+            long rowCount = partition.getBaseIndex().getRowCount();
 
             // step1: collect statistics by metadata
             List<StatisticsDesc> descs = Lists.newArrayList();
 
             // partition data size
-            StatsCategory dsCategory = getStatsCategory(job.getDbId(), tblId, pid);
-            StatsGranularity dsGranularity = getPartitionGranularity(pid);
+            StatsCategory dsCategory = getPartitionStatsCategory(job.getDbId(), tableId, partitionName);
+            StatsGranularity dsGranularity = getPartitionGranularity(partitionId);
             StatisticsDesc dsStatsDesc = new StatisticsDesc(dsCategory,
-                dsGranularity, Collections.singletonList(StatsType.DATA_SIZE));
+                    dsGranularity, Collections.singletonList(StatsType.DATA_SIZE));
             descs.add(dsStatsDesc);
 
             // partition row count
             if (tbl.getKeysType() == KeysType.DUP_KEYS) {
-                StatsCategory rcCategory = getStatsCategory(job.getDbId(), tblId, pid);
-                StatsGranularity rcGranularity = getPartitionGranularity(pid);
+                StatsCategory rcCategory = getPartitionStatsCategory(job.getDbId(), tableId, partitionName);
+                StatsGranularity rcGranularity = getPartitionGranularity(partitionId);
                 StatisticsDesc rcStatsDesc = new StatisticsDesc(rcCategory,
-                    rcGranularity, Collections.singletonList(StatsType.ROW_COUNT));
+                        rcGranularity, Collections.singletonList(StatsType.ROW_COUNT));
                 descs.add(rcStatsDesc);
             }
 
@@ -185,6 +205,7 @@ public class StatisticsJobScheduler extends MasterDaemon {
             for (String colName : colNames) {
                 Column col = tbl.getColumn(colName);
                 if (col == null) {
+                    LOG.info("Column {} not found in the table {}", colName, tbl.getName());
                     continue;
                 }
                 Type colType = col.getType();
@@ -192,10 +213,10 @@ public class StatisticsJobScheduler extends MasterDaemon {
                     strColNames.add(colName);
                     continue;
                 }
-                StatsCategory colCategory = getStatsCategory(job.getDbId(), tblId, pid, colName);
-                StatsGranularity colGranularity = getPartitionGranularity(pid);
+                StatsCategory colCategory = getColumnStatsCategory(job.getDbId(), tableId, colName);
+                StatsGranularity colGranularity = getPartitionGranularity(partitionId);
                 StatisticsDesc colStatsDesc = new StatisticsDesc(colCategory,
-                    colGranularity, Arrays.asList(StatsType.MAX_SIZE, StatsType.AVG_SIZE));
+                        colGranularity, Arrays.asList(StatsType.MAX_SIZE, StatsType.AVG_SIZE));
                 descs.add(colStatsDesc);
             }
 
@@ -206,70 +227,97 @@ public class StatisticsJobScheduler extends MasterDaemon {
             // step2: collect statistics by sql
             // partition row count (table model is AGGREGATE or UNIQUE)
             if (tbl.getKeysType() != KeysType.DUP_KEYS) {
-                StatsCategory rcCategory = getStatsCategory(job.getDbId(), tblId, pid);
-                StatsGranularity rcGranularity = getPartitionGranularity(pid);
-                StatisticsDesc rcStatsDesc = new StatisticsDesc(rcCategory,
-                    rcGranularity, Collections.singletonList(StatsType.ROW_COUNT));
-                SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(), Collections.singletonList(rcStatsDesc));
-                job.getTasks().add(sqlTask);
+                if (rowCount < backendIds.size() * COUNT_MAX_SCAN_PER_TASK) {
+                    StatsCategory rcCategory = getPartitionStatsCategory(job.getDbId(), tableId, partitionName);
+                    StatsGranularity rcGranularity = getPartitionGranularity(partitionId);
+                    StatisticsDesc rcStatsDesc = new StatisticsDesc(rcCategory,
+                            rcGranularity, Collections.singletonList(StatsType.ROW_COUNT));
+                    SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(), Collections.singletonList(rcStatsDesc));
+                    job.getTasks().add(sqlTask);
+                } else {
+                    // divide subtasks by tablet
+                    List<Tablet> tablets = partition.getBaseIndex().getTablets();
+                    tablets.forEach(tablet -> {
+                        StatsCategory rcCategory = getPartitionStatsCategory(job.getDbId(), tableId, partitionName);
+                        StatsGranularity rcGranularity = getTabletGranularity(tablet.getId());
+                        StatisticsDesc rcStatsDesc = new StatisticsDesc(rcCategory,
+                                rcGranularity, Collections.singletonList(StatsType.ROW_COUNT));
+                        SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(),
+                                Collections.singletonList(rcStatsDesc));
+                        job.getTasks().add(sqlTask);
+                    });
+                }
             }
 
             // column max size, avg size
             for (String colName : strColNames) {
-                StatsCategory colCategory = getStatsCategory(job.getDbId(), tblId, pid, colName);
-                StatsGranularity colGranularity = getPartitionGranularity(pid);
-                StatisticsDesc colStatsDesc = new StatisticsDesc(colCategory,
-                    colGranularity, Arrays.asList(StatsType.MAX_SIZE, StatsType.AVG_SIZE));
-                SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(), Collections.singletonList(colStatsDesc));
-                job.getTasks().add(sqlTask);
+                if (rowCount < backendIds.size() * NDV_MAX_SCAN_PER_TASK) {
+                    StatsCategory colCategory = getColumnStatsCategory(job.getDbId(), tableId, partitionName, colName);
+                    StatsGranularity colGranularity = getPartitionGranularity(partitionId);
+                    StatisticsDesc colStatsDesc = new StatisticsDesc(colCategory,
+                            colGranularity, Arrays.asList(StatsType.MAX_SIZE, StatsType.AVG_SIZE));
+                    SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(),
+                            Collections.singletonList(colStatsDesc));
+                    job.getTasks().add(sqlTask);
+                } else {
+                    // divide subtasks by tablet
+                    List<Tablet> tablets = partition.getBaseIndex().getTablets();
+                    tablets.forEach(tablet -> {
+                        StatsCategory colCategory = getColumnStatsCategory(job.getDbId(), tableId, partitionName, colName);
+                        StatsGranularity colGranularity = getTabletGranularity(tablet.getId());
+                        StatisticsDesc colStatsDesc = new StatisticsDesc(colCategory,
+                                colGranularity, Arrays.asList(StatsType.MAX_SIZE, StatsType.AVG_SIZE));
+                        SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(),
+                                Collections.singletonList(colStatsDesc));
+                        job.getTasks().add(sqlTask);
+                    });
+                }
             }
 
             // column null nums
             for (String colName : colNames) {
-                StatsCategory colCategory = getStatsCategory(job.getDbId(), tblId, pid, colName);
-                StatsGranularity colGranularity = getPartitionGranularity(pid);
-                StatisticsDesc columnStatsDesc = new StatisticsDesc(colCategory,
-                    colGranularity, Collections.singletonList(StatsType.NUM_NULLS));
-                SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(), Collections.singletonList(columnStatsDesc));
+                StatsCategory colCategory = getColumnStatsCategory(job.getDbId(), tableId, partitionName, colName);
+                StatsGranularity colGranularity = getPartitionGranularity(partitionId);
+                StatisticsDesc colStatsDesc = new StatisticsDesc(colCategory,
+                        colGranularity, Collections.singletonList(StatsType.NUM_NULLS));
+                SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(), Collections.singletonList(colStatsDesc));
                 job.getTasks().add(sqlTask);
             }
 
             // column max value, min value and ndv
             for (String colName : colNames) {
-                StatsCategory colCategory = getStatsCategory(job.getDbId(), tblId, pid, colName);
-                StatsGranularity colGranularity = getPartitionGranularity(pid);
-                StatisticsDesc colStatsDesc = new StatisticsDesc(colCategory,
-                    colGranularity, Arrays.asList(StatsType.MIN_VALUE, StatsType.MAX_VALUE, StatsType.NDV));
-                SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(), Collections.singletonList(colStatsDesc));
-                job.getTasks().add(sqlTask);
+                StatsCategory colCategory = getColumnStatsCategory(job.getDbId(), tableId, partitionName, colName);
+                StatsGranularity colGranularity = getPartitionGranularity(partitionId);
+                getColumnSQLTask(job, rowCount, colCategory, colGranularity);
             }
         }
     }
 
-
-    private void getStatsTaskByTable(StatisticsJob job, long tblId) throws DdlException {
+    private void getStatsTaskByTable(StatisticsJob job, long tableId) throws DdlException {
         Database db = Catalog.getCurrentCatalog().getDbOrDdlException(job.getDbId());
-        OlapTable tbl = (OlapTable) db.getTableOrDdlException(tblId);
+        OlapTable tbl = (OlapTable) db.getTableOrDdlException(tableId);
 
         Map<Long, List<String>> tblIdToColName = job.getTableIdToColumnName();
-        List<String> colNames = tblIdToColName.get(tblId);
+        List<String> colNames = tblIdToColName.get(tableId);
+
+        List<Long> backendIds = Catalog.getCurrentSystemInfo().getBackendIds(true);
 
         // step1: collect statistics by metadata
         List<StatisticsDesc> descs = Lists.newArrayList();
 
-        // partition data size
-        StatsCategory dsCategory = getStatsCategory(job.getDbId(), tblId);
-        StatsGranularity dsGranularity = getTblGranularity(tblId);
+        // table data size
+        StatsCategory dsCategory = getTableStatsCategory(job.getDbId(), tableId);
+        StatsGranularity dsGranularity = getTableGranularity(tableId);
         StatisticsDesc dsStatsDesc = new StatisticsDesc(dsCategory,
-            dsGranularity, Collections.singletonList(StatsType.DATA_SIZE));
+                dsGranularity, Collections.singletonList(StatsType.DATA_SIZE));
         descs.add(dsStatsDesc);
 
-        // partition row count
+        // table row count
         if (tbl.getKeysType() == KeysType.DUP_KEYS) {
-            StatsCategory rcCategory = getStatsCategory(job.getDbId(), tblId);
-            StatsGranularity rcGranularity = getTblGranularity(tblId);
+            StatsCategory rcCategory = getTableStatsCategory(job.getDbId(), tableId);
+            StatsGranularity rcGranularity = getTableGranularity(tableId);
             StatisticsDesc rcStatsDesc = new StatisticsDesc(rcCategory,
-                rcGranularity, Collections.singletonList(StatsType.ROW_COUNT));
+                    rcGranularity, Collections.singletonList(StatsType.ROW_COUNT));
             descs.add(rcStatsDesc);
         }
 
@@ -280,7 +328,7 @@ public class StatisticsJobScheduler extends MasterDaemon {
         for (String colName : colNames) {
             Column col = tbl.getColumn(colName);
             if (col == null) {
-                LOG.info("Column {} not found ", colName);
+                LOG.info("column {} not found in table {}", colName, tbl.getName());
                 continue;
             }
             Type colType = col.getType();
@@ -288,10 +336,10 @@ public class StatisticsJobScheduler extends MasterDaemon {
                 strColNames.add(colName);
                 continue;
             }
-            StatsCategory colCategory = getStatsCategory(job.getDbId(), tblId, colName);
-            StatsGranularity colGranularity = getTblGranularity(tblId);
+            StatsCategory colCategory = getColumnStatsCategory(job.getDbId(), tableId, colName);
+            StatsGranularity colGranularity = getTableGranularity(tableId);
             StatisticsDesc colStatsDesc = new StatisticsDesc(colCategory,
-                colGranularity, Arrays.asList(StatsType.MAX_SIZE, StatsType.AVG_SIZE));
+                    colGranularity, Arrays.asList(StatsType.MAX_SIZE, StatsType.AVG_SIZE));
             descs.add(colStatsDesc);
         }
 
@@ -299,52 +347,90 @@ public class StatisticsJobScheduler extends MasterDaemon {
         MetaStatisticsTask metaStatsTask = new MetaStatisticsTask(job.getId(), descs);
         job.getTasks().add(metaStatsTask);
 
+        long rowCount = tbl.getRowCount();
+
         // step2: collect statistics by sql
         // partition row count (table model is AGGREGATE or UNIQUE)
         if (tbl.getKeysType() != KeysType.DUP_KEYS) {
-            StatsCategory rcCategory = getStatsCategory(job.getDbId(), tblId);
-            StatsGranularity rcGranularity = getTblGranularity(tblId);
-            StatisticsDesc rcStatsDesc = new StatisticsDesc(rcCategory,
-                rcGranularity, Collections.singletonList(StatsType.ROW_COUNT));
-            SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(), Collections.singletonList(rcStatsDesc));
-            job.getTasks().add(sqlTask);
+            if (rowCount < backendIds.size() * COUNT_MAX_SCAN_PER_TASK) {
+                StatsCategory rcCategory = getTableStatsCategory(job.getDbId(), tableId);
+                StatsGranularity rcGranularity = getTableGranularity(tableId);
+                StatisticsDesc rcStatsDesc = new StatisticsDesc(rcCategory,
+                        rcGranularity, Collections.singletonList(StatsType.ROW_COUNT));
+                SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(), Collections.singletonList(rcStatsDesc));
+                job.getTasks().add(sqlTask);
+            } else {
+                // divide subtasks by tablet
+                Collection<Partition> partitions = tbl.getPartitions();
+                for (Partition partition : partitions) {
+                    Collection<Tablet> tablets = partition.getBaseIndex().getTablets();
+                    tablets.forEach(tablet -> {
+                        StatsCategory rcCategory = getTableStatsCategory(job.getDbId(), tableId);
+                        StatsGranularity rcGranularity = getTabletGranularity(tablet.getId());
+                        StatisticsDesc rcStatsDesc = new StatisticsDesc(rcCategory,
+                                rcGranularity, Collections.singletonList(StatsType.ROW_COUNT));
+                        SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(), Collections.singletonList(rcStatsDesc));
+                        job.getTasks().add(sqlTask);
+                    });
+                }
+            }
         }
 
         // column max size, avg size
         for (String colName : strColNames) {
-            StatsCategory colCategory = getStatsCategory(job.getDbId(), tblId, colName);
-            StatsGranularity colGranularity = getTblGranularity(tblId);
-            StatisticsDesc colStatsDesc = new StatisticsDesc(colCategory,
-                colGranularity, Arrays.asList(StatsType.MAX_SIZE, StatsType.AVG_SIZE));
-            SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(), Collections.singletonList(colStatsDesc));
-            job.getTasks().add(sqlTask);
+            if (rowCount < backendIds.size() * NDV_MAX_SCAN_PER_TASK) {
+                StatsCategory colCategory = getColumnStatsCategory(job.getDbId(), tableId, colName);
+                StatsGranularity colGranularity = getTableGranularity(tableId);
+                StatisticsDesc colStatsDesc = new StatisticsDesc(colCategory,
+                        colGranularity, Arrays.asList(StatsType.MAX_SIZE, StatsType.AVG_SIZE));
+                SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(), Collections.singletonList(colStatsDesc));
+                job.getTasks().add(sqlTask);
+            } else {
+                // divide subtasks by partition
+                Collection<Partition> partitions = tbl.getPartitions();
+                partitions.forEach(partition -> {
+                    StatsCategory colCategory = getColumnStatsCategory(job.getDbId(), tableId, colName);
+                    StatsGranularity colGranularity = getPartitionGranularity(partition.getId());
+                    StatisticsDesc colStatsDesc = new StatisticsDesc(colCategory,
+                            colGranularity, Arrays.asList(StatsType.MAX_SIZE, StatsType.AVG_SIZE));
+                    SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(), Collections.singletonList(colStatsDesc));
+                    job.getTasks().add(sqlTask);
+                });
+            }
         }
 
         // column null nums
         for (String colName : colNames) {
-            StatsCategory colCategory = getStatsCategory(job.getDbId(), tblId, colName);
-            StatsGranularity colGranularity = getTblGranularity(tblId);
-            StatisticsDesc columnStatsDesc = new StatisticsDesc(colCategory,
-                colGranularity, Collections.singletonList(StatsType.NUM_NULLS));
-            SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(), Collections.singletonList(columnStatsDesc));
+            StatsCategory colCategory = getColumnStatsCategory(job.getDbId(), tableId, colName);
+            StatsGranularity colGranularity = getTableGranularity(tableId);
+            StatisticsDesc colStatsDesc = new StatisticsDesc(colCategory,
+                    colGranularity, Collections.singletonList(StatsType.NUM_NULLS));
+            SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(), Collections.singletonList(colStatsDesc));
             job.getTasks().add(sqlTask);
         }
 
         // column max value, min value and ndv
         for (String colName : colNames) {
-            Column col = tbl.getColumn(colName);
-            if (col != null) {
-                StatsCategory colCategory = getStatsCategory(job.getDbId(), tblId, colName);
-                StatsGranularity colGranularity = getTblGranularity(tblId);
-                StatisticsDesc colStatsDesc = new StatisticsDesc(colCategory,
-                    colGranularity, Arrays.asList(StatsType.MIN_VALUE, StatsType.MAX_VALUE, StatsType.NDV));
-                SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(), Collections.singletonList(colStatsDesc));
-                job.getTasks().add(sqlTask);
-            }
+            StatsCategory colCategory = getColumnStatsCategory(job.getDbId(), tableId, colName);
+            StatsGranularity colGranularity = getTableGranularity(tableId);
+            getColumnSQLTask(job, rowCount, colCategory, colGranularity);
         }
     }
 
-    private StatsCategory getStatsCategory(long dbId, long tableId) {
+    private void getColumnSQLTask(StatisticsJob job, long rowCount,
+                                  StatsCategory colCategory, StatsGranularity colGranularity) {
+        StatisticsDesc colStatsDesc = new StatisticsDesc(colCategory,
+                colGranularity, Arrays.asList(StatsType.MIN_VALUE, StatsType.MAX_VALUE, StatsType.NDV));
+        SQLStatisticsTask sqlTask;
+        if (rowCount < MIN_SAMPLE_ROWS) {
+            sqlTask = new SQLStatisticsTask(job.getId(), Collections.singletonList(colStatsDesc));
+        } else {
+            sqlTask = new SampleSQLStatisticsTask(job.getId(), Arrays.asList(colStatsDesc, colStatsDesc));
+        }
+        job.getTasks().add(sqlTask);
+    }
+
+    private StatsCategory getTableStatsCategory(long dbId, long tableId) {
         StatsCategory category = new StatsCategory();
         category.setCategory(StatsCategory.Category.TABLE);
         category.setDbId(dbId);
@@ -352,16 +438,16 @@ public class StatisticsJobScheduler extends MasterDaemon {
         return category;
     }
 
-    private StatsCategory getStatsCategory(long dbId, long tableId, long partitionId) {
+    private StatsCategory getPartitionStatsCategory(long dbId, long tableId, String partitionName) {
         StatsCategory category = new StatsCategory();
         category.setCategory(StatsCategory.Category.TABLE);
         category.setDbId(dbId);
         category.setTableId(tableId);
-        category.setPartitionId(partitionId);
+        category.setPartitionName(partitionName);
         return category;
     }
 
-    private StatsCategory getStatsCategory(long dbId, long tableId, String columnName) {
+    private StatsCategory getColumnStatsCategory(long dbId, long tableId, String columnName) {
         StatsCategory category = new StatsCategory();
         category.setDbId(dbId);
         category.setTableId(tableId);
@@ -371,18 +457,18 @@ public class StatisticsJobScheduler extends MasterDaemon {
         return category;
     }
 
-    private StatsCategory getStatsCategory(long dbId, long tableId, long partitionId, String columnName) {
+    private StatsCategory getColumnStatsCategory(long dbId, long tableId, String partitionName, String columnName) {
         StatsCategory category = new StatsCategory();
         category.setDbId(dbId);
         category.setTableId(tableId);
-        category.setPartitionId(partitionId);
+        category.setPartitionName(partitionName);
         category.setColumnName(columnName);
         category.setCategory(StatsCategory.Category.COLUMN);
         category.setColumnName(columnName);
         return category;
     }
 
-    private StatsGranularity getTblGranularity(long tableId) {
+    private StatsGranularity getTableGranularity(long tableId) {
         StatsGranularity granularity = new StatsGranularity();
         granularity.setTableId(tableId);
         granularity.setGranularity(StatsGranularity.Granularity.TABLE);

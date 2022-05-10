@@ -59,20 +59,8 @@ public class TableStats {
 
     private long rowCount = -1;
     private long dataSize = -1;
-    private Map<Long, PartitionStats> idToPartitionStats = Maps.newConcurrentMap();
-
-    public void updateTableStats(Map<StatsType, String> statsTypeToValue) throws AnalysisException {
-        for (Map.Entry<StatsType, String> entry : statsTypeToValue.entrySet()) {
-            StatsType statsType = entry.getKey();
-            if (statsType == ROW_COUNT) {
-                rowCount = Util.getLongPropertyOrDefault(entry.getValue(), rowCount,
-                        DESIRED_ROW_COUNT_PRED, ROW_COUNT + " should >= -1");
-            } else if (statsType == DATA_SIZE) {
-                dataSize = Util.getLongPropertyOrDefault(entry.getValue(), dataSize,
-                        DESIRED_DATA_SIZE_PRED, DATA_SIZE + " should >= -1");
-            }
-        }
-    }
+    private final Map<String, PartitionStats> nameToPartitionStats = Maps.newConcurrentMap();
+    private final Map<String, ColumnStats> nameToColumnStats = Maps.newConcurrentMap();
 
     public void updateTableStats(StatsType statsType, String value) throws AnalysisException {
         if (statsType == ROW_COUNT) {
@@ -84,15 +72,46 @@ public class TableStats {
         }
     }
 
-    public void updatePartitionStats(long partitionId, PartitionStats partitionStats2)
+    public void updatePartitionStats(String partitionName, StatsType statsType, String value)
             throws AnalysisException {
+        PartitionStats partitionStats = getNotNullPartitionStats(partitionName);
+        partitionStats.updatePartitionStats(statsType, value);
+    }
 
-        PartitionStats partitionStats = idToPartitionStats.get(partitionId);
-        if (partitionStats == null) {
-            partitionStats = new PartitionStats();
-            idToPartitionStats.put(partitionId, partitionStats);
+    public void updateColumnStats(String columnName, Type columnType, StatsType statsType, String value)
+            throws AnalysisException {
+        ColumnStats columnStats = getNotNullColumnStats(columnName);
+        columnStats.updateStats(columnType, statsType, value);
+    }
+
+    /**
+     * If partition stats is not exist, create a new one.
+     *
+     * @param partitionName partition name
+     * @return @PartitionStats
+     */
+    private PartitionStats getNotNullPartitionStats(String partitionName) {
+        PartitionStats partitionStat = nameToPartitionStats.get(partitionName);
+        if (partitionStat == null) {
+            partitionStat = new PartitionStats();
+            nameToPartitionStats.put(partitionName, partitionStat);
         }
-        partitionStats.updateTableStats(statsTypeToValue);
+        return partitionStat;
+    }
+
+    /**
+     * If column stats is not exist, create a new one.
+     *
+     * @param columnName column name
+     * @return @ColumnStats
+     */
+    public ColumnStats getNotNullColumnStats(String columnName) {
+        ColumnStats columnStats = nameToColumnStats.get(columnName);
+        if (columnStats == null) {
+            columnStats = new ColumnStats();
+            nameToColumnStats.put(columnName, columnStats);
+        }
+        return columnStats;
     }
 
     public List<String> getShowInfo() {
@@ -102,8 +121,17 @@ public class TableStats {
         return result;
     }
 
-    public Map<Long, PartitionStats> getIdToPartitionStats() {
-        return idToPartitionStats;
+    public List<String> getShowInfo(String partitionName) {
+        PartitionStats partitionStats = nameToPartitionStats.get(partitionName);
+        return partitionStats.getShowInfo();
+    }
+
+    public Map<String, PartitionStats> getNameToPartitionStats() {
+        return nameToPartitionStats;
+    }
+
+    public Map<String, ColumnStats> getNameToColumnStats() {
+        return nameToColumnStats;
     }
 
     public long getRowCount() {

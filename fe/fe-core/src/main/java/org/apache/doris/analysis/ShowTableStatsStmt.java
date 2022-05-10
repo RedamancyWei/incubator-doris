@@ -18,7 +18,10 @@
 package org.apache.doris.analysis;
 
 import org.apache.doris.catalog.Column;
+import org.apache.doris.catalog.Database;
+import org.apache.doris.catalog.Partition;
 import org.apache.doris.catalog.ScalarType;
+import org.apache.doris.catalog.Table;
 import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.ErrorReport;
 import org.apache.doris.common.UserException;
@@ -45,8 +48,11 @@ public class ShowTableStatsStmt extends ShowStmt {
     // There is only on attribute for both @tableName and @dbName at the same time.
     private String dbName;
 
-    public ShowTableStatsStmt(TableName tableName) {
+    private String partitionName;
+
+    public ShowTableStatsStmt(TableName tableName, String partitionName) {
         this.tableName = tableName;
+        this.partitionName = partitionName;
     }
 
     public String getTableName() {
@@ -65,6 +71,10 @@ public class ShowTableStatsStmt extends ShowStmt {
         return tableName.getDb();
     }
 
+    public String getPartitionName() {
+        return partitionName;
+    }
+
     @Override
     public void analyze(Analyzer analyzer) throws UserException {
         super.analyze(analyzer);
@@ -76,6 +86,15 @@ public class ShowTableStatsStmt extends ShowStmt {
             return;
         }
         tableName.analyze(analyzer);
+
+        if (!Strings.isNullOrEmpty(partitionName)) {
+            Database db = analyzer.getCatalog().getDbOrAnalysisException(tableName.getDb());
+            Table table = db.getTableOrAnalysisException(tableName.getTbl());
+            Partition partition = table.getPartition(partitionName);
+            if (partition == null) {
+                ErrorReport.reportAnalysisException(ErrorCode.ERR_UNKNOWN_PARTITION, partitionName);
+            }
+        }
     }
 
     @Override
