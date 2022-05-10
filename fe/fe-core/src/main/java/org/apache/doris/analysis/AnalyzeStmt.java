@@ -80,6 +80,7 @@ public class AnalyzeStmt extends DdlStmt {
     // after analyzed
     private long dbId;
     private final Set<Long> tblIds = Sets.newHashSet();
+    // table id -> List<partition id>
     private final Map<Long, List<Long>> tblIdToPid = Maps.newHashMap();
 
     public AnalyzeStmt(TableName dbTableName, List<String> columns, Map<String, String> properties) {
@@ -91,19 +92,19 @@ public class AnalyzeStmt extends DdlStmt {
     public long getDbId() {
         Preconditions.checkArgument(isAnalyzed(),
                 "The dbId must be obtained after the parsing is complete");
-        return this.dbId;
+        return dbId;
     }
 
     public Set<Long> getTblIds() {
         Preconditions.checkArgument(isAnalyzed(),
                 "The tblIds must be obtained after the parsing is complete");
-        return this.tblIds;
+        return tblIds;
     }
 
     public Database getDb() throws AnalysisException {
         Preconditions.checkArgument(isAnalyzed(),
                 "The db must be obtained after the parsing is complete");
-        return this.analyzer.getCatalog().getDbOrAnalysisException(this.dbId);
+        return analyzer.getCatalog().getDbOrAnalysisException(dbId);
     }
 
     public List<Table> getTables() throws AnalysisException {
@@ -114,7 +115,7 @@ public class AnalyzeStmt extends DdlStmt {
 
         db.readLock();
         try {
-            for (Long tblId : this.tblIds) {
+            for (Long tblId : tblIds) {
                 Table table = db.getTableOrAnalysisException(tblId);
                 tables.add(table);
             }
@@ -127,7 +128,7 @@ public class AnalyzeStmt extends DdlStmt {
 
     public Map<Long, List<Long>> getTblIdToPid() throws AnalysisException {
         Preconditions.checkArgument(isAnalyzed(),
-            "The columns must be obtained after the parsing is complete");
+            "The partitionIds must be obtained after the parsing is complete");
         for (Table table : getTables()) {
             table.readLock();
             try {
@@ -147,7 +148,7 @@ public class AnalyzeStmt extends DdlStmt {
                 "The db name must be obtained after the parsing is complete");
         Map<Long, List<String>> tableIdToColumnName = Maps.newHashMap();
         List<Table> tables = getTables();
-        if (this.columnNames == null || this.columnNames.isEmpty()) {
+        if (columnNames == null || columnNames.isEmpty()) {
             for (Table table : tables) {
                 table.readLock();
                 try {
@@ -161,8 +162,8 @@ public class AnalyzeStmt extends DdlStmt {
                 }
             }
         } else {
-            for (Long tblId : this.tblIds) {
-                tableIdToColumnName.put(tblId, this.columnNames);
+            for (Long tblId : tblIds) {
+                tableIdToColumnName.put(tblId, columnNames);
             }
         }
 
@@ -170,7 +171,7 @@ public class AnalyzeStmt extends DdlStmt {
     }
 
     public Map<String, String> getProperties() {
-        return this.properties;
+        return properties;
     }
 
     @Override
@@ -178,21 +179,21 @@ public class AnalyzeStmt extends DdlStmt {
         super.analyze(analyzer);
 
         // step1: analyze db, table and column
-        if (this.dbTableName != null) {
-            this.dbTableName.analyze(analyzer);
-            String dbName = this.dbTableName.getDb();
-            String tblName = this.dbTableName.getTbl();
+        if (dbTableName != null) {
+            dbTableName.analyze(analyzer);
+            String dbName = dbTableName.getDb();
+            String tblName = dbTableName.getTbl();
             checkAnalyzePriv(dbName, tblName);
 
             Database db = analyzer.getCatalog().getDbOrAnalysisException(dbName);
             Table table = db.getTableOrAnalysisException(tblName);
 
-            if (this.columnNames != null && !this.columnNames.isEmpty()) {
+            if (columnNames != null && !columnNames.isEmpty()) {
                 table.readLock();
                 try {
                     List<String> baseSchema = table.getBaseSchema(false)
                             .stream().map(Column::getName).collect(Collectors.toList());
-                    Optional<String> optional = this.columnNames.stream()
+                    Optional<String> optional = columnNames.stream()
                             .filter(entity -> !baseSchema.contains(entity)).findFirst();
                     if (optional.isPresent()) {
                         String columnName = optional.get();
@@ -203,8 +204,8 @@ public class AnalyzeStmt extends DdlStmt {
                 }
             }
 
-            this.dbId = db.getId();
-            this.tblIds.add(table.getId());
+            dbId = db.getId();
+            tblIds.add(table.getId());
         } else {
             // analyze the current default db
             String dbName = analyzer.getDefaultDb();
@@ -220,10 +221,10 @@ public class AnalyzeStmt extends DdlStmt {
                     checkAnalyzePriv(dbName, table.getName());
                 }
 
-                this.dbId = db.getId();
+                dbId = db.getId();
                 for (Table table : tables) {
                     long tblId = table.getId();
-                    this.tblIds.add(tblId);
+                    tblIds.add(tblId);
                 }
             } finally {
                 db.readUnlock();
@@ -252,16 +253,16 @@ public class AnalyzeStmt extends DdlStmt {
     }
 
     private void checkProperties() throws UserException {
-        Optional<String> optional = this.properties.keySet().stream().filter(
+        Optional<String> optional = properties.keySet().stream().filter(
                 entity -> !PROPERTIES_SET.contains(entity)).findFirst();
         if (optional.isPresent()) {
             throw new AnalysisException(optional.get() + " is invalid property");
         }
 
-        long taskTimeout = ((Long) Util.getLongPropertyOrDefault(this.properties.get(CBO_STATISTICS_TASK_TIMEOUT_SEC),
+        long taskTimeout = ((Long) Util.getLongPropertyOrDefault(properties.get(CBO_STATISTICS_TASK_TIMEOUT_SEC),
                 Config.max_cbo_statistics_task_timeout_sec, DESIRED_TASK_TIMEOUT_SEC,
                 CBO_STATISTICS_TASK_TIMEOUT_SEC + " should > 0")).intValue();
-        this.properties.put(CBO_STATISTICS_TASK_TIMEOUT_SEC, String.valueOf(taskTimeout));
+        properties.put(CBO_STATISTICS_TASK_TIMEOUT_SEC, String.valueOf(taskTimeout));
     }
 }
 

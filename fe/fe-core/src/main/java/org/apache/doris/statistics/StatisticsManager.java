@@ -71,7 +71,14 @@ public class StatisticsManager {
             ErrorReport.reportAnalysisException(ErrorCode.ERR_BAD_FIELD_ERROR, columnName, table.getName());
         }
         // match type and column value
-        statistics.updateColumnStats(table.getId(), table.getId(), columnName, column.getType(), stmt.getStatsTypeToValue());
+        Type colType = column.getType();
+        Map<StatsType, String> statsTypeToValue = stmt.getStatsTypeToValue();
+        for (Map.Entry<StatsType, String> entry : statsTypeToValue.entrySet()) {
+            StatsType statsType = entry.getKey();
+            String value = entry.getValue();
+            statistics.updateColumnStats(table.getId(),
+                    null, column.getName(), colType, statsType, value);
+        }
     }
 
     public List<List<String>> showTableStatsList(String dbName, String tableName)

@@ -19,9 +19,6 @@ package org.apache.doris.statistics;
 
 import org.apache.doris.catalog.Type;
 import org.apache.doris.common.AnalysisException;
-import org.apache.doris.common.DdlException;
-
-import org.jetbrains.annotations.NotNull;
 
 import com.google.common.collect.Maps;
 
@@ -43,22 +40,18 @@ public class Statistics {
 
     private final Map<Long, TableStats> idToTableStats = Maps.newConcurrentMap();
 
-    public void updateTableStats(long tableId, Map<StatsType, String> statsTypeToValue)
-            throws AnalysisException {
-        TableStats tableStats = idToTableStats.get(tableId);
-        if (tableStats == null) {
-            tableStats = new TableStats();
-            idToTableStats.put(tableId, tableStats);
-        }
-        tableStats.updateTableStats(statsTypeToValue);
-    }
+    // public void updateTableStats(long tableId, Map<StatsType, String> statsTypeToValue)
+    //         throws AnalysisException {
+    //     TableStats tableStats = idToTableStats.get(tableId);
+    //     if (tableStats == null) {
+    //         tableStats = new TableStats();
+    //         idToTableStats.put(tableId, tableStats);
+    //     }
+    //     tableStats.updateTableStats(statsTypeToValue);
+    // }
 
     public void updateTableStats(long tableId, StatsType statsType, String value) throws AnalysisException {
-        TableStats tableStats = idToTableStats.get(tableId);
-        if (tableStats == null) {
-            tableStats = new TableStats();
-            idToTableStats.put(tableId, tableStats);
-        }
+        TableStats tableStats = getTableStats(tableId);
         tableStats.updateTableStats(statsType, value);
     }
 
@@ -68,31 +61,51 @@ public class Statistics {
         partitionStat.updatePartitionStats(statsType, value);
     }
 
-    public void updateColumnStats(long tableId, long partitionId, String columnName, Type columnType,
-                                  Map<StatsType, String> statsTypeToValue)
-            throws AnalysisException {
-        PartitionStats partitionStat = getPartitionStats(tableId, partitionId);
-        partitionStat.updateColumnStats(columnName, columnType, statsTypeToValue);
-    }
+    // public void updateColumnStats(long tableId, long partitionId, String columnName, Type columnType,
+    //                               Map<StatsType, String> statsTypeToValue)
+    //         throws AnalysisException {
+    //     PartitionStats partitionStat = getPartitionStats(tableId, partitionId);
+    //     partitionStat.updateColumnStats(columnName, columnType, statsTypeToValue);
+    // }
 
-    // (tblId, partitionId, colName, statsType, value);
-    public void updateColumnStats(long tableId, long partitionId, String columnName, Type columnType, StatsType statsType, String value)
-        throws AnalysisException {
+    /**
+     * Update the column stats of the partition.
+     * For partitionId if null means the table is not partitioned, use the table id instead.
+     * @see org.apache.doris.statistics.PartitionStats
+     *
+     * @param tableId table id
+     * @param partitionId partition id
+     * @param columnName column name
+     * @param columnType column type
+     * @param statsType stats type
+     * @param value stats value
+     * @throws AnalysisException
+     */
+    public void updateColumnStats(long tableId,
+                                  @Nullable Long partitionId,
+                                  String columnName,
+                                  Type columnType,
+                                  StatsType statsType,
+                                  String value) throws AnalysisException {
+        if (partitionId == null) {
+            // TODO(wzt): support for updating column statistics on non-partitioned
+            throw new AnalysisException("Unsupported non-partitioned table: " + tableId);
+        }
         PartitionStats partitionStat = getPartitionStats(tableId, partitionId);
         partitionStat.updateColumnStats(columnName, columnType, statsType, value);
     }
 
     public TableStats getTableStats(long tableId) {
-        return idToTableStats.get(tableId);
-    }
-
-    @NotNull
-    private PartitionStats getPartitionStats(long tableId, long partitionId) {
         TableStats tableStats = idToTableStats.get(tableId);
         if (tableStats == null) {
             tableStats = new TableStats();
             idToTableStats.put(tableId, tableStats);
         }
+        return tableStats;
+    }
+
+    private PartitionStats getPartitionStats(long tableId, long partitionId) {
+        TableStats tableStats = getTableStats(tableId);
         Map<Long, PartitionStats> partitionStats = tableStats.getIdToPartitionStats();
         PartitionStats partitionStat = partitionStats.get(partitionId);
         if (partitionStat == null) {
@@ -102,8 +115,16 @@ public class Statistics {
         return partitionStat;
     }
 
+    /**
+     * PartitionId is null means...
+     *
+     * @param tableId table id
+     * @param partitionId partition id
+     * @return column stats of the partition
+     */
     public Map<String, ColumnStats> getColumnStats(long tableId, @Nullable Long partitionId) {
         if (partitionId == null) {
+            // TODO(wzt): support for getting column statistics on non-partitioned
             partitionId = tableId;
         }
         PartitionStats partitionStat = getPartitionStats(tableId, partitionId);
