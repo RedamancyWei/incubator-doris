@@ -35,6 +35,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 
 import java.util.List;
+import java.util.Map;
 import java.util.function.Predicate;
 
 
@@ -75,32 +76,37 @@ public class ColumnStats {
     private LiteralExpr minValue;
     private LiteralExpr maxValue;
 
-    public void updateStats(Type columnType, StatsType statsType, String value) throws AnalysisException {
-        switch (statsType) {
-            case NDV:
-                ndv = Util.getLongPropertyOrDefault(value, ndv,
-                        DESIRED_NDV_PRED, NDV + " should >= -1");
-                break;
-            case AVG_SIZE:
-                avgSize = Util.getFloatPropertyOrDefault(value, avgSize,
-                        DESIRED_AVG_SIZE_PRED, AVG_SIZE + " should (>=0) or (=-1)");
-                break;
-            case MAX_SIZE:
-                maxSize = Util.getLongPropertyOrDefault(value, maxSize,
-                        DESIRED_MAX_SIZE_PRED, MAX_SIZE + " should >=-1");
-                break;
-            case NUM_NULLS:
-                numNulls = Util.getLongPropertyOrDefault(value, numNulls,
-                        DESIRED_NUM_NULLS_PRED, NUM_NULLS + " should >=-1");
-                break;
-            case MIN_VALUE:
-                minValue = validateColumnValue(columnType, value);
-                break;
-            case MAX_VALUE:
-                maxValue = validateColumnValue(columnType, value);
-                break;
-            default:
-                throw new AnalysisException("Unknown stats type: " + statsType);
+    public void updateStats(Type columnType, Map<StatsType, String> statsTypeToValue) throws AnalysisException {
+        for (Map.Entry<StatsType, String> entry : statsTypeToValue.entrySet()) {
+            StatsType statsType = entry.getKey();
+            String value = entry.getValue();
+
+            switch (statsType) {
+                case NDV:
+                    ndv = Util.getLongPropertyOrDefault(value, ndv,
+                            DESIRED_NDV_PRED, NDV + " should >= -1");
+                    break;
+                case AVG_SIZE:
+                    avgSize = Util.getFloatPropertyOrDefault(value, avgSize,
+                            DESIRED_AVG_SIZE_PRED, AVG_SIZE + " should (>=0) or (=-1)");
+                    break;
+                case MAX_SIZE:
+                    maxSize = Util.getLongPropertyOrDefault(value, maxSize,
+                            DESIRED_MAX_SIZE_PRED, MAX_SIZE + " should >=-1");
+                    break;
+                case NUM_NULLS:
+                    numNulls = Util.getLongPropertyOrDefault(value, numNulls,
+                            DESIRED_NUM_NULLS_PRED, NUM_NULLS + " should >=-1");
+                    break;
+                case MIN_VALUE:
+                    minValue = validateColumnValue(columnType, value);
+                    break;
+                case MAX_VALUE:
+                    maxValue = validateColumnValue(columnType, value);
+                    break;
+                default:
+                    throw new AnalysisException("Unknown stats type: " + statsType);
+            }
         }
     }
 

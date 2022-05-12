@@ -62,10 +62,10 @@ import java.util.stream.Collectors;
  *      properties: properties of statistics jobs
  */
 public class AnalyzeStmt extends DdlStmt {
-    private static final Logger LOG = LogManager.getLogger(AnalyzeStmt.class);
-
     // time to wait for collect  statistics
-    private static final String CBO_STATISTICS_TASK_TIMEOUT_SEC = "cbo_statistics_task_timeout_sec";
+    public static final String CBO_STATISTICS_TASK_TIMEOUT_SEC = "cbo_statistics_task_timeout_sec";
+
+    private static final Logger LOG = LogManager.getLogger(AnalyzeStmt.class);
 
     private static final ImmutableSet<String> PROPERTIES_SET = new ImmutableSet.Builder<String>()
             .add(CBO_STATISTICS_TASK_TIMEOUT_SEC)
@@ -135,8 +135,7 @@ public class AnalyzeStmt extends DdlStmt {
                 OlapTable olapTable = (OlapTable) table;
                 List<String> partitionNames = Lists.newArrayList(olapTable.getPartitionNames());
                 tableIdToPartitionName.put(table.getId(), partitionNames);
-            }
-            finally {
+            } finally {
                 table.readUnlock();
             }
         }

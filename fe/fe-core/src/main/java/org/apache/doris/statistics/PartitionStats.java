@@ -61,20 +61,24 @@ public class PartitionStats {
     private long dataSize = -1;
     private final Map<String, ColumnStats> nameToColumnStats = Maps.newConcurrentMap();
 
-    public void updatePartitionStats(StatsType statsType, String value) throws AnalysisException {
-        if (statsType == ROW_COUNT) {
-            rowCount = Util.getLongPropertyOrDefault(value, rowCount,
-                    DESIRED_ROW_COUNT_PRED, ROW_COUNT + " should >= -1");
-        } else if (statsType == DATA_SIZE) {
-            dataSize = Util.getLongPropertyOrDefault(value, dataSize,
-                    DESIRED_DATA_SIZE_PRED, DATA_SIZE + " should >= -1");
+    public void updatePartitionStats(Map<StatsType, String> statsTypeToValue) throws AnalysisException {
+        for (Map.Entry<StatsType, String> entry : statsTypeToValue.entrySet()) {
+            StatsType statsType = entry.getKey();
+            String value = entry.getValue();
+            if (statsType == ROW_COUNT) {
+                rowCount = Util.getLongPropertyOrDefault(value, rowCount,
+                        DESIRED_ROW_COUNT_PRED, ROW_COUNT + " should >= -1");
+            } else if (statsType == DATA_SIZE) {
+                dataSize = Util.getLongPropertyOrDefault(value, dataSize,
+                        DESIRED_DATA_SIZE_PRED, DATA_SIZE + " should >= -1");
+            }
         }
     }
 
-    public void updateColumnStats(String columnName, Type columnType, StatsType statsType, String value)
+    public void updateColumnStats(String columnName, Type columnType, Map<StatsType, String> statsTypeToValue)
             throws AnalysisException {
         ColumnStats columnStats = getNotNullColumnStats(columnName);
-        columnStats.updateStats(columnType, statsType, value);
+        columnStats.updateStats(columnType, statsTypeToValue);
     }
 
     /**

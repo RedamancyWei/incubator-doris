@@ -38,35 +38,29 @@ public class Statistics {
 
     private final Map<Long, TableStats> idToTableStats = Maps.newConcurrentMap();
 
-    public void updateTableStats(long tableId, StatsType statsType, String value) throws AnalysisException {
+    public void updateTableStats(long tableId, Map<StatsType, String> statsTypeToValue) throws AnalysisException {
         TableStats tableStats = getNotNullTableStats(tableId);
-        tableStats.updateTableStats(statsType, value);
+        tableStats.updateTableStats(statsTypeToValue);
     }
 
-    public void updatePartitionStats(long tableId, String partitionName, StatsType statsType, String value)
+    public void updatePartitionStats(long tableId, String partitionName, Map<StatsType, String> statsTypeToValue)
             throws AnalysisException {
         TableStats tableStats = getNotNullTableStats(tableId);
-        tableStats.updatePartitionStats(partitionName, statsType, value);
-        // PartitionStats partitionStat = getNotNullPartitionStats(tableId, partitionName);
-        // partitionStat.updatePartitionStats(statsType, value);
+        tableStats.updatePartitionStats(partitionName, statsTypeToValue);
     }
 
     public void updateColumnStats(long tableId, String columnName, Type columnType,
-                                  StatsType statsType, String value) throws AnalysisException {
+                                  Map<StatsType, String> statsTypeToValue) throws AnalysisException {
         TableStats tableStats = getNotNullTableStats(tableId);
-        tableStats.updateColumnStats(columnName, columnType, statsType, value);
-        // ColumnStats columnStats = getNotNullColumnStats(tableId, columnName);
-        // columnStats.updateStats(columnType, statsType, value);
+        tableStats.updateColumnStats(columnName, columnType, statsTypeToValue);
     }
 
     public void updateColumnStats(long tableId, String partitionName, String columnName, Type columnType,
-                                  StatsType statsType, String value) throws AnalysisException {
+                                  Map<StatsType, String> statsTypeToValue) throws AnalysisException {
         TableStats tableStats = getNotNullTableStats(tableId);
         Map<String, PartitionStats> nameToPartitionStats = tableStats.getNameToPartitionStats();
         PartitionStats partitionStats = nameToPartitionStats.get(partitionName);
-        partitionStats.updateColumnStats(columnName, columnType, statsType, value);
-        // ColumnStats columnStats = getNotNullColumnStats(tableId, partitionName, columnName);
-        // columnStats.updateStats(columnType, statsType, value);
+        partitionStats.updateColumnStats(columnName, columnType, statsTypeToValue);
     }
 
     /**

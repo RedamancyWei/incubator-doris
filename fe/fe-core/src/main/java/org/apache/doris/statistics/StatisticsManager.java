@@ -33,10 +33,14 @@ import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.ErrorReport;
 import org.apache.doris.mysql.privilege.PrivPredicate;
 import org.apache.doris.qe.ConnectContext;
+import org.apache.doris.statistics.StatisticsTaskResult.TaskResult;
+import org.apache.doris.statistics.StatsGranularity.Granularity;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 
+import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -65,16 +69,13 @@ public class StatisticsManager {
     public void alterTableStatistics(AlterTableStatsStmt stmt) throws AnalysisException {
         Table table = validateTableName(stmt.getTableName());
         String partitionName = validatePartitionName(table, stmt.getPartitionName());
+
         Map<StatsType, String> statsTypeToValue = stmt.getStatsTypeToValue();
 
-        for (Map.Entry<StatsType, String> entry : statsTypeToValue.entrySet()) {
-            StatsType statsType = entry.getKey();
-            String value = entry.getValue();
-            if (Strings.isNullOrEmpty(partitionName)) {
-                statistics.updateTableStats(table.getId(), statsType, value);
-            } else {
-                statistics.updatePartitionStats(table.getId(), partitionName, statsType, value);
-            }
+        if (Strings.isNullOrEmpty(partitionName)) {
+            statistics.updateTableStats(table.getId(), statsTypeToValue);
+        } else {
+            statistics.updatePartitionStats(table.getId(), partitionName, statsTypeToValue);
         }
     }
 
@@ -86,75 +87,125 @@ public class StatisticsManager {
      */
     public void alterColumnStatistics(AlterColumnStatsStmt stmt) throws AnalysisException {
         Table table = validateTableName(stmt.getTableName());
-        String columnName = stmt.getColumnName();
-        Column column = validateColumn(table, columnName);
-
-        // match type and column value
+        String colName = stmt.getColumnName();
+        String partitionName = stmt.getPartitionName();
+        Column column = validateColumn(table, partitionName, colName);
         Type colType = column.getType();
-        String partitionName = validatePartitionName(table, stmt.getPartitionName());
+
         Map<StatsType, String> statsTypeToValue = stmt.getStatsTypeToValue();
 
-        for (Map.Entry<StatsType, String> entry : statsTypeToValue.entrySet()) {
-            StatsType statsType = entry.getKey();
-            String value = entry.getValue();
-            if (Strings.isNullOrEmpty(partitionName)) {
-                statistics.updateColumnStats(table.getId(), column.getName(), colType, statsType, value);
-            } else {
-                statistics.updateColumnStats(table.getId(), partitionName, column.getName(), colType, statsType, value);
-            }
+        if (Strings.isNullOrEmpty(partitionName)) {
+            statistics.updateColumnStats(table.getId(), colName, colType, statsTypeToValue);
+        } else {
+            statistics.updateColumnStats(table.getId(), partitionName, colName, colType, statsTypeToValue);
         }
     }
 
     /**
      * Update statistics. there are three types of statistics: column, table and column.
      *
-     * @param taskResult statistics task result
+     * @param statsTaskResults statistics task results
      * @throws AnalysisException if column, table or partition not exist
      */
-    public void updateStatistics(StatisticsTaskResult taskResult) throws AnalysisException {
-        Map<StatsType, List<StatsCategory>> statsTypeToValue = taskResult.getStatsTypeToValue();
+    public void updateStatistics(List<StatisticsTaskResult> statsTaskResults) throws AnalysisException {
+        // tablet granularity stats(row count, max size, avg size)
+        Map<StatsType, Map<TaskResult, List<String>>> tabletStats = Maps.newHashMap();
 
-        for (Map.Entry<StatsType, List<StatsCategory>> entry : statsTypeToValue.entrySet()) {
-            StatsType statsType = entry.getKey();
-            List<StatsCategory> statsCategories = entry.getValue();
+        for (StatisticsTaskResult statsTaskResult : statsTaskResults) {
+            List<TaskResult> taskResults = statsTaskResult.getTaskResults();
 
-            for (StatsCategory category : statsCategories) {
-                validateStatsCategory(category);
-                long tblId = category.getTableId();
-                String value = category.getStatsValue();
-                String partitionName = category.getPartitionName();
+            for (TaskResult result : taskResults) {
+                validateResult(result);
+                long tblId = result.getTableId();
+                Map<StatsType, String> statsTypeToValue = result.getStatsTypeToValue();
 
-                switch (category.getCategory()) {
+                if (result.getGranularity() == Granularity.TABLET) {
+                    statsTypeToValue.forEach((statsType, value) -> {
+                        if (tabletStats.containsKey(statsType)) {
+                            Map<TaskResult, List<String>> resultToValue = tabletStats.get(statsType);
+                            List<String> values = resultToValue.get(result);
+                            values.add(value);
+                        } else {
+                            Map<TaskResult, List<String>> resultToValue = Maps.newHashMap();
+                            List<String> values = Lists.newArrayList();
+                            values.add(value);
+                            resultToValue.put(result, values);
+                            tabletStats.put(statsType, resultToValue);
+                        }
+                    });
+                    continue;
+                }
+
+                switch (result.getCategory()) {
                     case TABLE:
-                        statistics.updateTableStats(tblId, statsType, value);
+                        statistics.updateTableStats(tblId, statsTypeToValue);
                         break;
                     case PARTITION:
-                        statistics.updatePartitionStats(tblId, partitionName, statsType, value);
+                        String partitionName = result.getPartitionName();
+                        statistics.updatePartitionStats(tblId, partitionName, statsTypeToValue);
                         break;
                     case COLUMN:
-                        updateColumnStats(statsType, category, tblId, value);
+                        updateColumnStats(result, statsTypeToValue);
                         break;
                     default:
-                        throw new AnalysisException("Unknown stats category: " + category.getCategory());
+                        throw new AnalysisException("Unknown stats category: " + result.getCategory());
                 }
             }
         }
+
+        // update tablet granularity stats
+        updateTabletStats(tabletStats);
     }
 
-    private void updateColumnStats(StatsType statsType, StatsCategory category, long tblId, String value)
+    private void updateColumnStats(TaskResult result, Map<StatsType, String> statsTypeToValue)
             throws AnalysisException {
-        Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(category.getDbId());
-        OlapTable tbl = (OlapTable) db.getTableOrAnalysisException(tblId);
+        long dbId = result.getDbId();
+        long tblId = result.getTableId();
+        String partitionName = result.getPartitionName();
+        String colName = result.getColumnName();
 
-        String colName = category.getColumnName();
-        Column column = tbl.getColumn(colName);
-        Type columnType = column.getType();
-        String partitionName = category.getPartitionName();
+        Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(dbId);
+        OlapTable table = (OlapTable) db.getTableOrAnalysisException(tblId);
+        Column column = table.getColumn(colName);
+        Type colType = column.getType();
 
-        if (Strings.isNullOrEmpty(partitionName)) {
-            statistics.updateColumnStats(tblId, colName, columnType, statsType, value);
-        } else {
-            statistics.updateColumnStats(tblId, partitionName, colName, columnType, statsType, value);
+        switch (result.getGranularity()) {
+            case TABLE:
+                statistics.updateColumnStats(tblId, colName, colType, statsTypeToValue);
+                break;
+            case PARTITION:
+                statistics.updateColumnStats(tblId, partitionName, colName, colType, statsTypeToValue);
+                break;
+            default:
+                // The tablet granularity is handle separately
+                throw new AnalysisException("Unknown granularity: " + result.getGranularity());
+        }
+    }
+
+    private void updateTabletStats(Map<StatsType, Map<TaskResult, List<String>>> tabletStats)
+            throws AnalysisException {
+        for (Map.Entry<StatsType, Map<TaskResult, List<String>>> statsEntry : tabletStats.entrySet()) {
+            StatsType statsType = statsEntry.getKey();
+            Map<TaskResult, List<String>> resultToValue = statsEntry.getValue();
+
+            for (Map.Entry<TaskResult, List<String>> resultEntry : resultToValue.entrySet()) {
+                TaskResult result = resultEntry.getKey();
+                List<String> values = resultEntry.getValue();
+
+                switch (statsType) {
+                    case ROW_COUNT:
+                        updateTabletRowCount(result, values);
+                        break;
+                    case MAX_SIZE:
+                        updateTabletMaxSize(result, values);
+                        break;
+                    case AVG_SIZE:
+                        updateTabletAvgSize(result, values);
+                        break;
+                    default:
+                        throw new AnalysisException("Unknown stats type: " + statsType);
+                }
+            }
         }
     }
 
@@ -288,6 +339,60 @@ public class StatisticsManager {
         return result;
     }
 
+    private void updateTabletRowCount(TaskResult result, List<String> values) throws AnalysisException {
+        long statsValue = values.stream().filter(NumberUtils::isCreatable)
+                .mapToLong(Long::parseLong).sum();
+
+        Map<StatsType, String> statsTypeToValue = Maps.newHashMap();
+        statsTypeToValue.put(StatsType.ROW_COUNT, String.valueOf(statsValue));
+
+        if (result.getCategory() == StatsCategory.Category.TABLE) {
+            statistics.updateTableStats(result.getTableId(), statsTypeToValue);
+        } else if (result.getCategory() == StatsCategory.Category.PARTITION) {
+            statistics.updatePartitionStats(result.getTableId(), result.getPartitionName(), statsTypeToValue);
+        }
+    }
+
+    private void updateTabletMaxSize(TaskResult result, List<String> values) throws AnalysisException {
+        long statsValue = values.stream().filter(NumberUtils::isCreatable)
+                .mapToLong(Long::parseLong).max().orElse(0L);
+
+        Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(result.getDbId());
+        Table table = db.getTableOrAnalysisException(result.getTableId());
+        Column column = table.getColumn(result.getColumnName());
+
+        Map<StatsType, String> statsTypeToValue = Maps.newHashMap();
+        statsTypeToValue.put(StatsType.MAX_SIZE, String.valueOf(statsValue));
+
+        if (result.getCategory() == StatsCategory.Category.TABLE) {
+            statistics.updateColumnStats(result.getTableId(),
+                    result.getColumnName(), column.getType(), statsTypeToValue);
+        } else if (result.getCategory() == StatsCategory.Category.PARTITION) {
+            statistics.updateColumnStats(result.getTableId(), result.getPartitionName(),
+                    result.getColumnName(), column.getType(), statsTypeToValue);
+        }
+    }
+
+    private void updateTabletAvgSize(TaskResult result, List<String> values) throws AnalysisException {
+        double statsValue = values.stream().filter(NumberUtils::isCreatable)
+                .mapToLong(Long::parseLong).average().orElse(0.0);
+
+        Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(result.getDbId());
+        Table table = db.getTableOrAnalysisException(result.getTableId());
+        Column column = table.getColumn(result.getColumnName());
+
+        Map<StatsType, String> statsTypeToValue = Maps.newHashMap();
+        statsTypeToValue.put(StatsType.AVG_SIZE, String.valueOf(statsValue));
+
+        if (result.getCategory() == StatsCategory.Category.TABLE) {
+            statistics.updateColumnStats(result.getTableId(),
+                    result.getColumnName(), column.getType(), statsTypeToValue);
+        } else if (result.getCategory() == StatsCategory.Category.PARTITION) {
+            statistics.updateColumnStats(result.getTableId(), result.getPartitionName(),
+                    result.getColumnName(), column.getType(), statsTypeToValue);
+        }
+    }
+
     private Table validateTableName(TableName dbTableName) throws AnalysisException {
         String dbName = dbTableName.getDb();
         String tableName = dbTableName.getTbl();
@@ -295,20 +400,26 @@ public class StatisticsManager {
         return db.getTableOrAnalysisException(tableName);
     }
 
+    /**
+     * Partition name is optional, if partition name is not null, it will be validated.
+     */
     private String validatePartitionName(Table table, String partitionName) throws AnalysisException {
         if (!table.isPartitioned() && !Strings.isNullOrEmpty(partitionName)) {
             ErrorReport.reportAnalysisException(ErrorCode.ERR_PARTITION_CLAUSE_ON_NONPARTITIONED, partitionName);
-            throw new AnalysisException("Table " + table.getName() + " is not partitioned");
         }
 
-        if (table.isPartitioned() && table.getPartition(partitionName) == null) {
+        if (!Strings.isNullOrEmpty(partitionName) && table.getPartition(partitionName) == null) {
             ErrorReport.reportAnalysisException(ErrorCode.ERR_UNKNOWN_PARTITION, partitionName);
         }
 
         return partitionName;
     }
 
-    private Column validateColumn(Table table, String columnName) throws AnalysisException {
+    private Column validateColumn(Table table, String partitionName, String columnName) throws AnalysisException {
+        if (table.isPartitioned() && Strings.isNullOrEmpty(partitionName)) {
+            throw new AnalysisException("Partition name is required for partitioned table: " + table.getName());
+        }
+
         Column column = table.getColumn(columnName);
         if (column == null) {
             ErrorReport.reportAnalysisException(ErrorCode.ERR_BAD_FIELD_ERROR, columnName, table.getName());
@@ -316,12 +427,29 @@ public class StatisticsManager {
         return column;
     }
 
-    private void validateStatsCategory(StatsCategory category) throws AnalysisException {
-        long dbId = category.getDbId();
-        long tblId = category.getTableId();
-        Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(dbId);
-        Table table = db.getTableOrAnalysisException(tblId);
-        validatePartitionName(table, category.getPartitionName());
-        validateColumn(table, category.getColumnName());
+    private void validateResult(TaskResult result) throws AnalysisException {
+        Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(result.getDbId());
+        Table table = db.getTableOrAnalysisException(result.getTableId());
+
+        if (!Strings.isNullOrEmpty(result.getPartitionName())) {
+            validatePartitionName(table, result.getPartitionName());
+        }
+
+        if (!Strings.isNullOrEmpty(result.getColumnName())) {
+            validateColumn(table, result.getPartitionName(), result.getColumnName());
+        }
+
+        if (result.getCategory() == null) {
+            throw new AnalysisException("Category is null.");
+        }
+
+        if (result.getGranularity() == null) {
+            throw new AnalysisException("Granularity is null.");
+        }
+
+        Map<StatsType, String> statsTypeToValue = result.getStatsTypeToValue();
+        if (statsTypeToValue == null || statsTypeToValue.isEmpty()) {
+            throw new AnalysisException("StatsTypeToValue is empty.");
+        }
     }
 }

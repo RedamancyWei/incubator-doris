@@ -71,11 +71,12 @@ public class StatisticsTaskScheduler extends MasterDaemon {
             for (StatisticsTask task : tasks) {
                 queue.remove();
                 long jobId = task.getJobId();
-                StatisticsJob statisticsJob = statisticsJobs.get(jobId);
 
                 if (checkJobIsValid(jobId)) {
                     // step2: execute task and save task result
                     Future<StatisticsTaskResult> future = executor.submit(task);
+                    StatisticsJob statisticsJob = statisticsJobs.get(jobId);
+
                     if (updateTaskAndJobState(task, statisticsJob)) {
                         Map<Long, Future<StatisticsTaskResult>> taskInfo = Maps.newHashMap();
                         taskInfo.put(task.getId(), future);
@@ -145,34 +146,44 @@ public class StatisticsTaskScheduler extends MasterDaemon {
         StatisticsManager statsManager = Catalog.getCurrentCatalog().getStatisticsManager();
         StatisticsJobManager jobManager = Catalog.getCurrentCatalog().getStatisticsJobManager();
 
-        resultMap.forEach((jobId, taskMapList) -> {
+        resultMap.entrySet().forEach(entry -> {
+            Long jobId = entry.getKey();
+            List<Map<Long, Future<StatisticsTaskResult>>> taskMapList = entry.getValue();
             if (checkJobIsValid(jobId)) {
-                String errorMsg = "";
                 StatisticsJob statisticsJob = jobManager.getIdToStatisticsJob().get(jobId);
                 Map<String, String> properties = statisticsJob.getProperties();
                 long timeout = Long.parseLong(properties.get(AnalyzeStmt.CBO_STATISTICS_TASK_TIMEOUT_SEC));
 
+                // For tasks with tablet granularity,
+                // we need aggregate calculations to get the results of the statistics,
+                // so we need to put all the tasks together and handle the results together.
+                List<StatisticsTaskResult> taskResults = Lists.newArrayList();
+
                 for (Map<Long, Future<StatisticsTaskResult>> taskInfos : taskMapList) {
-                    for (Map.Entry<Long, Future<StatisticsTaskResult>> taskInfo : taskInfos.entrySet()) {
-                        Long taskId = taskInfo.getKey();
-                        Future<StatisticsTaskResult> future = taskInfo.getValue();
+                    taskInfos.forEach((taskId, future) -> {
+                        String errorMsg = "";
 
                         try {
                             StatisticsTaskResult taskResult = future.get(timeout, TimeUnit.SECONDS);
-                            statsManager.updateStatistics(taskResult);
-                        } catch (AnalysisException | TimeoutException | ExecutionException
+                            taskResults.add(taskResult);
+                        } catch (TimeoutException | ExecutionException
                                 | InterruptedException | CancellationException e) {
                             errorMsg = e.getMessage();
-                            LOG.info("Failed to update statistics. jobId: {}, taskId: {}, e: {}", jobId, taskId, e);
+                            LOG.info("Failed to get statistics. jobId: {}, taskId: {}, e: {}", jobId, taskId, e);
                         }
 
                         try {
-                            // update the task and job info
                             statisticsJob.updateJobInfoByTaskId(taskId, errorMsg);
                         } catch (DdlException e) {
-                            LOG.info("Failed to update statistics job info. jobId: {}, taskId: {}, e: {}", jobId, taskId, e);
+                            LOG.info("Failed to update statistics job info. jobId: {}, e: {}", jobId, e);
                         }
-                    }
+                    });
+                }
+
+                try {
+                    statsManager.updateStatistics(taskResults);
+                } catch (AnalysisException e) {
+                    LOG.info("Failed to update statistics. jobId: {}, e: {}", jobId, e);
                 }
             }
         });

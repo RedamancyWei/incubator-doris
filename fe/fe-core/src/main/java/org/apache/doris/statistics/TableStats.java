@@ -62,26 +62,29 @@ public class TableStats {
     private final Map<String, PartitionStats> nameToPartitionStats = Maps.newConcurrentMap();
     private final Map<String, ColumnStats> nameToColumnStats = Maps.newConcurrentMap();
 
-    public void updateTableStats(StatsType statsType, String value) throws AnalysisException {
-        if (statsType == ROW_COUNT) {
-            rowCount = Util.getLongPropertyOrDefault(value, rowCount,
-                DESIRED_ROW_COUNT_PRED, ROW_COUNT + " should >= -1");
-        } else if (statsType == DATA_SIZE) {
-            dataSize = Util.getLongPropertyOrDefault(value, dataSize,
-                DESIRED_DATA_SIZE_PRED, DATA_SIZE + " should >= -1");
+    public void updateTableStats(Map<StatsType, String> statsTypeToValue) throws AnalysisException {
+        for (Map.Entry<StatsType, String> entry : statsTypeToValue.entrySet()) {
+            if (entry.getKey() == ROW_COUNT) {
+                rowCount = Util.getLongPropertyOrDefault(entry.getValue(), rowCount,
+                        DESIRED_ROW_COUNT_PRED, ROW_COUNT + " should >= -1");
+            } else if (entry.getKey() == DATA_SIZE) {
+                dataSize = Util.getLongPropertyOrDefault(entry.getValue(), dataSize,
+                        DESIRED_DATA_SIZE_PRED, DATA_SIZE + " should >= -1");
+            }
         }
+
     }
 
-    public void updatePartitionStats(String partitionName, StatsType statsType, String value)
+    public void updatePartitionStats(String partitionName, Map<StatsType, String> statsTypeToValue)
             throws AnalysisException {
         PartitionStats partitionStats = getNotNullPartitionStats(partitionName);
-        partitionStats.updatePartitionStats(statsType, value);
+        partitionStats.updatePartitionStats(statsTypeToValue);
     }
 
-    public void updateColumnStats(String columnName, Type columnType, StatsType statsType, String value)
+    public void updateColumnStats(String columnName, Type columnType, Map<StatsType, String> statsTypeToValue)
             throws AnalysisException {
         ColumnStats columnStats = getNotNullColumnStats(columnName);
-        columnStats.updateStats(columnType, statsType, value);
+        columnStats.updateStats(columnType, statsTypeToValue);
     }
 
     /**

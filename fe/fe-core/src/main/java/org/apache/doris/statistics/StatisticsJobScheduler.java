@@ -132,8 +132,6 @@ public class StatisticsJobScheduler extends MasterDaemon {
      * we'll divide subtasks by partition. relevant values(3700000000L&600000000L) are derived from test.
      * <p>
      * Eventually, we will get several subtasks of the following types:
-     *
-     * @throws DdlException exception
      * @see MetaStatisticsTask
      * @see SampleSQLStatisticsTask
      * @see SQLStatisticsTask
@@ -143,13 +141,13 @@ public class StatisticsJobScheduler extends MasterDaemon {
         Set<Long> tblIds = job.getTblIds();
 
         for (Long tblId : tblIds) {
-            Optional<Table> table = db.getTable(tblId);
-            if (!table.isPresent()) {
+            Optional<Table> optionalTbl = db.getTable(tblId);
+            if (!optionalTbl.isPresent()) {
                 LOG.warn("Table(id={}) not found in the database {}", tblId, db.getFullName());
                 continue;
             }
-            OlapTable tbl = (OlapTable) table.get();
-            if (tbl.isPartitioned()) {
+            Table table = optionalTbl.get();
+            if (table.isPartitioned()) {
                 getStatsTaskByPartition(job, tblId);
             } else {
                 getStatsTaskByTable(job, tblId);
@@ -157,9 +155,16 @@ public class StatisticsJobScheduler extends MasterDaemon {
         }
     }
 
+    /**
+     * If table is partitioned, dividing the job into several subtasks by partition.
+     *
+     * @param job statistics job
+     * @param tableId table id
+     * @throws DdlException exception
+     */
     private void getStatsTaskByPartition(StatisticsJob job, long tableId) throws DdlException {
         Database db = Catalog.getCurrentCatalog().getDbOrDdlException(job.getDbId());
-        OlapTable tbl = (OlapTable) db.getTableOrDdlException(tableId);
+        OlapTable table = (OlapTable) db.getTableOrDdlException(tableId);
 
         Map<Long, List<String>> tblIdToColName = job.getTableIdToColumnName();
         List<String> colNames = tblIdToColName.get(tableId);
@@ -170,9 +175,9 @@ public class StatisticsJobScheduler extends MasterDaemon {
         List<Long> backendIds = Catalog.getCurrentSystemInfo().getBackendIds(true);
 
         for (String partitionName : partitionNames) {
-            Partition partition = tbl.getPartition(partitionName);
+            Partition partition = table.getPartition(partitionName);
             if (partition == null) {
-                LOG.info("Partition {} not found in the table {}", partitionName, tbl.getName());
+                LOG.info("Partition {} not found in the table {}", partitionName, table.getName());
                 continue;
             }
 
@@ -190,7 +195,7 @@ public class StatisticsJobScheduler extends MasterDaemon {
             descs.add(dsStatsDesc);
 
             // partition row count
-            if (tbl.getKeysType() == KeysType.DUP_KEYS) {
+            if (table.getKeysType() == KeysType.DUP_KEYS) {
                 StatsCategory rcCategory = getPartitionStatsCategory(job.getDbId(), tableId, partitionName);
                 StatsGranularity rcGranularity = getPartitionGranularity(partitionId);
                 StatisticsDesc rcStatsDesc = new StatisticsDesc(rcCategory,
@@ -203,12 +208,12 @@ public class StatisticsJobScheduler extends MasterDaemon {
 
             // column max size and avg size
             for (String colName : colNames) {
-                Column col = tbl.getColumn(colName);
-                if (col == null) {
-                    LOG.info("Column {} not found in the table {}", colName, tbl.getName());
+                Column column = table.getColumn(colName);
+                if (column == null) {
+                    LOG.info("Column {} not found in the table {}", colName, table.getName());
                     continue;
                 }
-                Type colType = col.getType();
+                Type colType = column.getType();
                 if (colType.isStringType()) {
                     strColNames.add(colName);
                     continue;
@@ -226,13 +231,14 @@ public class StatisticsJobScheduler extends MasterDaemon {
 
             // step2: collect statistics by sql
             // partition row count (table model is AGGREGATE or UNIQUE)
-            if (tbl.getKeysType() != KeysType.DUP_KEYS) {
+            if (table.getKeysType() != KeysType.DUP_KEYS) {
                 if (rowCount < backendIds.size() * COUNT_MAX_SCAN_PER_TASK) {
                     StatsCategory rcCategory = getPartitionStatsCategory(job.getDbId(), tableId, partitionName);
                     StatsGranularity rcGranularity = getPartitionGranularity(partitionId);
                     StatisticsDesc rcStatsDesc = new StatisticsDesc(rcCategory,
                             rcGranularity, Collections.singletonList(StatsType.ROW_COUNT));
-                    SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(), Collections.singletonList(rcStatsDesc));
+                    SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(),
+                            Collections.singletonList(rcStatsDesc));
                     job.getTasks().add(sqlTask);
                 } else {
                     // divide subtasks by tablet
@@ -280,7 +286,8 @@ public class StatisticsJobScheduler extends MasterDaemon {
                 StatsGranularity colGranularity = getPartitionGranularity(partitionId);
                 StatisticsDesc colStatsDesc = new StatisticsDesc(colCategory,
                         colGranularity, Collections.singletonList(StatsType.NUM_NULLS));
-                SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(), Collections.singletonList(colStatsDesc));
+                SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(),
+                        Collections.singletonList(colStatsDesc));
                 job.getTasks().add(sqlTask);
             }
 
@@ -293,9 +300,16 @@ public class StatisticsJobScheduler extends MasterDaemon {
         }
     }
 
+    /**
+     * For non-partitioned table, dividing the job into several subtasks.
+     *
+     * @param job statistics job
+     * @param tableId table id
+     * @throws DdlException exception
+     */
     private void getStatsTaskByTable(StatisticsJob job, long tableId) throws DdlException {
         Database db = Catalog.getCurrentCatalog().getDbOrDdlException(job.getDbId());
-        OlapTable tbl = (OlapTable) db.getTableOrDdlException(tableId);
+        OlapTable table = (OlapTable) db.getTableOrDdlException(tableId);
 
         Map<Long, List<String>> tblIdToColName = job.getTableIdToColumnName();
         List<String> colNames = tblIdToColName.get(tableId);
@@ -313,7 +327,7 @@ public class StatisticsJobScheduler extends MasterDaemon {
         descs.add(dsStatsDesc);
 
         // table row count
-        if (tbl.getKeysType() == KeysType.DUP_KEYS) {
+        if (table.getKeysType() == KeysType.DUP_KEYS) {
             StatsCategory rcCategory = getTableStatsCategory(job.getDbId(), tableId);
             StatsGranularity rcGranularity = getTableGranularity(tableId);
             StatisticsDesc rcStatsDesc = new StatisticsDesc(rcCategory,
@@ -326,12 +340,12 @@ public class StatisticsJobScheduler extends MasterDaemon {
 
         // column max size and avg size
         for (String colName : colNames) {
-            Column col = tbl.getColumn(colName);
-            if (col == null) {
-                LOG.info("column {} not found in table {}", colName, tbl.getName());
+            Column column = table.getColumn(colName);
+            if (column == null) {
+                LOG.info("column {} not found in table {}", colName, table.getName());
                 continue;
             }
-            Type colType = col.getType();
+            Type colType = column.getType();
             if (colType.isStringType()) {
                 strColNames.add(colName);
                 continue;
@@ -347,21 +361,22 @@ public class StatisticsJobScheduler extends MasterDaemon {
         MetaStatisticsTask metaStatsTask = new MetaStatisticsTask(job.getId(), descs);
         job.getTasks().add(metaStatsTask);
 
-        long rowCount = tbl.getRowCount();
+        long rowCount = table.getRowCount();
 
         // step2: collect statistics by sql
         // partition row count (table model is AGGREGATE or UNIQUE)
-        if (tbl.getKeysType() != KeysType.DUP_KEYS) {
+        if (table.getKeysType() != KeysType.DUP_KEYS) {
             if (rowCount < backendIds.size() * COUNT_MAX_SCAN_PER_TASK) {
                 StatsCategory rcCategory = getTableStatsCategory(job.getDbId(), tableId);
                 StatsGranularity rcGranularity = getTableGranularity(tableId);
                 StatisticsDesc rcStatsDesc = new StatisticsDesc(rcCategory,
                         rcGranularity, Collections.singletonList(StatsType.ROW_COUNT));
-                SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(), Collections.singletonList(rcStatsDesc));
+                SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(),
+                        Collections.singletonList(rcStatsDesc));
                 job.getTasks().add(sqlTask);
             } else {
                 // divide subtasks by tablet
-                Collection<Partition> partitions = tbl.getPartitions();
+                Collection<Partition> partitions = table.getPartitions();
                 for (Partition partition : partitions) {
                     Collection<Tablet> tablets = partition.getBaseIndex().getTablets();
                     tablets.forEach(tablet -> {
@@ -369,7 +384,8 @@ public class StatisticsJobScheduler extends MasterDaemon {
                         StatsGranularity rcGranularity = getTabletGranularity(tablet.getId());
                         StatisticsDesc rcStatsDesc = new StatisticsDesc(rcCategory,
                                 rcGranularity, Collections.singletonList(StatsType.ROW_COUNT));
-                        SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(), Collections.singletonList(rcStatsDesc));
+                        SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(),
+                                Collections.singletonList(rcStatsDesc));
                         job.getTasks().add(sqlTask);
                     });
                 }
@@ -383,19 +399,24 @@ public class StatisticsJobScheduler extends MasterDaemon {
                 StatsGranularity colGranularity = getTableGranularity(tableId);
                 StatisticsDesc colStatsDesc = new StatisticsDesc(colCategory,
                         colGranularity, Arrays.asList(StatsType.MAX_SIZE, StatsType.AVG_SIZE));
-                SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(), Collections.singletonList(colStatsDesc));
+                SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(),
+                        Collections.singletonList(colStatsDesc));
                 job.getTasks().add(sqlTask);
             } else {
-                // divide subtasks by partition
-                Collection<Partition> partitions = tbl.getPartitions();
-                partitions.forEach(partition -> {
-                    StatsCategory colCategory = getColumnStatsCategory(job.getDbId(), tableId, colName);
-                    StatsGranularity colGranularity = getPartitionGranularity(partition.getId());
-                    StatisticsDesc colStatsDesc = new StatisticsDesc(colCategory,
-                            colGranularity, Arrays.asList(StatsType.MAX_SIZE, StatsType.AVG_SIZE));
-                    SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(), Collections.singletonList(colStatsDesc));
-                    job.getTasks().add(sqlTask);
-                });
+                // divide subtasks by tablet
+                Collection<Partition> partitions = table.getPartitions();
+                for (Partition partition : partitions) {
+                    Collection<Tablet> tablets = partition.getBaseIndex().getTablets();
+                    tablets.forEach(tablet -> {
+                        StatsCategory colCategory = getColumnStatsCategory(job.getDbId(), tableId, colName);
+                        StatsGranularity colGranularity = getTabletGranularity(tablet.getId());
+                        StatisticsDesc colStatsDesc = new StatisticsDesc(colCategory,
+                                colGranularity, Arrays.asList(StatsType.MAX_SIZE, StatsType.AVG_SIZE));
+                        SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(),
+                                Collections.singletonList(colStatsDesc));
+                        job.getTasks().add(sqlTask);
+                    });
+                }
             }
         }
 
@@ -405,7 +426,8 @@ public class StatisticsJobScheduler extends MasterDaemon {
             StatsGranularity colGranularity = getTableGranularity(tableId);
             StatisticsDesc colStatsDesc = new StatisticsDesc(colCategory,
                     colGranularity, Collections.singletonList(StatsType.NUM_NULLS));
-            SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(), Collections.singletonList(colStatsDesc));
+            SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(),
+                    Collections.singletonList(colStatsDesc));
             job.getTasks().add(sqlTask);
         }
 
