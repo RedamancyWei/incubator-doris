@@ -29,9 +29,12 @@ import org.apache.doris.qe.ShowResultSetMetaData;
 import org.apache.doris.statistics.TableStats;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 
 import org.apache.parquet.Preconditions;
 import org.apache.parquet.Strings;
+
+import java.util.List;
 
 public class ShowTableStatsStmt extends ShowStmt {
 
@@ -48,11 +51,11 @@ public class ShowTableStatsStmt extends ShowStmt {
     // There is only on attribute for both @tableName and @dbName at the same time.
     private String dbName;
 
-    private String partitionName;
+    private final PartitionNames partitionNames;
 
-    public ShowTableStatsStmt(TableName tableName, String partitionName) {
+    public ShowTableStatsStmt(TableName tableName, PartitionNames partitionNames) {
         this.tableName = tableName;
-        this.partitionName = partitionName;
+        this.partitionNames = partitionNames;
     }
 
     public String getTableName() {
@@ -71,8 +74,11 @@ public class ShowTableStatsStmt extends ShowStmt {
         return tableName.getDb();
     }
 
-    public String getPartitionName() {
-        return partitionName;
+    public List<String> getPartitionNames() {
+        if (partitionNames == null) {
+            return Lists.newArrayList();
+        }
+        return partitionNames.getPartitionNames();
     }
 
     @Override
@@ -87,13 +93,8 @@ public class ShowTableStatsStmt extends ShowStmt {
         }
         tableName.analyze(analyzer);
 
-        if (!Strings.isNullOrEmpty(partitionName)) {
-            Database db = analyzer.getCatalog().getDbOrAnalysisException(tableName.getDb());
-            Table table = db.getTableOrAnalysisException(tableName.getTbl());
-            Partition partition = table.getPartition(partitionName);
-            if (partition == null) {
-                ErrorReport.reportAnalysisException(ErrorCode.ERR_UNKNOWN_PARTITION, partitionName);
-            }
+        if (partitionNames != null) {
+            partitionNames.analyze(analyzer);
         }
     }
 

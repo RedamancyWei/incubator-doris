@@ -21,6 +21,7 @@ import com.google.common.base.Preconditions;
 import org.apache.doris.analysis.SlotDescriptor;
 import org.apache.doris.analysis.SlotId;
 import org.apache.doris.catalog.Catalog;
+import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.Pair;
 import org.apache.doris.common.UserException;
 import org.apache.doris.planner.OlapScanNode;
@@ -67,7 +68,7 @@ public class OlapScanStatsDerive extends BaseStatsDerive {
         return new StatsDeriveResult(deriveRowCount(), slotIdToDataSize, slotIdToNdv);
     }
 
-    public void buildStructure(OlapScanNode node) {
+    public void buildStructure(OlapScanNode node) throws AnalysisException {
         slotIdToDataSize = new HashMap<>();
         slotIdToNdv = new HashMap<>();
         if (node.getTupleDesc() != null

@@ -18,20 +18,16 @@
 package org.apache.doris.analysis;
 
 import org.apache.doris.catalog.Column;
-import org.apache.doris.catalog.Database;
-import org.apache.doris.catalog.Partition;
 import org.apache.doris.catalog.ScalarType;
-import org.apache.doris.catalog.Table;
 import org.apache.doris.common.AnalysisException;
-import org.apache.doris.common.ErrorCode;
-import org.apache.doris.common.ErrorReport;
 import org.apache.doris.common.UserException;
 import org.apache.doris.qe.ShowResultSetMetaData;
 import org.apache.doris.statistics.ColumnStats;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 
-import org.apache.parquet.Strings;
+import java.util.List;
 
 public class ShowColumnStatsStmt extends ShowStmt {
 
@@ -47,19 +43,22 @@ public class ShowColumnStatsStmt extends ShowStmt {
                     .build();
 
     private TableName tableName;
-    private String partitionName;
+    private final PartitionNames partitionNames;
 
-    public ShowColumnStatsStmt(TableName tableName, String partitionName) {
+    public ShowColumnStatsStmt(TableName tableName, PartitionNames partitionNames) {
         this.tableName = tableName;
-        this.partitionName = partitionName;
+        this.partitionNames = partitionNames;
     }
 
     public TableName getTableName() {
         return tableName;
     }
 
-    public String getPartitionName() {
-        return partitionName;
+    public List<String> getPartitionNames() {
+        if (partitionNames == null) {
+            return Lists.newArrayList();
+        }
+        return partitionNames.getPartitionNames();
     }
 
     @Override
@@ -67,13 +66,8 @@ public class ShowColumnStatsStmt extends ShowStmt {
         super.analyze(analyzer);
         tableName.analyze(analyzer);
 
-        if (!Strings.isNullOrEmpty(partitionName)) {
-            Database db = analyzer.getCatalog().getDbOrAnalysisException(tableName.getDb());
-            Table table = db.getTableOrAnalysisException(tableName.getTbl());
-            Partition partition = table.getPartition(partitionName);
-            if (partition == null) {
-                ErrorReport.reportAnalysisException(ErrorCode.ERR_UNKNOWN_PARTITION, partitionName);
-            }
+        if (partitionNames != null) {
+            partitionNames.analyze(analyzer);
         }
     }
 

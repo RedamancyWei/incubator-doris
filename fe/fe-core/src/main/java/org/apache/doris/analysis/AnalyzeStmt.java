@@ -27,6 +27,7 @@ import org.apache.doris.common.Config;
 import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.ErrorReport;
 import org.apache.doris.common.UserException;
+import org.apache.doris.common.util.PrintableMap;
 import org.apache.doris.common.util.Util;
 import org.apache.doris.mysql.privilege.PaloAuth;
 import org.apache.doris.mysql.privilege.PrivPredicate;
@@ -74,6 +75,7 @@ public class AnalyzeStmt extends DdlStmt {
     private static final Predicate<Long> DESIRED_TASK_TIMEOUT_SEC = (v) -> v > 0L;
 
     private final TableName dbTableName;
+    private final PartitionNames partitionNames;
     private final List<String> columnNames;
     private final Map<String, String> properties;
 
@@ -81,8 +83,9 @@ public class AnalyzeStmt extends DdlStmt {
     private long dbId;
     private final Set<Long> tblIds = Sets.newHashSet();
 
-    public AnalyzeStmt(TableName dbTableName, List<String> columns, Map<String, String> properties) {
+    public AnalyzeStmt(TableName dbTableName, PartitionNames partitionNames, List<String> columns, Map<String, String> properties) {
         this.dbTableName = dbTableName;
+        this.partitionNames = partitionNames;
         this.columnNames = columns;
         this.properties = properties == null ? Maps.newHashMap() : properties;
     }
@@ -124,6 +127,13 @@ public class AnalyzeStmt extends DdlStmt {
         return tables;
     }
 
+    public List<String> getPartitionNames() {
+        if (partitionNames == null) {
+            return Lists.newArrayList();
+        }
+        return partitionNames.getPartitionNames();
+    }
+
     public Map<Long, List<String>> getTableIdToPartitionName() throws AnalysisException {
         Preconditions.checkArgument(isAnalyzed(),
                 "The partitionIds must be obtained after the parsing is complete");
@@ -132,8 +142,12 @@ public class AnalyzeStmt extends DdlStmt {
         for (Table table : getTables()) {
             table.readLock();
             try {
+                // OlapTable olapTable = (OlapTable) table;
                 OlapTable olapTable = (OlapTable) table;
-                List<String> partitionNames = Lists.newArrayList(olapTable.getPartitionNames());
+                List<String> partitionNames = getPartitionNames();
+                if (partitionNames.isEmpty()) {
+                    partitionNames.addAll(olapTable.getPartitionNames());
+                }
                 tableIdToPartitionName.put(table.getId(), partitionNames);
             } finally {
                 table.readUnlock();
@@ -230,7 +244,12 @@ public class AnalyzeStmt extends DdlStmt {
             }
         }
 
-        // step2: analyze properties
+        // step2: check partition
+        if (partitionNames != null) {
+            partitionNames.analyze(analyzer);
+        }
+
+        // step3: analyze properties
         checkProperties();
     }
 
@@ -262,6 +281,32 @@ public class AnalyzeStmt extends DdlStmt {
                 Config.max_cbo_statistics_task_timeout_sec, DESIRED_TASK_TIMEOUT_SEC,
                 CBO_STATISTICS_TASK_TIMEOUT_SEC + " should > 0")).intValue();
         properties.put(CBO_STATISTICS_TASK_TIMEOUT_SEC, String.valueOf(taskTimeout));
+    }
+
+    @Override
+    public String toSql() {
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("ANALYZE ");
+
+        if (dbTableName != null) {
+            sb.append(dbTableName.toSql());
+        }
+
+        if (partitionNames != null) {
+            sb.append(" ");
+            sb.append(partitionNames.toSql());
+        }
+
+        if (properties != null) {
+            sb.append(" PROPERTIES(");
+            sb.append(new PrintableMap<>(properties, " = ",
+                    true,
+                    false));
+            sb.append(")");
+        }
+
+        return sb.toString();
     }
 }
 

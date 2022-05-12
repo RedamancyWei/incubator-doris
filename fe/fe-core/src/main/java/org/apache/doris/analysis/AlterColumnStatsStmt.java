@@ -32,8 +32,10 @@ import org.apache.doris.statistics.StatsType;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -49,14 +51,14 @@ public class AlterColumnStatsStmt extends DdlStmt {
             .build();
 
     private TableName tableName;
-    private String partitionName;
+    private final PartitionNames partitionNames;
     private String columnName;
     private Map<String, String> properties;
     public final Map<StatsType, String> statsTypeToValue = Maps.newHashMap();
 
-    public AlterColumnStatsStmt(TableName tableName, String partitionName, String columnName, Map<String, String> properties) {
+    public AlterColumnStatsStmt(TableName tableName, PartitionNames partitionNames, String columnName, Map<String, String> properties) {
         this.tableName = tableName;
-        this.partitionName = partitionName;
+        this.partitionNames = partitionNames;
         this.columnName = columnName;
         this.properties = properties;
     }
@@ -69,8 +71,11 @@ public class AlterColumnStatsStmt extends DdlStmt {
         return columnName;
     }
 
-    public String getPartitionName() {
-        return partitionName;
+    public List<String> getPartitionNames() {
+        if (partitionNames == null) {
+            return Lists.newArrayList();
+        }
+        return partitionNames.getPartitionNames();
     }
 
     @Override
@@ -94,13 +99,8 @@ public class AlterColumnStatsStmt extends DdlStmt {
         }
 
         // check partition
-        if (!Strings.isNullOrEmpty(partitionName)) {
-            Database db = analyzer.getCatalog().getDbOrAnalysisException(tableName.getDb());
-            Table table = db.getTableOrAnalysisException(tableName.getTbl());
-            Partition partition = table.getPartition(partitionName);
-            if (partition == null) {
-                ErrorReport.reportAnalysisException(ErrorCode.ERR_UNKNOWN_PARTITION, partitionName);
-            }
+        if (partitionNames != null) {
+            partitionNames.analyze(analyzer);
         }
 
         // get statsTypeToValue
