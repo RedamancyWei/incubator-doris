@@ -217,6 +217,7 @@ import org.apache.doris.persist.TablePropertyInfo;
 import org.apache.doris.persist.TruncateTableInfo;
 import org.apache.doris.plugin.PluginInfo;
 import org.apache.doris.plugin.PluginMgr;
+import org.apache.doris.policy.PolicyMgr;
 import org.apache.doris.qe.AuditEventProcessor;
 import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.qe.GlobalVariable;
@@ -265,11 +266,13 @@ import com.sleepycat.je.rep.NetworkRestore;
 import com.sleepycat.je.rep.NetworkRestoreConfig;
 
 import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.codehaus.jackson.map.ObjectMapper;
 
+import javax.annotation.Nullable;
 import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -295,7 +298,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
-import javax.annotation.Nullable;
 
 public class Catalog {
     private static final Logger LOG = LogManager.getLogger(Catalog.class);
@@ -457,6 +459,8 @@ public class Catalog {
     private AuditEventProcessor auditEventProcessor;
 
     private RefreshManager refreshManager;
+
+    private PolicyMgr policyMgr;
 
     public List<Frontend> getFrontends(FrontendNodeType nodeType) {
         if (nodeType == null) {
@@ -629,6 +633,7 @@ public class Catalog {
         this.pluginMgr = new PluginMgr();
         this.auditEventProcessor = new AuditEventProcessor(this.pluginMgr);
         this.refreshManager = new RefreshManager();
+        this.policyMgr = new PolicyMgr();
     }
 
     public static void destroyCheckpoint() {
@@ -1944,6 +1949,17 @@ public class Catalog {
         return checksum;
     }
 
+    /**
+     * Load policy through file.
+     **/
+    public long loadPolicy(DataInputStream in, long checksum) throws IOException {
+        if (Catalog.getCurrentCatalogJournalVersion() >= FeMetaVersion.VERSION_109) {
+            policyMgr = PolicyMgr.read(in);
+        }
+        LOG.info("finished replay policy from image");
+        return checksum;
+    }
+
     // Only called by checkpoint thread
     // return the latest image file's absolute path
     public String saveImage() throws IOException {
@@ -2208,6 +2224,11 @@ public class Catalog {
 
     public long saveSqlBlockRule(CountingDataOutputStream out, long checksum) throws IOException {
         Catalog.getCurrentCatalog().getSqlBlockRuleMgr().write(out);
+        return checksum;
+    }
+
+    public long savePolicy(CountingDataOutputStream out, long checksum) throws IOException {
+        Catalog.getCurrentCatalog().getPolicyMgr().write(out);
         return checksum;
     }
 
@@ -3133,10 +3154,17 @@ public class Catalog {
                 } else {
                     typeDef = new TypeDef(resultExpr.getType());
                 }
-                createTableStmt.addColumnDef(new ColumnDef(name, typeDef, false,
-                        null, true,
-                        new DefaultValue(false, null),
-                        ""));
+                ColumnDef columnDef;
+                if (resultExpr.getSrcSlotRef() == null) {
+                    columnDef = new ColumnDef(name, typeDef, false, null, true, new DefaultValue(false, null), "");
+                } else {
+                    Column column = resultExpr.getSrcSlotRef().getDesc().getColumn();
+                    boolean setDefault = StringUtils.isNotBlank(column.getDefaultValue());
+                    columnDef = new ColumnDef(name, typeDef, column.isKey(),
+                            column.getAggregationType(), column.isAllowNull(),
+                            new DefaultValue(setDefault, column.getDefaultValue()), column.getComment());
+                }
+                createTableStmt.addColumnDef(columnDef);
                 // set first column as default distribution
                 if (createTableStmt.getDistributionDesc() == null && i == 0) {
                     createTableStmt.setDistributionDesc(new HashDistributionDesc(10, Lists.newArrayList(name)));
@@ -3146,7 +3174,7 @@ public class Catalog {
             createTableStmt.analyze(dummyRootAnalyzer);
             createTable(createTableStmt);
         } catch (UserException e) {
-            throw new DdlException("Failed to execute CREATE TABLE AS SELECT Reason: " + e.getMessage());
+            throw new DdlException("Failed to execute CTAS Reason: " + e.getMessage());
         }
     }
 
@@ -4282,6 +4310,7 @@ public class Catalog {
                 sb.append("\"port\" = \"").append(mysqlTable.getPort()).append("\",\n");
                 sb.append("\"user\" = \"").append(mysqlTable.getUserName()).append("\",\n");
                 sb.append("\"password\" = \"").append(hidePassword ? "" : mysqlTable.getPasswd()).append("\",\n");
+                sb.append("\"charset\" = \"").append(mysqlTable.getCharset()).append("\",\n");
             } else {
                 sb.append("\"odbc_catalog_resource\" = \"").append(mysqlTable.getOdbcCatalogResourceName()).append("\",\n");
             }
@@ -4534,10 +4563,12 @@ public class Catalog {
                 // This is the first colocate table in the group, or just a normal table,
                 // randomly choose backends
                 if (!Config.disable_storage_medium_check) {
-                    chosenBackendIds = getCurrentSystemInfo().chooseBackendIdByFilters(replicaAlloc, clusterName,
+                    chosenBackendIds =
+                            getCurrentSystemInfo().selectBackendIdsForReplicaCreation(replicaAlloc, clusterName,
                             tabletMeta.getStorageMedium());
                 } else {
-                    chosenBackendIds = getCurrentSystemInfo().chooseBackendIdByFilters(replicaAlloc, clusterName, null);
+                    chosenBackendIds =
+                            getCurrentSystemInfo().selectBackendIdsForReplicaCreation(replicaAlloc, clusterName, null);
                 }
 
                 for (Map.Entry<Tag, List<Long>> entry : chosenBackendIds.entrySet()) {
@@ -5178,6 +5209,10 @@ public class Catalog {
 
     public EsRepository getEsRepository() {
         return this.esRepository;
+    }
+    
+    public PolicyMgr getPolicyMgr() {
+        return this.policyMgr;
     }
 
     public void setMaster(MasterInfo info) {
