@@ -15,8 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef DORIS_BE_SRC_RUNTIME_VECTORIZED_ROW_BATCH_H
-#define DORIS_BE_SRC_RUNTIME_VECTORIZED_ROW_BATCH_H
+#pragma once
 
 #include <cstddef>
 #include <memory>
@@ -85,7 +84,7 @@ public:
         _size = size;
     }
 
-    inline int num_rows() { return _size; }
+    int num_rows() { return _size; }
 
     bool selected_in_use() const { return _selected_in_use; }
 
@@ -93,7 +92,7 @@ public:
 
     uint16_t* selected() const { return _selected; }
 
-    inline void clear() {
+    void clear() {
         _size = 0;
         _selected_in_use = false;
         _limit = _capacity;
@@ -124,7 +123,3 @@ private:
 };
 
 } // namespace doris
-
-#endif // _DORIS_BE_SRC_RUNTIME_VECTORIZED_ROW_BATCH_H
-
-/* vim: set expandtab ts=4 sw=4 sts=4 tw=100: */

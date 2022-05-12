@@ -14,6 +14,9 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/apache/impala/blob/branch-2.9.0/fe/src/main/java/org/apache/impala/AnalyticExpr.java
+// and modified by Doris
 
 package org.apache.doris.analysis;
 
@@ -476,13 +479,17 @@ public class AnalyticExpr extends Expr {
 
         standardize(analyzer);
 
-        // min/max is not currently supported on sliding windows (i.e. start bound is not
-        // unbounded).
-        if (window != null && isMinMax(fn) &&
-                window.getLeftBoundary().getType() != BoundaryType.UNBOUNDED_PRECEDING) {
-            throw new AnalysisException(
-                "'" + getFnCall().toSql() + "' is only supported with an "
-                + "UNBOUNDED PRECEDING start bound.");
+        // But in Vectorized mode, after calculate a window, will be call reset() to reset state,
+        // And then restarted calculate next new window; 
+        if (!VectorizedUtil.isVectorized()) {
+            // min/max is not currently supported on sliding windows (i.e. start bound is not
+            // unbounded).
+            if (window != null && isMinMax(fn) &&
+                    window.getLeftBoundary().getType() != BoundaryType.UNBOUNDED_PRECEDING) {
+                throw new AnalysisException(
+                    "'" + getFnCall().toSql() + "' is only supported with an "
+                    + "UNBOUNDED PRECEDING start bound.");
+            }
         }
 
         setChildren();
@@ -831,12 +838,53 @@ public class AnalyticExpr extends Expr {
         return sb.toString();
     }
 
+    @Override
+    public String toDigestImpl() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(fnCall.toDigest()).append(" OVER (");
+        boolean needsSpace = false;
+        if (!partitionExprs.isEmpty()) {
+            sb.append("PARTITION BY ").append(exprListToDigest(partitionExprs));
+            needsSpace = true;
+        }
+        if (!orderByElements.isEmpty()) {
+            List<String> orderByStrings = Lists.newArrayList();
+            for (OrderByElement e : orderByElements) {
+                orderByStrings.add(e.toDigest());
+            }
+            if (needsSpace) {
+                sb.append(" ");
+            }
+            sb.append("ORDER BY ").append(Joiner.on(", ").join(orderByStrings));
+            needsSpace = true;
+        }
+        if (window != null) {
+            if (needsSpace) {
+                sb.append(" ");
+            }
+            sb.append(window.toDigest());
+        }
+        sb.append(")");
+        return sb.toString();
+    }
+
     private String exprListToSql(List<? extends Expr> exprs) {
         if (exprs == null || exprs.isEmpty())
             return "";
         List<String> strings = Lists.newArrayList();
         for (Expr expr : exprs) {
             strings.add(expr.toSql());
+        }
+        return Joiner.on(", ").join(strings);
+    }
+
+    private String exprListToDigest(List<? extends Expr> exprs) {
+        if (exprs == null || exprs.isEmpty()) {
+            return "";
+        }
+        List<String> strings = Lists.newArrayList();
+        for (Expr expr : exprs) {
+            strings.add(expr.toDigest());
         }
         return Joiner.on(", ").join(strings);
     }

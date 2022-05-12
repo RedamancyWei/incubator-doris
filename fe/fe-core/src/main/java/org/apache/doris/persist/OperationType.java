@@ -207,6 +207,7 @@ public class OperationType {
     // resource 276~290
     public static final short OP_CREATE_RESOURCE = 276;
     public static final short OP_DROP_RESOURCE = 277;
+    public static final short OP_ALTER_RESOURCE = 278;
 
     // alter external table
     public static final short OP_ALTER_EXTERNAL_TABLE_SCHEMA = 280;
@@ -217,6 +218,10 @@ public class OperationType {
     public static final short OP_CREATE_SQL_BLOCK_RULE = 300;
     public static final short OP_ALTER_SQL_BLOCK_RULE = 301;
     public static final short OP_DROP_SQL_BLOCK_RULE = 302;
+    
+    // policy 310-320
+    public static final short OP_CREATE_POLICY = 310;
+    public static final short OP_DROP_POLICY = 311;
 
     // get opcode name by op codeStri
     public static String getOpName(short opCode) {

@@ -50,6 +50,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
+/**
+ * This class is deprecated.
+ * If you want to start a FE server in unit test, please let your
+ * test class extend {@link TestWithFeService}.
+ */
+@Deprecated
 public class DorisAssert {
 
     private ConnectContext ctx;
@@ -148,7 +154,7 @@ public class DorisAssert {
 
     private void checkAlterJob() throws InterruptedException {
         // check alter job
-        Map<Long, AlterJobV2> alterJobs = Catalog.getCurrentCatalog().getRollupHandler().getAlterJobsV2();
+        Map<Long, AlterJobV2> alterJobs = Catalog.getCurrentCatalog().getMaterializedViewHandler().getAlterJobsV2();
         for (AlterJobV2 alterJobV2 : alterJobs.values()) {
             while (!alterJobV2.getJobState().isFinalState()) {
                 System.out.println("alter job " + alterJobV2.getDbId()
@@ -191,6 +197,8 @@ public class DorisAssert {
 
         private String internalExecute(String sql) throws Exception {
             StmtExecutor stmtExecutor = new StmtExecutor(connectContext, sql);
+            connectContext.setExecutor(stmtExecutor);
+            ConnectContext.get().setExecutor(stmtExecutor);
             stmtExecutor.execute();
             QueryState queryState = connectContext.getState();
             if (queryState.getStateType() == QueryState.MysqlStateType.ERR) {

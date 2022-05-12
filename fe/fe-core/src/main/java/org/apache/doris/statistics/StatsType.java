@@ -33,7 +33,7 @@ public enum StatsType {
         this.value = value;
     }
     public String getValue() {
-        return this.value;
+        return value;
     }
 
     public static StatsType fromString(String value) {
@@ -42,6 +42,6 @@ public enum StatsType {
                 return type;
             }
         }
-        throw new IllegalArgumentException("No constant with value " + value + " found.");
+        throw new IllegalArgumentException("Invalid StatsType: " + value);
     }
 }

@@ -14,9 +14,11 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/apache/impala/blob/branch-2.9.0/be/src/udf/uda-test-harness.h
+// and modified by Doris
 
-#ifndef DORIS_BE_UDF_UDA_TEST_HARNESS_H
-#define DORIS_BE_UDF_UDA_TEST_HARNESS_H
+#pragma once
 
 #include <sstream>
 #include <string>
@@ -266,5 +268,3 @@ private:
 } // namespace doris_udf
 
 #include "udf/uda_test_harness_impl.hpp"
-
-#endif

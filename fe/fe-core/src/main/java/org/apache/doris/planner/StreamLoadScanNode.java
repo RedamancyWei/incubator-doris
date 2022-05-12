@@ -66,8 +66,11 @@ public class StreamLoadScanNode extends LoadScanNode {
     private TupleDescriptor srcTupleDesc;
     private TBrokerScanRange brokerScanRange;
 
-    private Map<String, SlotDescriptor> slotDescByName = Maps.newHashMap();
-    private Map<String, Expr> exprsByName = Maps.newHashMap();
+    // If use case sensitive map, for example,
+    // the column name 「A」 in the table and the mapping '(a) set (A = a)' in load sql，
+    // Slotdescbyname stores「a」, later will use 「a」to get table's 「A」 column info, will throw exception.
+    private final Map<String, SlotDescriptor> slotDescByName = Maps.newTreeMap(String.CASE_INSENSITIVE_ORDER);
+    private final Map<String, Expr> exprsByName = Maps.newTreeMap(String.CASE_INSENSITIVE_ORDER);
 
     // used to construct for streaming loading
     public StreamLoadScanNode(
@@ -118,6 +121,7 @@ public class StreamLoadScanNode extends LoadScanNode {
                 throw new UserException("unsupported file type, type=" + taskInfo.getFileType());
         }
         rangeDesc.start_offset = 0;
+        rangeDesc.setHeaderType(taskInfo.getHeaderType());
         rangeDesc.size = -1;
         brokerScanRange.addToRanges(rangeDesc);
 

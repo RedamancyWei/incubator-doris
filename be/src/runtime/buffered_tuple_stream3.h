@@ -14,9 +14,11 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/apache/impala/blob/branch-3.0.0/be/src/runtime/buffered-tuple-stream.h
+// and modified by Doris
 
-#ifndef DORIS_BE_RUNTIME_BUFFERED_TUPLE_STREAM_H
-#define DORIS_BE_RUNTIME_BUFFERED_TUPLE_STREAM_H
+#pragma once
 
 #include <functional>
 #include <set>
@@ -376,9 +378,9 @@ private:
     struct Page {
         Page() : num_rows(0), retrieved_buffer(true) {}
 
-        inline int len() const { return handle.len(); }
-        inline bool is_pinned() const { return handle.is_pinned(); }
-        inline int pin_count() const { return handle.pin_count(); }
+        int len() const { return handle.len(); }
+        bool is_pinned() const { return handle.is_pinned(); }
+        int pin_count() const { return handle.pin_count(); }
         Status GetBuffer(const BufferPool::BufferHandle** buffer) {
             RETURN_IF_ERROR(handle.GetBuffer(buffer));
             retrieved_buffer = true;
@@ -687,5 +689,3 @@ private:
     void CheckPageConsistency(const Page* page) const;
 };
 } // namespace doris
-
-#endif

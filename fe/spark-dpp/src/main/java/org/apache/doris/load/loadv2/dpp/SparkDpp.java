@@ -248,7 +248,7 @@ public final class SparkDpp implements java.io.Serializable {
                             LOG.warn("invalid bucket key:" + curBucketKey);
                             continue;
                         }
-                        int partitionId = Integer.parseInt(bucketKey[0]);
+                        long partitionId = Long.parseLong(bucketKey[0]);
                         int bucketId = Integer.parseInt(bucketKey[1]);
                         dstPath = String.format(pathPattern, tableId, partitionId, indexMeta.indexId,
                                 bucketId, indexMeta.schemaHash);
@@ -455,7 +455,7 @@ public final class SparkDpp implements java.io.Serializable {
                     if(!validateData(columnObject, baseIndex.getColumn(columnName), parsers.get(i), row)) {
                         abnormalRowAcc.add(1);
                         return result.iterator();
-                    };
+                    }
                     keyColumns.add(columnObject);
                 }
 
@@ -465,7 +465,7 @@ public final class SparkDpp implements java.io.Serializable {
                     if(!validateData(columnObject,  baseIndex.getColumn(columnName), parsers.get(i + keyColumnNames.size()),row)) {
                         abnormalRowAcc.add(1);
                         return result.iterator();
-                    };
+                    }
                     valueColumns.add(columnObject);
                 }
 

@@ -21,7 +21,6 @@
 
 #include "exprs/expr.h"
 #include "runtime/mem_tracker.h"
-#include "runtime/mysql_table_sink.h"
 #include "runtime/runtime_state.h"
 #include "util/debug_util.h"
 #include "util/runtime_profile.h"
@@ -49,6 +48,7 @@ Status MysqlTableSink::init(const TDataSink& t_sink) {
     _conn_info.passwd = t_mysql_sink.passwd;
     _conn_info.db = t_mysql_sink.db;
     _mysql_tbl = t_mysql_sink.table;
+    _conn_info.charset = t_mysql_sink.charset;
 
     // From the thrift expressions create the real exprs.
     RETURN_IF_ERROR(Expr::create_expr_trees(_pool, _t_output_expr, &_output_expr_ctxs));

@@ -28,10 +28,13 @@ feHttpAddress = "127.0.0.1:8030"
 feHttpUser = "root"
 feHttpPassword = ""
 
+beHttpAddress = "127.0.0.1:8040"
+
 // set DORIS_HOME by system properties
 // e.g. java -DDORIS_HOME=./
 suitePath = "${DORIS_HOME}/regression-test/suites"
 dataPath = "${DORIS_HOME}/regression-test/data"
+pluginPath = "${DORIS_HOME}/regression-test/plugins"
 
 // will test <group>/<suite>.groovy
 // empty group will test all group
@@ -41,4 +44,18 @@ testSuites = ""
 // empty directories will test all directories
 testDirectories = ""
 
+// this groups will not be executed
+excludeGroups = ""
+// this suites will not be executed
+excludeSuites = ""
+// this directories will not be executed
+excludeDirectories = ""
+
 customConf1 = "test_custom_conf_value"
+
+// for test csv with header
+enableHdfs=false // set to true if hdfs is ready
+hdfsFs = "hdfs://127.0.0.1:9000"
+hdfsUser = "doris-test"
+hdfsPasswd = ""
+brokerName = "broker_name"

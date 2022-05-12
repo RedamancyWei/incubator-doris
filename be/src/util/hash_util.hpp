@@ -14,9 +14,11 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/apache/impala/blob/branch-2.9.0/be/src/util/hash-util.h
+// and modified by Doris
 
-#ifndef DORIS_BE_SRC_COMMON_UTIL_HASH_UTIL_HPP
-#define DORIS_BE_SRC_COMMON_UTIL_HASH_UTIL_HPP
+#pragma once
 
 #include "common/compiler_util.h"
 #include "common/logging.h"
@@ -398,5 +400,3 @@ struct hash<std::pair<doris::TUniqueId, int64_t>> {
 };
 
 } // namespace std
-
-#endif

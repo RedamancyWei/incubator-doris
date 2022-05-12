@@ -15,8 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef DORIS_BE_RUNTIME_BUFFER_POOL_INTERNAL_H
-#define DORIS_BE_RUNTIME_BUFFER_POOL_INTERNAL_H
+#pragma once
 
 #include <memory>
 #include <mutex>
@@ -25,7 +24,6 @@
 #include "runtime/bufferpool/buffer_pool.h"
 #include "runtime/bufferpool/buffer_pool_counters.h"
 #include "runtime/bufferpool/reservation_tracker.h"
-#include "util/condition_variable.h"
 
 // Ensure that DCheckConsistency() function calls get removed in release builds.
 #ifndef NDEBUG
@@ -316,5 +314,3 @@ private:
     PageList in_flight_write_pages_;
 };
 } // namespace doris
-
-#endif

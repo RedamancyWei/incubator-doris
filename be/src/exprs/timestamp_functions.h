@@ -14,9 +14,11 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/apache/impala/blob/branch-2.9.0/be/src/exprs/timestamp-functions.h
+// and modified by Doris
 
-#ifndef DORIS_BE_SRC_QUERY_EXPRS_TIMESTAMP_FUNCTIONS_H
-#define DORIS_BE_SRC_QUERY_EXPRS_TIMESTAMP_FUNCTIONS_H
+#pragma once
 
 #include <thread>
 
@@ -436,5 +438,3 @@ public:
                                  doris_udf::FunctionContext::FunctionStateScope scope);
 };
 } // namespace doris
-
-#endif

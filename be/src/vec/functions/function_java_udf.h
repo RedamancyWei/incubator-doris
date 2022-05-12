@@ -32,8 +32,7 @@ public:
     JavaFunctionCall(const TFunction& fn, const DataTypes& argument_types,
                      const DataTypePtr& return_type);
 
-    static FunctionBasePtr create(const TFunction& fn,
-                                  const ColumnsWithTypeAndName& argument_types,
+    static FunctionBasePtr create(const TFunction& fn, const ColumnsWithTypeAndName& argument_types,
                                   const DataTypePtr& return_type) {
         DataTypes data_types(argument_types.size());
         for (size_t i = 0; i < argument_types.size(); ++i) {
@@ -76,27 +75,36 @@ private:
     jmethodID executor_evaluate_id_;
     jmethodID executor_close_id_;
 
+    struct IntermediateState {
+        size_t buffer_size;
+        size_t row_idx;
+    };
+
     struct JniContext {
         JavaFunctionCall* parent = nullptr;
 
         jobject executor = nullptr;
 
-        int64_t input_values_buffer_ptr;
-        int64_t input_nulls_buffer_ptr;
-        int64_t input_byte_offsets_ptr;
-        int64_t output_value_buffer;
-        int64_t output_null_value;
-        int64_t batch_size_ptr;
+        std::unique_ptr<int64_t[]> input_values_buffer_ptr;
+        std::unique_ptr<int64_t[]> input_nulls_buffer_ptr;
+        std::unique_ptr<int64_t[]> input_offsets_ptrs;
+        std::unique_ptr<int64_t> output_value_buffer;
+        std::unique_ptr<int64_t> output_null_value;
+        std::unique_ptr<int64_t> output_offsets_ptr;
+        std::unique_ptr<int32_t> batch_size_ptr;
+        // intermediate_state includes two parts: reserved / used buffer size and rows
+        std::unique_ptr<IntermediateState> output_intermediate_state_ptr;
 
-        JniContext(int64_t num_args, JavaFunctionCall* parent):
-                  parent(parent) {
-            input_values_buffer_ptr = (int64_t) new int64_t[num_args];
-            input_nulls_buffer_ptr = (int64_t) new int64_t[num_args];
-            input_byte_offsets_ptr = (int64_t) new int64_t[num_args];
-
-            output_value_buffer = (int64_t) malloc(sizeof(int64_t));
-            output_null_value = (int64_t) malloc(sizeof(int64_t));
-            batch_size_ptr = (int64_t) malloc(sizeof(int32_t));
+        JniContext(int64_t num_args, JavaFunctionCall* parent) : parent(parent) {
+            input_values_buffer_ptr.reset(new int64_t[num_args]);
+            input_nulls_buffer_ptr.reset(new int64_t[num_args]);
+            input_offsets_ptrs.reset(new int64_t[num_args]);
+            output_value_buffer.reset((int64_t*)malloc(sizeof(int64_t)));
+            output_null_value.reset((int64_t*)malloc(sizeof(int64_t)));
+            batch_size_ptr.reset((int32_t*)malloc(sizeof(int32_t)));
+            output_offsets_ptr.reset((int64_t*)malloc(sizeof(int64_t)));
+            output_intermediate_state_ptr.reset(
+                    (IntermediateState*)malloc(sizeof(IntermediateState)));
         }
 
         ~JniContext() {
@@ -104,24 +112,23 @@ private:
             JNIEnv* env;
             Status status;
             RETURN_IF_STATUS_ERROR(status, JniUtil::GetJNIEnv(&env));
-            env->CallNonvirtualVoidMethodA(
-                    executor, parent->executor_cl_, parent->executor_close_id_, NULL);
+            env->CallNonvirtualVoidMethodA(executor, parent->executor_cl_,
+                                           parent->executor_close_id_, NULL);
             Status s = JniUtil::GetJniExceptionMsg(env);
             if (!s.ok()) LOG(WARNING) << s.get_error_msg();
             env->DeleteGlobalRef(executor);
-            delete[] ((int64*) input_values_buffer_ptr);
-            delete[] ((int64*) input_nulls_buffer_ptr);
-            delete[] ((int64*) input_byte_offsets_ptr);
-            free((int64*) output_value_buffer);
-            free((int64*) output_null_value);
-            free((int32*) batch_size_ptr);
         }
 
         /// These functions are cross-compiled to IR and used by codegen.
-        static void SetInputNullsBufferElement(
-                JniContext* jni_ctx, int index, uint8_t value);
+        static void SetInputNullsBufferElement(JniContext* jni_ctx, int index, uint8_t value);
         static uint8_t* GetInputValuesBufferAtOffset(JniContext* jni_ctx, int offset);
     };
+
+    static const int32_t INITIAL_RESERVED_BUFFER_SIZE = 1024;
+    // TODO: we need a heuristic strategy to increase buffer size for variable-size output.
+    static inline int32_t IncreaseReservedBufferSize(int n) {
+        return INITIAL_RESERVED_BUFFER_SIZE << n;
+    }
 };
 
 } // namespace vectorized

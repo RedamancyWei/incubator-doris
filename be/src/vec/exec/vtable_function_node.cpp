@@ -128,9 +128,10 @@ Status VTableFunctionNode::get_expanded_block(RuntimeState* state, Block* output
             RETURN_IF_ERROR(_process_next_child_row());
         }
 
+        bool skip_child_row = false;
         while (true) {
             int idx = _find_last_fn_eos_idx();
-            if (idx == 0) {
+            if (idx == 0 || skip_child_row) {
                 // all table functions' results are exhausted, process next child row.
                 RETURN_IF_ERROR(_process_next_child_row());
                 if (_cur_child_offset == -1) {
@@ -142,6 +143,11 @@ Status VTableFunctionNode::get_expanded_block(RuntimeState* state, Block* output
                     // continue to process next child row.
                     continue;
                 }
+            }
+
+            // if any table function is not outer and has empty result, go to next child row
+            if (skip_child_row = _is_inner_and_empty(); skip_child_row) {
+                continue;
             }
 
             // get slots from every table function.
@@ -209,7 +215,7 @@ Status VTableFunctionNode::_process_next_child_row() {
             RETURN_IF_ERROR(fn->process_close());
         }
 
-        release_block_memory(*_child_block.get());
+        release_block_memory(*_child_block);
         _cur_child_offset = -1;
         return Status::OK();
     }

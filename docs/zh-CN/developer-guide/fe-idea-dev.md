@@ -46,7 +46,10 @@ JDK1.8+, IntelliJ IDEA
            1. 下载：`brew install thrift@0.13.0`
            2. 建立软链接： 
               `mkdir -p ./thirdparty/installed/bin`
+              # ARM架构macOS
               `ln -s /opt/homebrew/Cellar/thrift@0.13.0/0.13.0/bin/thrift ./thirdparty/installed/bin/thrift`
+              # Intel架构macOS
+              `ln -s /usr/local/Cellar/thrift@0.13.0/0.13.0/bin/thrift ./thirdparty/installed/bin/thrift`
         
         注：MacOS执行 `brew install thrift@0.13.0` 可能会报找不到版本的错误，解决方法如下，在终端执行：
            1. `brew tap-new $USER/local-tap`
@@ -85,7 +88,7 @@ JDK1.8+, IntelliJ IDEA
 
 ## 3.配置conf/fe.conf
 
-下面是我自己的配置，你可以根据自己的需要进行修改
+下面是我自己的配置，你可以根据自己的需要进行修改(注意：如果使用`Mac`开发，由于`docker for Mac`不支持`Host`模式，需要使用`-p`方式暴露`be`端口，同时`fe.conf`的`priority_networks`配置为容器内可访问的Ip，例如WIFI的Ip)
 
 ```
 # Licensed to the Apache Software Foundation (ASF) under one

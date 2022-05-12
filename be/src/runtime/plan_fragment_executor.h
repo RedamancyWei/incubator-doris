@@ -14,9 +14,11 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/cloudera/Impala/blob/v0.7refresh/be/src/runtime/plan-fragment-executor.h
+// and modified by Doris
 
-#ifndef DORIS_BE_RUNTIME_PLAN_FRAGMENT_EXECUTOR_H
-#define DORIS_BE_RUNTIME_PLAN_FRAGMENT_EXECUTOR_H
+#pragma once
 
 #include <condition_variable>
 #include <functional>
@@ -257,5 +259,3 @@ private:
 };
 
 } // namespace doris
-
-#endif

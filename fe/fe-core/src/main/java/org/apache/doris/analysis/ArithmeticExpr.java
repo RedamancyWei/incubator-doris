@@ -14,6 +14,9 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/apache/impala/blob/branch-2.9.0/fe/src/main/java/org/apache/impala/ArithmeticExpr.java
+// and modified by Doris
 
 package org.apache.doris.analysis;
 
@@ -215,6 +218,15 @@ public class ArithmeticExpr extends Expr {
             return op.toString() + " " + getChild(0).toSql();
         } else {
             return getChild(0).toSql() + " " + op.toString() + " " + getChild(1).toSql();
+        }
+    }
+
+    @Override
+    public String toDigestImpl() {
+        if (children.size() == 1) {
+            return op.toString() + " " + getChild(0).toDigest();
+        } else {
+            return getChild(0).toDigest() + " " + op.toString() + " " + getChild(1).toDigest();
         }
     }
 

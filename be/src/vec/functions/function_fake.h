@@ -19,59 +19,20 @@
 
 #include "common/status.h"
 #include "vec/core/types.h"
+#include "vec/data_types/data_type_array.h"
+#include "vec/data_types/data_type_nullable.h"
 #include "vec/data_types/data_type_number.h"
 #include "vec/data_types/data_type_string.h"
+#include "vec/functions/function_helpers.h"
 #include "vec/functions/simple_function_factory.h"
 #include "vec/utils/util.hpp"
 
 namespace doris::vectorized {
-
-struct FunctionEsqueryImpl {
-    static constexpr auto name = "esquery";
-    static DataTypePtr get_return_type_impl(const DataTypes& arguments) {
-        return std::make_shared<DataTypeUInt8>();
-    }
-};
-
-struct FunctionExplodeSplitImpl {
-    static constexpr auto name = "explode_split";
-    static DataTypePtr get_return_type_impl(const DataTypes& arguments) {
-        return std::make_shared<DataTypeString>();
-    }
-};
-
-struct FunctionExplodeNumbersImpl {
-    static constexpr auto name = "explode_numbers";
-    static DataTypePtr get_return_type_impl(const DataTypes& arguments) {
-        return std::make_shared<DataTypeInt32>();
-    }
-};
-
-struct FunctionExplodeJsonArrayIntImpl {
-    static constexpr auto name = "explode_json_array_int";
-    static DataTypePtr get_return_type_impl(const DataTypes& arguments) {
-        return std::make_shared<DataTypeInt64>();
-    }
-};
-
-struct FunctionExplodeJsonArrayStringImpl {
-    static constexpr auto name = "explode_json_array_string";
-    static DataTypePtr get_return_type_impl(const DataTypes& arguments) {
-        return std::make_shared<DataTypeString>();
-    }
-};
-
-struct FunctionExplodeJsonArrayDoubleImpl {
-    static constexpr auto name = "explode_json_array_double";
-    static DataTypePtr get_return_type_impl(const DataTypes& arguments) {
-        return std::make_shared<DataTypeFloat64>();
-    }
-};
-//FunctionFake is use for some function call expr only work at prepare/open phase, do not support execute().
+// FunctionFake is use for some function call expr only work at prepare/open phase, do not support execute().
 template <typename Impl>
 class FunctionFake : public IFunction {
 public:
-    static constexpr auto name = Impl::name;
+    static constexpr auto name = "fake";
 
     static FunctionPtr create() { return std::make_shared<FunctionFake>(); }
 

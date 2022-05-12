@@ -14,6 +14,9 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/cloudera/Impala/blob/v0.7refresh/fe/src/main/jflex/sql-scanner.flex
+// and modified by Doris
 
 package org.apache.doris.analysis;
 
@@ -165,6 +168,7 @@ import org.apache.doris.qe.SqlModeHelper;
         keywordMap.put("delete", new Integer(SqlParserSymbols.KW_DELETE));
         keywordMap.put("desc", new Integer(SqlParserSymbols.KW_DESC));
         keywordMap.put("describe", new Integer(SqlParserSymbols.KW_DESCRIBE));
+        keywordMap.put("diagnose", new Integer(SqlParserSymbols.KW_DIAGNOSE));
         keywordMap.put("distinct", new Integer(SqlParserSymbols.KW_DISTINCT));
         keywordMap.put("distinctpc", new Integer(SqlParserSymbols.KW_DISTINCTPC));
         keywordMap.put("distinctpc", new Integer(SqlParserSymbols.KW_DISTINCTPC));
@@ -314,6 +318,7 @@ import org.apache.doris.qe.SqlModeHelper;
         keywordMap.put("profile", new Integer(SqlParserSymbols.KW_PROFILE));
         keywordMap.put("properties", new Integer(SqlParserSymbols.KW_PROPERTIES));
         keywordMap.put("property", new Integer(SqlParserSymbols.KW_PROPERTY));
+        keywordMap.put("policy", new Integer(SqlParserSymbols.KW_POLICY));
         keywordMap.put("query", new Integer(SqlParserSymbols.KW_QUERY));
         keywordMap.put("quota", new Integer(SqlParserSymbols.KW_QUOTA));
         keywordMap.put("random", new Integer(SqlParserSymbols.KW_RANDOM));
@@ -377,9 +382,11 @@ import org.apache.doris.qe.SqlModeHelper;
         keywordMap.put("superuser", new Integer(SqlParserSymbols.KW_SUPERUSER));
         keywordMap.put("sync", new Integer(SqlParserSymbols.KW_SYNC));
         keywordMap.put("system", new Integer(SqlParserSymbols.KW_SYSTEM));
+        keywordMap.put("sql_block_rule", new Integer(SqlParserSymbols.KW_SQL_BLOCK_RULE));
         keywordMap.put("table", new Integer(SqlParserSymbols.KW_TABLE));
         keywordMap.put("tables", new Integer(SqlParserSymbols.KW_TABLES));
         keywordMap.put("tablet", new Integer(SqlParserSymbols.KW_TABLET));
+        keywordMap.put("tablets", new Integer(SqlParserSymbols.KW_TABLETS));
         keywordMap.put("task", new Integer(SqlParserSymbols.KW_TASK));
         keywordMap.put("temporary", new Integer(SqlParserSymbols.KW_TEMPORARY));
         keywordMap.put("terminated", new Integer(SqlParserSymbols.KW_TERMINATED));
@@ -425,8 +432,6 @@ import org.apache.doris.qe.SqlModeHelper;
         keywordMap.put("write", new Integer(SqlParserSymbols.KW_WRITE));
         keywordMap.put("year", new Integer(SqlParserSymbols.KW_YEAR));
         keywordMap.put("||", new Integer(SqlParserSymbols.KW_PIPE));
-        keywordMap.put("sql_block_rule", new Integer(SqlParserSymbols.KW_SQL_BLOCK_RULE));
-        keywordMap.put("tablets", new Integer(SqlParserSymbols.KW_TABLETS));
    }
     
   // map from token id to token description

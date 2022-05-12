@@ -78,8 +78,19 @@ Status TableFunctionNode::_prepare_output_slot_ids(const TPlanNode& tnode) {
     return Status::OK();
 }
 
+bool TableFunctionNode::_is_inner_and_empty() {
+    for (int i = 0; i < _fn_num; i++) {
+        // if any table function is not outer and has empty result, go to next child row
+        if (!_fns[i]->is_outer() && _fns[i]->current_empty()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 Status TableFunctionNode::prepare(RuntimeState* state) {
     RETURN_IF_ERROR(ExecNode::prepare(state));
+    SCOPED_SWITCH_TASK_THREAD_LOCAL_MEM_TRACKER(mem_tracker());
 
     _num_rows_filtered_counter = ADD_COUNTER(_runtime_profile, "RowsFiltered", TUnit::UNIT);
 
@@ -92,6 +103,7 @@ Status TableFunctionNode::prepare(RuntimeState* state) {
 
 Status TableFunctionNode::open(RuntimeState* state) {
     SCOPED_TIMER(_runtime_profile->total_time_counter());
+    SCOPED_SWITCH_TASK_THREAD_LOCAL_MEM_TRACKER(mem_tracker());
     RETURN_IF_CANCELLED(state);
     RETURN_IF_ERROR(ExecNode::open(state));
 
@@ -186,6 +198,7 @@ bool TableFunctionNode::_roll_table_functions(int last_eos_idx) {
 Status TableFunctionNode::get_next(RuntimeState* state, RowBatch* row_batch, bool* eos) {
     RETURN_IF_ERROR(exec_debug_action(TExecNodePhase::GETNEXT));
     SCOPED_TIMER(_runtime_profile->total_time_counter());
+    SCOPED_SWITCH_TASK_THREAD_LOCAL_EXISTED_MEM_TRACKER(mem_tracker());
 
     const RowDescriptor& parent_rowdesc = row_batch->row_desc();
     const RowDescriptor& child_rowdesc = _children[0]->row_desc();
@@ -227,9 +240,10 @@ Status TableFunctionNode::get_next(RuntimeState* state, RowBatch* row_batch, boo
             }
         }
 
+        bool skip_child_row = false;
         while (true) {
             int idx = _find_last_fn_eos_idx();
-            if (idx == 0) {
+            if (idx == 0 || skip_child_row) {
                 // all table functions' results are exhausted, process next child row
                 RETURN_IF_ERROR(_process_next_child_row());
                 if (_child_batch_exhausted) {
@@ -241,6 +255,11 @@ Status TableFunctionNode::get_next(RuntimeState* state, RowBatch* row_batch, boo
                     // continue to process next child row
                     continue;
                 }
+            }
+
+            // if any table function is not outer and has empty result, go to next child row
+            if (skip_child_row = _is_inner_and_empty(); skip_child_row) {
+                continue;
             }
 
             // get slots from every table function
@@ -270,23 +289,29 @@ Status TableFunctionNode::get_next(RuntimeState* state, RowBatch* row_batch, boo
                 Tuple* child_tuple = _cur_child_tuple_row->get_tuple(
                         child_rowdesc.get_tuple_idx(child_tuple_desc->id()));
 
-                // copy the child tuple to parent_tuple
-                memcpy(tuple_ptr, child_tuple, parent_tuple_desc->byte_size());
-                // only deep copy the child slot if it is selected and is var len (Eg: string, bitmap, hll)
-                for (int j = 0; j < _child_slot_sizes[i]; ++j) {
-                    SlotDescriptor* child_slot_desc = child_tuple_desc->slots()[j];
-                    SlotDescriptor* parent_slot_desc = parent_tuple_desc->slots()[j];
+                // The child tuple is nullptr, only when the child tuple is from outer join. so we directly set
+                // parent_tuple have same tuple_idx nullptr to mock the behavior
+                if (child_tuple != nullptr) {
+                    // copy the child tuple to parent_tuple
+                    memcpy(tuple_ptr, child_tuple, parent_tuple_desc->byte_size());
+                    // only deep copy the child slot if it is selected and is var len (Eg: string, bitmap, hll)
+                    for (int j = 0; j < _child_slot_sizes[i]; ++j) {
+                        SlotDescriptor* child_slot_desc = child_tuple_desc->slots()[j];
+                        SlotDescriptor* parent_slot_desc = parent_tuple_desc->slots()[j];
 
-                    if (_output_slot_ids[parent_slot_desc->id()] &&
-                        !child_tuple->is_null(child_slot_desc->null_indicator_offset())
-                        && child_slot_desc->type().is_string_type()) {
-                        void* dest_slot = tuple_ptr->get_slot(parent_slot_desc->tuple_offset());
-                        RawValue::write(child_tuple->get_slot(child_slot_desc->tuple_offset()),
-                                        dest_slot, parent_slot_desc->type(),
-                                        row_batch->tuple_data_pool());
+                        if (_output_slot_ids[parent_slot_desc->id()] &&
+                            !child_tuple->is_null(child_slot_desc->null_indicator_offset()) &&
+                            child_slot_desc->type().is_string_type()) {
+                            void* dest_slot = tuple_ptr->get_slot(parent_slot_desc->tuple_offset());
+                            RawValue::write(child_tuple->get_slot(child_slot_desc->tuple_offset()),
+                                            dest_slot, parent_slot_desc->type(),
+                                            row_batch->tuple_data_pool());
+                        }
                     }
+                    parent_tuple_row->set_tuple(tuple_idx, tuple_ptr);
+                } else {
+                    parent_tuple_row->set_tuple(tuple_idx, nullptr);
                 }
-                parent_tuple_row->set_tuple(tuple_idx, tuple_ptr);
                 tuple_ptr = reinterpret_cast<Tuple*>(reinterpret_cast<uint8_t*>(tuple_ptr) +
                                                      parent_tuple_desc->byte_size());
             }

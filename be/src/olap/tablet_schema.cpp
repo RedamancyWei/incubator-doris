@@ -271,7 +271,7 @@ uint32_t TabletColumn::get_field_length_by_type(TPrimitiveType::type type, uint3
     case TPrimitiveType::DECIMALV2:
         return 12; // use 12 bytes in olap engine.
     default:
-        OLAP_LOG_WARNING("unknown field type. [type=%d]", type);
+        LOG(WARNING) << "unknown field type. [type=" << type << "]";
         return 0;
     }
 }
@@ -386,8 +386,12 @@ void TabletColumn::to_schema_pb(ColumnPB* column) {
 
 uint32_t TabletColumn::mem_size() const {
     auto size = sizeof(TabletColumn);
+    size += _col_name.size();
     if (_has_default_value) {
         size += _default_value.size();
+    }
+    if (_has_referenced_column) {
+        size += _referenced_column.size();
     }
     for (auto& sub_column : _sub_columns) {
         size += sub_column.mem_size();
@@ -510,7 +514,8 @@ vectorized::Block TabletSchema::create_block(
     for (int i = 0; i < return_columns.size(); ++i) {
         const auto& col = _cols[return_columns[i]];
         bool is_nullable = (tablet_columns_need_convert_null != nullptr &&
-                tablet_columns_need_convert_null->find(return_columns[i]) != tablet_columns_need_convert_null->end());
+                            tablet_columns_need_convert_null->find(return_columns[i]) !=
+                                    tablet_columns_need_convert_null->end());
         auto data_type = vectorized::DataTypeFactory::instance().create_data_type(col, is_nullable);
         auto column = data_type->create_column();
         block.insert({std::move(column), data_type, col.name()});

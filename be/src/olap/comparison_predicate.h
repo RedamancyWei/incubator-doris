@@ -15,8 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef DORIS_BE_SRC_OLAP_COMPARISON_PREDICATE_H
-#define DORIS_BE_SRC_OLAP_COMPARISON_PREDICATE_H
+#pragma once
 
 #include <stdint.h>
 
@@ -47,11 +46,9 @@ class VectorizedRowBatch;
         void evaluate_or(vectorized::IColumn& column, uint16_t* sel, uint16_t size,                \
                          bool* flags) const override;                                              \
         void evaluate_vec(vectorized::IColumn& column, uint16_t size, bool* flags) const override; \
-        void set_dict_code_if_necessary(vectorized::IColumn& column) override;                     \
+                                                                                                   \
     private:                                                                                       \
         T _value;                                                                                  \
-        bool _dict_code_inited = false;                                                            \
-        int32_t _dict_code;                                                                        \
     };
 
 COMPARISON_PRED_CLASS_DEFINE(EqualPredicate, EQ)
@@ -62,5 +59,3 @@ COMPARISON_PRED_CLASS_DEFINE(GreaterPredicate, GT)
 COMPARISON_PRED_CLASS_DEFINE(GreaterEqualPredicate, GE)
 
 } //namespace doris
-
-#endif //DORIS_BE_SRC_OLAP_COMPARISON_PREDICATE_H

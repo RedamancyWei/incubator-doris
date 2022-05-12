@@ -15,8 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef DORIS_BE_RUNTIME_PRIMITIVE_TYPE_H
-#define DORIS_BE_RUNTIME_PRIMITIVE_TYPE_H
+#pragma once
 
 #include <string>
 
@@ -52,9 +51,9 @@ enum PrimitiveType {
     TYPE_DATE,     /* 11 */
     TYPE_DATETIME, /* 12 */
     TYPE_BINARY,
-    /* 13 */                // Not implemented
-    TYPE_DECIMAL_DEPRACTED, /* 14 */
-    TYPE_CHAR,              /* 15 */
+    /* 13 */                     // Not implemented
+    TYPE_DECIMAL [[deprecated]], /* 14 */
+    TYPE_CHAR,                   /* 15 */
 
     TYPE_STRUCT,    /* 16 */
     TYPE_ARRAY,     /* 17 */
@@ -382,5 +381,3 @@ struct PredicatePrimitiveTypeTraits<TYPE_DATETIME> {
 };
 
 } // namespace doris
-
-#endif

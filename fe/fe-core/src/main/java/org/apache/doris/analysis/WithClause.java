@@ -14,6 +14,9 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/apache/impala/blob/branch-2.9.0/fe/src/main/java/org/apache/impala/WithClause.java
+// and modified by Doris
 
 package org.apache.doris.analysis;
 
@@ -136,6 +139,21 @@ public class WithClause implements ParseNode {
                         ToSqlUtils.getIdentSqlList(view.getOriginalColLabels())) + ")";
             }
             viewStrings.add(aliasSql + " AS (" + view.getQueryStmt().toSql() + ")");
+        }
+        return "WITH " + Joiner.on(",").join(viewStrings);
+    }
+
+    public String toDigest() {
+        List<String> viewStrings = Lists.newArrayList();
+        for (View view : views_) {
+            // Enclose the view alias and explicit labels in quotes if Hive cannot parse it
+            // without quotes. This is needed for view compatibility between Impala and Hive.
+            String aliasSql = ToSqlUtils.getIdentSql(view.getName());
+            if (view.hasColLabels()) {
+                aliasSql += "(" + Joiner.on(", ").join(
+                        ToSqlUtils.getIdentSqlList(view.getOriginalColLabels())) + ")";
+            }
+            viewStrings.add(aliasSql + " AS (" + view.getQueryStmt().toDigest() + ")");
         }
         return "WITH " + Joiner.on(",").join(viewStrings);
     }

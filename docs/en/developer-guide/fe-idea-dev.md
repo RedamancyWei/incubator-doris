@@ -53,7 +53,10 @@ under the License.
       1. Download：`brew install thrift@0.13.0`
       2. Establish soft connection： 
         `mkdir -p ./thirdparty/installed/bin`
+        # For ARM macOS
         `ln -s /opt/homebrew/Cellar/thrift@0.13.0/0.13.0/bin/thrift ./thirdparty/installed/bin/thrift`
+        # For Intel macOS
+        `ln -s /usr/local/Cellar/thrift@0.13.0/0.13.0/bin/thrift ./thirdparty/installed/bin/thrift`
       
    Note：The error that the version cannot be found may be reported when MacOS execute `brew install thrift@0.13.0`. The solution is execute at the terminal as follows:
       1. `brew tap-new $USER/local-tap`
@@ -93,7 +96,7 @@ is generate codes in Linux and copy them back. Using Docker should also be an op
 
 ## 3. Custom FE configuration
 
-Copy below content into `conf/fe.conf` and tune it to fit your environment.
+Copy below content into `conf/fe.conf` and tune it to fit your environment(Note: If developed using`Mac`, since`docker for Mac`does not support`Host`mode,`be`needs to be exposed using`-p` and `fe.conf` `priority_networks` configured to be accessible within the container, such as WIFI Ip).
 
 ```
 # Licensed to the Apache Software Foundation (ASF) under one

@@ -29,6 +29,8 @@
 #include <vector>
 
 #include "gen_cpp/data.pb.h"
+#include "runtime/descriptors.h"
+#include "vec/columns/column.h"
 #include "vec/columns/column_nullable.h"
 #include "vec/core/block_info.h"
 #include "vec/core/column_with_type_and_name.h"
@@ -70,6 +72,7 @@ public:
     Block(std::initializer_list<ColumnWithTypeAndName> il);
     Block(const ColumnsWithTypeAndName& data_);
     Block(const PBlock& pblock);
+    Block(const std::vector<SlotDescriptor*>& slots, size_t block_size);
 
     /// insert the column at the specified position
     void insert(size_t position, const ColumnWithTypeAndName& elem);
@@ -100,8 +103,7 @@ public:
     ColumnWithTypeAndName& get_by_position(size_t position) { return data[position]; }
     const ColumnWithTypeAndName& get_by_position(size_t position) const { return data[position]; }
 
-    Status copy_column_data_to_block(bool is_block_mem_reuse,
-                                     doris::vectorized::IColumn* input_col_ptr,
+    Status copy_column_data_to_block(doris::vectorized::IColumn* input_col_ptr,
                                      uint16_t* sel_rowid_idx, uint16_t select_size, int block_cid,
                                      size_t batch_size) {
         // Only the additional deleted filter condition need to materialize column be at the end of the block
@@ -111,25 +113,22 @@ public:
         //      `select b from table;`
         // a column only effective in segment iterator, the block from query engine only contain the b column.
         // so the `block_cid >= data.size()` is true
-        if (block_cid >= data.size())
-            return Status::OK();
-
-        if (is_block_mem_reuse) {
-            auto* raw_res_ptr = this->get_by_position(block_cid).column.get();
-            const_cast<doris::vectorized::IColumn*>(raw_res_ptr)->reserve(batch_size);
-            return input_col_ptr->filter_by_selector(
-                    sel_rowid_idx, select_size,
-                    const_cast<doris::vectorized::IColumn*>(raw_res_ptr));
-        } else {
-            MutableColumnPtr res_col_ptr = data[block_cid].type->create_column();
-            res_col_ptr->reserve(batch_size);
-            auto* raw_res_ptr = res_col_ptr.get();
-            RETURN_IF_ERROR(input_col_ptr->filter_by_selector(
-                    sel_rowid_idx, select_size,
-                    const_cast<doris::vectorized::IColumn*>(raw_res_ptr)));
-            this->replace_by_position(block_cid, std::move(res_col_ptr));
+        if (block_cid >= data.size()) {
             return Status::OK();
         }
+
+        MutableColumnPtr raw_res_ptr = this->get_by_position(block_cid).column->assume_mutable();
+        raw_res_ptr->reserve(batch_size);
+
+        // adapt for outer join change column to nullable
+        if (raw_res_ptr->is_nullable() && !input_col_ptr->is_nullable()) {
+            auto col_ptr_nullable =
+                    reinterpret_cast<vectorized::ColumnNullable*>(raw_res_ptr.get());
+            col_ptr_nullable->get_null_map_column().insert_many_defaults(select_size);
+            raw_res_ptr = col_ptr_nullable->get_nested_column_ptr();
+        }
+
+        return input_col_ptr->filter_by_selector(sel_rowid_idx, select_size, raw_res_ptr);
     }
 
     void replace_by_position(size_t position, ColumnPtr&& res) {
@@ -245,7 +244,7 @@ public:
 
     static Status filter_block(Block* block, int filter_conlumn_id, int column_to_keep);
 
-    static inline void erase_useless_column(Block* block, int column_to_keep) {
+    static void erase_useless_column(Block* block, int column_to_keep) {
         for (int i = block->columns() - 1; i >= column_to_keep; --i) {
             block->erase(i);
         }
@@ -260,7 +259,7 @@ public:
 
     std::unique_ptr<Block> create_same_struct_block(size_t size) const;
 
-    /** Compares (*this) n-th row and rhs m-th row. 
+    /** Compares (*this) n-th row and rhs m-th row.
       * Returns negative number, 0, or positive number  (*this) n-th row is less, equal, greater than rhs m-th row respectively.
       * Is used in sortings.
       *
@@ -311,9 +310,8 @@ public:
 private:
     void erase_impl(size_t position);
     void initialize_index_by_name();
-    inline bool is_column_data_null(const doris::TypeDescriptor& type_desc,
-                                    const StringRef& data_ref,
-                                    const IColumn* column_with_type_and_name, int row);
+    bool is_column_data_null(const doris::TypeDescriptor& type_desc, const StringRef& data_ref,
+                             const IColumn* column_with_type_and_name, int row);
     void deep_copy_slot(void* dst, MemPool* pool, const doris::TypeDescriptor& type_desc,
                         const StringRef& data_ref, const IColumn* column, int row,
                         bool padding_char);
@@ -351,7 +349,7 @@ public:
     size_t rows() const;
     size_t columns() const { return _columns.size(); }
 
-    bool empty() { return rows() == 0; }
+    bool empty() const { return rows() == 0; }
 
     MutableColumns& mutable_columns() { return _columns; }
 
@@ -359,6 +357,33 @@ public:
 
     DataTypes& data_types() { return _data_types; }
 
+    MutableColumnPtr& get_column_by_position(size_t position) { return _columns[position]; }
+    const MutableColumnPtr& get_column_by_position(size_t position) const {
+        return _columns[position];
+    }
+
+    DataTypePtr& get_datatype_by_position(size_t position) { return _data_types[position]; }
+    const DataTypePtr& get_datatype_by_position(size_t position) const {
+        return _data_types[position];
+    }
+
+    int compare_at(size_t n, size_t m, size_t num_columns, const MutableBlock& rhs,
+                   int nan_direction_hint) const {
+        DCHECK_GE(columns(), num_columns);
+        DCHECK_GE(rhs.columns(), num_columns);
+
+        DCHECK_LE(n, rows());
+        DCHECK_LE(m, rhs.rows());
+        for (size_t i = 0; i < num_columns; ++i) {
+            DCHECK(get_datatype_by_position(i)->equals(*rhs.get_datatype_by_position(i)));
+            auto res = get_column_by_position(i)->compare_at(n, m, *(rhs.get_column_by_position(i)),
+                                                             nan_direction_hint);
+            if (res) {
+                return res;
+            }
+        }
+        return 0;
+    }
     template <typename T>
     void merge(T&& block) {
         if (_columns.size() == 0 && _data_types.size() == 0) {
@@ -402,6 +427,7 @@ public:
 
     void add_row(const Block* block, int row);
     void add_rows(const Block* block, const int* row_begin, const int* row_end);
+    void add_rows(const Block* block, size_t row_begin, size_t length);
 
     std::string dump_data(size_t row_limit = 100) const;
 
@@ -409,6 +435,7 @@ public:
         _columns.clear();
         _data_types.clear();
     }
+    size_t allocated_bytes() const;
 };
 
 } // namespace vectorized

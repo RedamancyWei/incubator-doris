@@ -46,7 +46,7 @@ struct decimal12_t {
             fraction += (sign ? -FRAC_RATIO : FRAC_RATIO);
         }
 
-        //OLAP_LOG_WARNING("agg: int=%ld, frac=%d", integer, fraction);
+        //LOG(WARNING) << "agg: int=" << integer << ", frac=" << fraction;
         //_set_flag();
         return *this;
     }
@@ -89,7 +89,7 @@ struct decimal12_t {
         return std::string(buf);
     }
 
-    OLAPStatus from_string(const std::string& str) {
+    Status from_string(const std::string& str) {
         integer = 0;
         fraction = 0;
         const char* value_string = str.c_str();
@@ -97,7 +97,7 @@ struct decimal12_t {
 
         if (sign != nullptr) {
             if (sign != value_string) {
-                return OLAP_ERR_INPUT_PARAMETER_ERROR;
+                return Status::OLAPInternalError(OLAP_ERR_INPUT_PARAMETER_ERROR);
             } else {
                 ++value_string;
             }
@@ -131,7 +131,7 @@ struct decimal12_t {
             integer = -integer;
         }
 
-        return OLAP_SUCCESS;
+        return Status::OK();
     }
 
     static const int32_t FRAC_RATIO = 1000000000;

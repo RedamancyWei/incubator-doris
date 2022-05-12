@@ -20,7 +20,6 @@ package org.apache.doris.planner;
 import org.apache.doris.analysis.CreateDbStmt;
 import org.apache.doris.analysis.CreateTableStmt;
 import org.apache.doris.analysis.CreateViewStmt;
-import org.apache.doris.analysis.FunctionCallExpr;
 import org.apache.doris.catalog.Catalog;
 import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.utframe.UtFrameUtils;
@@ -29,7 +28,6 @@ import org.apache.commons.io.FileUtils;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.File;
@@ -184,11 +182,11 @@ public class TableFunctionPlanTest {
     public void errorParam() throws Exception {
         String sql = "explain select k1, e1 from db1.tbl1 lateral view explode_split(k2) tmp as e1;";
         String explainString = UtFrameUtils.getSQLPlanOrErrorMsg(ctx, sql);
-        Assert.assertTrue(explainString.contains(FunctionCallExpr.UNKNOWN_TABLE_FUNCTION_MSG));
+        Assert.assertTrue(explainString.contains("No matching function with signature: explode_split(varchar(1))"));
 
         sql = "explain select k1, e1 from db1.tbl1 lateral view explode_split(k1) tmp as e1;";
         explainString = UtFrameUtils.getSQLPlanOrErrorMsg(ctx, sql);
-        Assert.assertTrue(explainString.contains(FunctionCallExpr.UNKNOWN_TABLE_FUNCTION_MSG));
+        Assert.assertTrue(explainString.contains("No matching function with signature: explode_split(int(11))"));
     }
 
     /* Case2 table function in where stmt
@@ -199,7 +197,7 @@ public class TableFunctionPlanTest {
         String sql = "explain select k1 from db1.tbl1 where explode_split(k2, \",\");";
         String explainString = UtFrameUtils.getSQLPlanOrErrorMsg(ctx, sql);
         Assert.assertTrue(
-                explainString.contains("No matching function with signature: explode_split(varchar(-1), varchar(-1))."));
+                explainString.contains("No matching function with signature: explode_split(varchar(1), varchar(-1))."));
     }
 
     // test projection
@@ -340,8 +338,8 @@ public class TableFunctionPlanTest {
         Assert.assertTrue(explainString.contains("table function: explode_split(concat(`a`.`k2`, ',', `a`.`k3`), ',')"));
         Assert.assertTrue(explainString.contains("lateral view tuple id: 1"));
         Assert.assertTrue(explainString.contains("output slot id: 3"));
-        Assert.assertTrue(explainString.contains("SlotDescriptor{id=0, col=k2, type=VARCHAR(*)}"));
-        Assert.assertTrue(explainString.contains("SlotDescriptor{id=1, col=k3, type=VARCHAR(*)}"));
+        Assert.assertTrue(explainString.contains("SlotDescriptor{id=0, col=k2, type=VARCHAR(1)}"));
+        Assert.assertTrue(explainString.contains("SlotDescriptor{id=1, col=k3, type=VARCHAR(1)}"));
     }
 
     // lateral view of subquery
@@ -398,7 +396,7 @@ public class TableFunctionPlanTest {
                         + "materialized=true"
         ));
         Assert.assertTrue(formatString.contains(
-                "SlotDescriptor{id=1,col=k2,type=VARCHAR(*)}\n"
+                "SlotDescriptor{id=1,col=k2,type=VARCHAR(1)}\n"
                         + "parent=0\n"
                         + "materialized=true"
         ));
@@ -526,5 +524,16 @@ public class TableFunctionPlanTest {
         String sql = "select k1,e1 from db1.v2 lateral view explode_split(k3,',') tmp as e1;";
         String explainString = UtFrameUtils.getSQLPlanOrErrorMsg(ctx, sql, true);
         Assert.assertTrue(!explainString.contains("Unknown column 'e1' in 'table list'"));
+    }
+
+
+    // The 'k1' column in 'd' view should be materialized
+    // Fix #8850
+    @Test
+    public void testLateralViewWithInlineViewBug() throws Exception {
+        String sql = "with d as (select k1+k1 as k1 from db1.table_for_view ) "
+                + "select k1 from d lateral view explode_split(k1,',') tmp as e1;";
+        String explainString = UtFrameUtils.getSQLPlanOrErrorMsg(ctx, sql, true);
+        Assert.assertTrue(!explainString.contains("Unexpected exception: org.apache.doris.analysis.FunctionCallExpr cannot be cast to org.apache.doris.analysis.SlotRef"));
     }
 }

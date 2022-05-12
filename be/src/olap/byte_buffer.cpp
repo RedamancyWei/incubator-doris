@@ -20,6 +20,7 @@
 #include <sys/mman.h>
 
 #include "olap/utils.h"
+#include "runtime/thread_context.h"
 
 namespace doris {
 
@@ -42,6 +43,8 @@ void StorageByteBuffer::BufDeleter::operator()(char* p) {
         if (0 != munmap(p, _mmap_length)) {
             LOG(FATAL) << "fail to munmap: mem=" << p << ", len=" << _mmap_length
                        << ", errno=" << Errno::no() << ", errno_str=" << Errno::str();
+        } else {
+            RELEASE_THREAD_LOCAL_MEM_TRACKER(_mmap_length);
         }
     } else {
         delete[] p;
@@ -93,10 +96,13 @@ StorageByteBuffer* StorageByteBuffer::reference_buffer(StorageByteBuffer* refere
 
 StorageByteBuffer* StorageByteBuffer::mmap(void* start, uint64_t length, int prot, int flags,
                                            int fd, uint64_t offset) {
+    CONSUME_THREAD_LOCAL_MEM_TRACKER(length);
     char* memory = (char*)::mmap(start, length, prot, flags, fd, offset);
 
     if (MAP_FAILED == memory) {
-        OLAP_LOG_WARNING("fail to mmap. [errno='%d' errno_str='%s']", Errno::no(), Errno::str());
+        LOG(WARNING) << "fail to mmap. [errno='" << Errno::no() << "' errno_str='" << Errno::str()
+                     << "']";
+        RELEASE_THREAD_LOCAL_MEM_TRACKER(length);
         return nullptr;
     }
 
@@ -107,7 +113,8 @@ StorageByteBuffer* StorageByteBuffer::mmap(void* start, uint64_t length, int pro
 
     if (nullptr == buf) {
         deleter(memory);
-        OLAP_LOG_WARNING("fail to allocate StorageByteBuffer.");
+        LOG(WARNING) << "fail to allocate StorageByteBuffer.";
+        RELEASE_THREAD_LOCAL_MEM_TRACKER(length);
         return nullptr;
     }
 
@@ -122,16 +129,19 @@ StorageByteBuffer* StorageByteBuffer::mmap(void* start, uint64_t length, int pro
 StorageByteBuffer* StorageByteBuffer::mmap(FileHandler* handler, uint64_t offset, int prot,
                                            int flags) {
     if (nullptr == handler) {
-        OLAP_LOG_WARNING("invalid file handler");
+        LOG(WARNING) << "invalid file handler";
         return nullptr;
     }
 
     size_t length = handler->length();
     int fd = handler->fd();
+    CONSUME_THREAD_LOCAL_MEM_TRACKER(length);
     char* memory = (char*)::mmap(nullptr, length, prot, flags, fd, offset);
 
     if (MAP_FAILED == memory) {
-        OLAP_LOG_WARNING("fail to mmap. [errno='%d' errno_str='%s']", Errno::no(), Errno::str());
+        LOG(WARNING) << "fail to mmap. [errno='" << Errno::no() << "' errno_str='" << Errno::str()
+                     << "']";
+        RELEASE_THREAD_LOCAL_MEM_TRACKER(length);
         return nullptr;
     }
 
@@ -142,7 +152,8 @@ StorageByteBuffer* StorageByteBuffer::mmap(FileHandler* handler, uint64_t offset
 
     if (nullptr == buf) {
         deleter(memory);
-        OLAP_LOG_WARNING("fail to allocate StorageByteBuffer.");
+        LOG(WARNING) << "fail to allocate StorageByteBuffer.";
+        RELEASE_THREAD_LOCAL_MEM_TRACKER(length);
         return nullptr;
     }
 
@@ -154,39 +165,39 @@ StorageByteBuffer* StorageByteBuffer::mmap(FileHandler* handler, uint64_t offset
     return buf;
 }
 
-OLAPStatus StorageByteBuffer::put(char src) {
+Status StorageByteBuffer::put(char src) {
     if (_position < _limit) {
         _array[_position++] = src;
-        return OLAP_SUCCESS;
+        return Status::OK();
     }
 
-    return OLAP_ERR_BUFFER_OVERFLOW;
+    return Status::OLAPInternalError(OLAP_ERR_BUFFER_OVERFLOW);
 }
 
-OLAPStatus StorageByteBuffer::put(uint64_t index, char src) {
+Status StorageByteBuffer::put(uint64_t index, char src) {
     if (index < _limit) {
         _array[index] = src;
-        return OLAP_SUCCESS;
+        return Status::OK();
     }
 
-    return OLAP_ERR_BUFFER_OVERFLOW;
+    return Status::OLAPInternalError(OLAP_ERR_BUFFER_OVERFLOW);
 }
 
-OLAPStatus StorageByteBuffer::put(const char* src, uint64_t src_size, uint64_t offset,
-                                  uint64_t length) {
+Status StorageByteBuffer::put(const char* src, uint64_t src_size, uint64_t offset,
+                              uint64_t length) {
     //没有足够的空间可以写
     if (length > remaining()) {
-        return OLAP_ERR_BUFFER_OVERFLOW;
+        return Status::OLAPInternalError(OLAP_ERR_BUFFER_OVERFLOW);
     }
 
     //src不够大
     if (offset + length > src_size) {
-        return OLAP_ERR_OUT_OF_BOUND;
+        return Status::OLAPInternalError(OLAP_ERR_OUT_OF_BOUND);
     }
 
     memory_copy(&_array[_position], &src[offset], length);
     _position += length;
-    return OLAP_SUCCESS;
+    return Status::OK();
 }
 
 } // namespace doris

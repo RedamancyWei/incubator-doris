@@ -14,6 +14,9 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/apache/impala/blob/branch-2.9.0/fe/src/main/java/org/apache/impala/AnalyticWindow.java
+// and modified by Doris
 
 package org.apache.doris.analysis;
 
@@ -164,6 +167,17 @@ public class AnalyticWindow {
             return sb.toString();
         }
 
+        public String toDigest() {
+            StringBuilder sb = new StringBuilder();
+
+            if (expr != null) {
+                sb.append(expr.toDigest()).append(" ");
+            }
+
+            sb.append(type.toString());
+            return sb.toString();
+        }
+
         public TAnalyticWindowBoundary toThrift(Type windowType) {
             TAnalyticWindowBoundary result = new TAnalyticWindowBoundary(type.toThrift());
 
@@ -292,6 +306,21 @@ public class AnalyticWindow {
 
         return sb.toString();
     }
+
+    public String toDigest() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(type_.toString()).append(" ");
+
+        if (rightBoundary_ == null) {
+            sb.append(leftBoundary_.toDigest());
+        } else {
+            sb.append("BETWEEN ").append(leftBoundary_.toDigest()).append(" AND ");
+            sb.append(rightBoundary_.toDigest());
+        }
+
+        return sb.toString();
+    }
+
 
     public TAnalyticWindow toThrift() {
         TAnalyticWindow result = new TAnalyticWindow(type_.toThrift());

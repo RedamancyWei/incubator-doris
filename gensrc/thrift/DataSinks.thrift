@@ -38,7 +38,7 @@ enum TDataSinkType {
 
 enum TResultSinkType {
     MYSQL_PROTOCAL,
-    FILE
+    FILE,    // deprecated, should not be used any more. FileResultSink is covered by TRESULT_FILE_SINK for concurrent purpose.
 }
 
 struct TResultFileSinkOptions {
@@ -75,7 +75,7 @@ struct TDataStreamSink {
 
 struct TResultSink {
     1: optional TResultSinkType type;
-    2: optional TResultFileSinkOptions file_options
+    2: optional TResultFileSinkOptions file_options // deprecated
 }
 
 struct TResultFileSink {
@@ -83,6 +83,8 @@ struct TResultFileSink {
     2: optional Types.TStorageBackendType storage_backend_type;
     3: optional Types.TPlanNodeId dest_node_id;
     4: optional Types.TTupleId output_tuple_id;
+    5: optional string header;
+    6: optional string header_type;
 }
 
 struct TMysqlTableSink {
@@ -92,6 +94,7 @@ struct TMysqlTableSink {
     4: required string passwd
     5: required string db
     6: required string table
+    7: required string charset
 }
 
 struct TOdbcTableSink {
@@ -108,6 +111,7 @@ struct TExportSink {
     // properties need to access broker.
     5: optional list<Types.TNetworkAddress> broker_addresses
     6: optional map<string, string> properties
+    7: optional string header
 }
 
 struct TOlapTableSink {

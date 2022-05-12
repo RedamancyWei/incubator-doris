@@ -14,6 +14,9 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/apache/impala/blob/branch-2.9.0/fe/src/main/java/org/apache/impala/FromClause.java
+// and modified by Doris
 
 package org.apache.doris.analysis;
 
@@ -185,6 +188,17 @@ public class FromClause implements ParseNode, Iterable<TableRef> {
             builder.append(" FROM");
             for (int i = 0; i < tableRefs_.size(); ++i) {
                 builder.append(" " + tableRefs_.get(i).toSql());
+            }
+        }
+        return builder.toString();
+    }
+
+    public String toDigest() {
+        StringBuilder builder = new StringBuilder();
+        if (!tableRefs_.isEmpty()) {
+            builder.append(" FROM");
+            for (int i = 0; i < tableRefs_.size(); ++i) {
+                builder.append(" " + tableRefs_.get(i).toDigest());
             }
         }
         return builder.toString();

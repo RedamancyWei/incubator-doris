@@ -15,8 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef DORIS_BE_SRC_COMMON_CONFIG_H
-#define DORIS_BE_SRC_COMMON_CONFIG_H
+#pragma once
 
 #include "configbase.h"
 
@@ -189,6 +188,7 @@ CONF_mInt64(column_dictionary_key_ratio_threshold, "0");
 CONF_mInt64(column_dictionary_key_size_threshold, "0");
 // memory_limitation_per_thread_for_schema_change_bytes unit bytes
 CONF_mInt64(memory_limitation_per_thread_for_schema_change_bytes, "2147483648");
+CONF_mInt64(memory_limitation_per_thread_for_storage_migration_bytes, "100000000");
 
 // the clean interval of file descriptor cache and segment cache
 CONF_mInt32(cache_clean_interval, "1800");
@@ -239,6 +239,8 @@ CONF_Bool(enable_low_cardinality_optimize, "false");
 // be policy
 // whether disable automatic compaction task
 CONF_mBool(disable_auto_compaction, "false");
+// whether enable vectorized compaction
+CONF_Bool(enable_vectorized_compaction, "true");
 // check the configuration of auto compaction in seconds when auto compaction disabled
 CONF_mInt32(check_auto_compaction_interval_seconds, "5");
 
@@ -614,6 +616,10 @@ CONF_mInt32(remote_storage_read_buffer_mb, "16");
 // Whether Hook TCmalloc new/delete, currently consume/release tls mem tracker in Hook.
 CONF_Bool(track_new_delete, "true");
 
+// If true, switch TLS MemTracker to count more detailed memory,
+// including caches such as ExecNode operators and TabletManager.
+CONF_Bool(memory_verbose_track, "true");
+
 // Default level of MemTracker to show in web page
 // now MemTracker support two level:
 //      OVERVIEW: 0
@@ -727,8 +733,9 @@ CONF_mInt32(string_type_length_soft_limit_bytes, "1048576");
 CONF_Validator(string_type_length_soft_limit_bytes,
                [](const int config) -> bool { return config > 0 && config <= 2147483643; });
 
+// used for olap scanner to save memory, when the size of unused_object_pool
+// is greater than object_pool_buffer_size, release the object in the unused_object_pool.
+CONF_Int32(object_pool_buffer_size, "100");
 } // namespace config
 
 } // namespace doris
-
-#endif // DORIS_BE_SRC_COMMON_CONFIG_H

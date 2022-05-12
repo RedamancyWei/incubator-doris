@@ -15,8 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef DORIS_BE_RUNTIME_RESULT_FILE_SINK_H
-#define DORIS_BE_RUNTIME_RESULT_FILE_SINK_H
+#pragma once
 
 #include "common/status.h"
 #include "gen_cpp/PaloInternalService_types.h"
@@ -74,7 +73,8 @@ private:
     RowBatch* _output_batch = nullptr;
     int _buf_size = 1024; // Allocated from _pool
     bool _is_top_sink = true;
+    std::string _header;
+    std::string _header_type;
 };
 
 } // namespace doris
-#endif

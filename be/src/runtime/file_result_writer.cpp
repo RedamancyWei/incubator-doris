@@ -17,13 +17,12 @@
 
 #include "runtime/file_result_writer.h"
 
+#include "common/consts.h"
 #include "exec/broker_writer.h"
 #include "exec/hdfs_reader_writer.h"
-#include "exec/hdfs_writer.h"
 #include "exec/local_file_writer.h"
 #include "exec/parquet_writer.h"
 #include "exec/s3_writer.h"
-#include "exprs/expr.h"
 #include "exprs/expr_context.h"
 #include "gen_cpp/PaloInternalService_types.h"
 #include "runtime/buffer_control_block.h"
@@ -44,28 +43,6 @@
 namespace doris {
 
 const size_t FileResultWriter::OUTSTREAM_BUFFER_SIZE_BYTES = 1024 * 1024;
-
-// deprecated
-FileResultWriter::FileResultWriter(const ResultFileOptions* file_opts,
-                                   const std::vector<ExprContext*>& output_expr_ctxs,
-                                   RuntimeProfile* parent_profile, BufferControlBlock* sinker,
-                                   bool output_object_data)
-        : _file_opts(file_opts),
-          _output_expr_ctxs(output_expr_ctxs),
-          _parent_profile(parent_profile),
-          _sinker(sinker) {
-    if (_file_opts->is_local_file) {
-        _storage_type = TStorageBackendType::LOCAL;
-    } else {
-        _storage_type = TStorageBackendType::BROKER;
-    }
-    // The new file writer needs to use fragment instance id as part of the file prefix.
-    // But during the upgrade process, the old version of fe will be called to the new version of be,
-    // resulting in no such attribute. So we need a mock here.
-    _fragment_instance_id.hi = 12345678987654321;
-    _fragment_instance_id.lo = 98765432123456789;
-    _output_object_data = output_object_data;
-}
 
 FileResultWriter::FileResultWriter(const ResultFileOptions* file_opts,
                                    const TStorageBackendType::type storage_type,
@@ -175,6 +152,7 @@ Status FileResultWriter::_get_next_file_name(std::string* file_name) {
     ss << _file_opts->file_path << print_id(_fragment_instance_id) << "_" << (_file_idx++) << "."
        << _file_format_to_name();
     *file_name = ss.str();
+    _header_sent = false;
     if (_storage_type == TStorageBackendType::LOCAL) {
         // For local file writer, the file_path is a local dir.
         // Here we do a simple security verification by checking whether the file exists.
@@ -216,12 +194,38 @@ std::string FileResultWriter::_file_format_to_name() {
         return "unknown";
     }
 }
+std::string FileResultWriter::gen_types() {
+    std::string types = "";
+    int num_columns = _output_expr_ctxs.size();
+    for (int i = 0; i < num_columns; ++i) {
+        types += type_to_string(_output_expr_ctxs[i]->root()->type().type);
+        if (i < num_columns - 1) {
+            types += _file_opts->column_separator;
+        }
+    }
+    types += _file_opts->line_delimiter;
+    return types;
+}
+
+Status FileResultWriter::write_csv_header() {
+    if (!_header_sent && _header.size() > 0) {
+        std::string tmp_header = _header;
+        if (_header_type == BeConsts::CSV_WITH_NAMES_AND_TYPES) {
+            tmp_header += gen_types();
+        }
+        size_t written_len = 0;
+        RETURN_IF_ERROR(_file_writer->write(reinterpret_cast<const uint8_t*>(tmp_header.c_str()),
+                                            tmp_header.size(), &written_len));
+        _header_sent = true;
+    }
+    return Status::OK();
+}
 
 Status FileResultWriter::append_row_batch(const RowBatch* batch) {
     if (nullptr == batch || 0 == batch->num_rows()) {
         return Status::OK();
     }
-
+    RETURN_IF_ERROR(write_csv_header());
     SCOPED_TIMER(_append_row_batch_timer);
     if (_parquet_writer != nullptr) {
         RETURN_IF_ERROR(_write_parquet_file(*batch));

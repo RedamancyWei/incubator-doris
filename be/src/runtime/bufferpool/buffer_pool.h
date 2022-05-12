@@ -15,8 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef DORIS_BE_RUNTIME_BUFFER_POOL_H
-#define DORIS_BE_RUNTIME_BUFFER_POOL_H
+#pragma once
 
 #include <stdint.h>
 
@@ -28,7 +27,6 @@
 #include "common/status.h"
 #include "gutil/dynamic_annotations.h"
 #include "gutil/macros.h"
-//#include "runtime/tmp_file_mgr.h"
 #include "util/aligned_new.h"
 #include "util/internal_queue.h"
 #include "util/mem_range.h"
@@ -413,11 +411,11 @@ public:
 
     /// Allow move construction of handles to support std::move(). Inline to make moving
     /// efficient.
-    inline BufferHandle(BufferHandle&& src);
+    BufferHandle(BufferHandle&& src);
 
     /// Allow move assignment of handles to support STL classes like std::vector.
     /// Destination must be uninitialized. Inline to make moving efficient.
-    inline BufferHandle& operator=(BufferHandle&& src);
+    BufferHandle& operator=(BufferHandle&& src);
 
     bool is_open() const { return data_ != nullptr; }
     int64_t len() const {
@@ -452,7 +450,7 @@ private:
 
     /// Internal helper to reset the handle to an unopened state. Inlined to make moving
     /// efficient.
-    inline void Reset();
+    void Reset();
 
     /// The client the buffer handle belongs to, used to validate that the correct client
     /// is provided in BufferPool method calls. Set to nullptr if the buffer is in a free list.
@@ -542,5 +540,3 @@ inline void BufferPool::BufferHandle::Reset() {
     home_core_ = -1;
 }
 } // namespace doris
-
-#endif

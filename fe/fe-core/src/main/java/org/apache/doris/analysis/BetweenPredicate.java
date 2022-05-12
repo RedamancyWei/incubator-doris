@@ -14,6 +14,9 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/apache/impala/blob/branch-2.9.0/fe/src/main/java/org/apache/impala/BetweenPredicate.java
+// and modified by Doris
 
 package org.apache.doris.analysis;
 
@@ -93,7 +96,14 @@ public class BetweenPredicate extends Predicate {
     public String toSqlImpl() {
         String notStr = (isNotBetween) ? "NOT " : "";
         return children.get(0).toSql() + " " + notStr + "BETWEEN " +
-          children.get(1).toSql() + " AND " + children.get(2).toSql();
+                children.get(1).toSql() + " AND " + children.get(2).toSql();
+    }
+
+    @Override
+    public String toDigestImpl() {
+        String notStr = (isNotBetween) ? "NOT " : "";
+        return children.get(0).toDigest() + " " + notStr + "BETWEEN " +
+                children.get(1).toDigest() + " AND " + children.get(2).toDigest();
     }
 
     @Override

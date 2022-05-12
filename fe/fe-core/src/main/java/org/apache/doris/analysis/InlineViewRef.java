@@ -14,6 +14,9 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/apache/impala/blob/branch-2.9.0/fe/src/main/java/org/apache/impala/InlineViewRef.java
+// and modified by Doris
 
 package org.apache.doris.analysis;
 
@@ -455,6 +458,26 @@ public class InlineViewRef extends TableRef {
         StringBuilder sb = new StringBuilder();
         sb.append("(")
                 .append(queryStmt.toSql())
+                .append(") ")
+                .append(aliasSql);
+
+        return sb.toString();
+    }
+
+    @Override
+    public String tableRefToDigest() {
+        String aliasSql = null;
+        String alias = getExplicitAlias();
+        if (alias != null) {
+            aliasSql = ToSqlUtils.getIdentSql(alias);
+        }
+        if (view != null) {
+            return name.toSql() + (aliasSql == null ? "" : " " + aliasSql);
+        }
+
+        StringBuilder sb = new StringBuilder()
+                .append("(")
+                .append(queryStmt.toDigest())
                 .append(") ")
                 .append(aliasSql);
 

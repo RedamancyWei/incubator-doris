@@ -24,6 +24,7 @@
 #include "olap/column_mapping.h"
 #include "olap/rowset/rowset.h"
 #include "olap/rowset/rowset_writer_context.h"
+#include "vec/core/block.h"
 
 namespace doris {
 
@@ -36,26 +37,32 @@ public:
     RowsetWriter() = default;
     virtual ~RowsetWriter() = default;
 
-    virtual OLAPStatus init(const RowsetWriterContext& rowset_writer_context) = 0;
+    virtual Status init(const RowsetWriterContext& rowset_writer_context) = 0;
 
     // Memory note: input `row` is guaranteed to be copied into writer's internal buffer, including all slice data
     // referenced by `row`. That means callers are free to de-allocate memory for `row` after this method returns.
-    virtual OLAPStatus add_row(const RowCursor& row) = 0;
-    virtual OLAPStatus add_row(const ContiguousRow& row) = 0;
+    virtual Status add_row(const RowCursor& row) = 0;
+    virtual Status add_row(const ContiguousRow& row) = 0;
+
+    virtual Status add_block(const vectorized::Block* block) {
+        return Status::OLAPInternalError(OLAP_ERR_FUNC_NOT_IMPLEMENTED);
+    }
 
     // Precondition: the input `rowset` should have the same type of the rowset we're building
-    virtual OLAPStatus add_rowset(RowsetSharedPtr rowset) = 0;
+    virtual Status add_rowset(RowsetSharedPtr rowset) = 0;
 
     // Precondition: the input `rowset` should have the same type of the rowset we're building
-    virtual OLAPStatus add_rowset_for_linked_schema_change(RowsetSharedPtr rowset,
-                                                           const SchemaMapping& schema_mapping) = 0;
+    virtual Status add_rowset_for_linked_schema_change(RowsetSharedPtr rowset,
+                                                       const SchemaMapping& schema_mapping) = 0;
+
+    virtual Status add_rowset_for_migration(RowsetSharedPtr rowset) = 0;
 
     // explicit flush all buffered rows into segment file.
     // note that `add_row` could also trigger flush when certain conditions are met
-    virtual OLAPStatus flush() = 0;
+    virtual Status flush() = 0;
 
-    virtual OLAPStatus flush_single_memtable(MemTable* memtable, int64_t* flush_size) {
-        return OLAP_ERR_FUNC_NOT_IMPLEMENTED;
+    virtual Status flush_single_memtable(MemTable* memtable, int64_t* flush_size) {
+        return Status::OLAPInternalError(OLAP_ERR_FUNC_NOT_IMPLEMENTED);
     }
 
     // finish building and return pointer to the built rowset (guaranteed to be inited).

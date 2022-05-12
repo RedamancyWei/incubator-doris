@@ -23,7 +23,6 @@
 #include "gen_cpp/PlanNodes_types.h"
 #include "runtime/row_batch.h"
 #include "runtime/runtime_state.h"
-#include "runtime/thread_context.h"
 #include "util/runtime_profile.h"
 
 namespace doris::vectorized {
@@ -34,7 +33,9 @@ VCrossJoinNode::VCrossJoinNode(ObjectPool* pool, const TPlanNode& tnode, const D
 Status VCrossJoinNode::prepare(RuntimeState* state) {
     DCHECK(_join_op == TJoinOp::CROSS_JOIN);
     RETURN_IF_ERROR(VBlockingJoinNode::prepare(state));
-    _block_mem_tracker = MemTracker::create_virtual_tracker(-1, "VCrossJoinNode:Block", mem_tracker());
+    SCOPED_SWITCH_TASK_THREAD_LOCAL_MEM_TRACKER(mem_tracker());
+    _block_mem_tracker =
+            MemTracker::create_virtual_tracker(-1, "VCrossJoinNode:Block", mem_tracker());
 
     _num_existing_columns = child(0)->row_desc().num_materialized_slots();
     _num_columns_to_add = child(1)->row_desc().num_materialized_slots();
@@ -54,7 +55,8 @@ Status VCrossJoinNode::close(RuntimeState* state) {
 Status VCrossJoinNode::construct_build_side(RuntimeState* state) {
     // Do a full scan of child(1) and store all build row batches.
     RETURN_IF_ERROR(child(1)->open(state));
-    SCOPED_SWITCH_THREAD_LOCAL_MEM_TRACKER_ERR_CB("Vec Cross join, while getting next from the child 1");
+    SCOPED_SWITCH_THREAD_LOCAL_MEM_TRACKER_ERR_CB(
+            "Vec Cross join, while getting next from the child 1");
 
     bool eos = false;
     while (true) {
@@ -90,8 +92,9 @@ void VCrossJoinNode::init_get_next(int left_batch_row) {
 
 Status VCrossJoinNode::get_next(RuntimeState* state, Block* block, bool* eos) {
     RETURN_IF_CANCELLED(state);
-    *eos = false;
     SCOPED_TIMER(_runtime_profile->total_time_counter());
+    SCOPED_SWITCH_TASK_THREAD_LOCAL_EXISTED_MEM_TRACKER(mem_tracker());
+    *eos = false;
 
     if (_eos) {
         *eos = true;

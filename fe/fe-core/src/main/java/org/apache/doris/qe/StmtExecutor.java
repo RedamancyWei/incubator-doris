@@ -20,6 +20,7 @@ package org.apache.doris.qe;
 import org.apache.doris.analysis.Analyzer;
 import org.apache.doris.analysis.CreateTableAsSelectStmt;
 import org.apache.doris.analysis.DdlStmt;
+import org.apache.doris.analysis.DropTableStmt;
 import org.apache.doris.analysis.EnterStmt;
 import org.apache.doris.analysis.ExplainOptions;
 import org.apache.doris.analysis.ExportStmt;
@@ -34,6 +35,7 @@ import org.apache.doris.analysis.QueryStmt;
 import org.apache.doris.analysis.RedirectStatus;
 import org.apache.doris.analysis.SelectListItem;
 import org.apache.doris.analysis.SelectStmt;
+import org.apache.doris.analysis.SetOperationStmt;
 import org.apache.doris.analysis.SetStmt;
 import org.apache.doris.analysis.SetVar;
 import org.apache.doris.analysis.ShowStmt;
@@ -66,6 +68,7 @@ import org.apache.doris.common.ErrorReport;
 import org.apache.doris.common.FeConstants;
 import org.apache.doris.common.MetaNotFoundException;
 import org.apache.doris.common.UserException;
+import org.apache.doris.common.VecNotImplException;
 import org.apache.doris.common.Version;
 import org.apache.doris.common.util.DebugUtil;
 import org.apache.doris.common.util.MetaLockUtils;
@@ -75,6 +78,7 @@ import org.apache.doris.common.util.QueryPlannerProfile;
 import org.apache.doris.common.util.RuntimeProfile;
 import org.apache.doris.common.util.SqlParserUtils;
 import org.apache.doris.common.util.TimeUtils;
+import org.apache.doris.common.util.VectorizedUtil;
 import org.apache.doris.load.EtlJobType;
 import org.apache.doris.metric.MetricRepo;
 import org.apache.doris.mysql.MysqlChannel;
@@ -117,7 +121,6 @@ import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.google.protobuf.ByteString;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -136,6 +139,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+
+import com.google.protobuf.ByteString;
 
 // Do one COM_QUERY process.
 // first: Parse receive byte array to statement struct.
@@ -192,6 +197,10 @@ public class StmtExecutor implements ProfileWriter {
 
     public void setCoord(Coordinator coord) {
         this.coord = coord;
+    }
+
+    public Analyzer getAnalyzer() {
+        return analyzer;
     }
 
     // At the end of query execution, we begin to add up profile
@@ -407,6 +416,8 @@ public class StmtExecutor implements ProfileWriter {
                 handleUseStmt();
             } else if (parsedStmt instanceof TransactionStmt) {
                 handleTransactionStmt();
+            } else if (parsedStmt instanceof CreateTableAsSelectStmt) {
+                handleCtasStmt();
             } else if (parsedStmt instanceof InsertStmt) { // Must ahead of DdlStmt because InserStmt is its subclass
                 try {
                     handleInsertStmt();
@@ -566,24 +577,38 @@ public class StmtExecutor implements ProfileWriter {
             }
             // table id in tableList is in ascending order because that table map is a sorted map
             List<Table> tables = Lists.newArrayList(tableMap.values());
-            MetaLockUtils.readLockTables(tables);
-            try {
-                analyzeAndGenerateQueryPlan(tQueryOptions);
-            } catch (MVSelectFailedException e) {
-                /**
-                 * If there is MVSelectFailedException after the first planner, there will be error mv rewritten in query.
-                 * So, the query should be reanalyzed without mv rewritten and planner again.
-                 * Attention: Only error rewritten tuple is forbidden to mv rewrite in the second time.
-                 */
-                resetAnalyzerAndStmt();
-                analyzeAndGenerateQueryPlan(tQueryOptions);
-            } catch (UserException e) {
-                throw e;
-            } catch (Exception e) {
-                LOG.warn("Analyze failed. {}", context.getQueryIdentifier(), e);
-                throw new AnalysisException("Unexpected exception: " + e.getMessage());
-            } finally {
-                MetaLockUtils.readUnlockTables(tables);
+            int analyzeTimes = 2;
+            for (int i = 1; i <= analyzeTimes; i++) {
+                MetaLockUtils.readLockTables(tables);
+                try {
+                    analyzeAndGenerateQueryPlan(tQueryOptions);
+                    break;
+                } catch (MVSelectFailedException e) {
+                    /**
+                     * If there is MVSelectFailedException after the first planner, there will be error mv rewritten in query.
+                     * So, the query should be reanalyzed without mv rewritten and planner again.
+                     * Attention: Only error rewritten tuple is forbidden to mv rewrite in the second time.
+                     */
+                    if (i == analyzeTimes) {
+                        throw e;
+                    } else {
+                        resetAnalyzerAndStmt();
+                    }
+                } catch (VecNotImplException e) {
+                    if (i == analyzeTimes) {
+                        throw e;
+                    } else {
+                        resetAnalyzerAndStmt();
+                        VectorizedUtil.switchToQueryNonVec();
+                    }
+                } catch (UserException e) {
+                    throw e;
+                } catch (Exception e) {
+                    LOG.warn("Analyze failed. {}", context.getQueryIdentifier(), e);
+                    throw new AnalysisException("Unexpected exception: " + e.getMessage());
+                } finally {
+                    MetaLockUtils.readUnlockTables(tables);
+                }
             }
         } else {
             try {
@@ -652,6 +677,25 @@ public class StmtExecutor implements ProfileWriter {
                 parsedStmt = StmtRewriter.rewrite(analyzer, parsedStmt);
                 reAnalyze = true;
             }
+            if (parsedStmt instanceof SelectStmt) {
+                if (StmtRewriter.rewriteByPolicy(parsedStmt, analyzer)) {
+                    reAnalyze = true;
+                }
+            }
+            if (parsedStmt instanceof SetOperationStmt) {
+                List<SetOperationStmt.SetOperand> operands = ((SetOperationStmt) parsedStmt).getOperands();
+                for (SetOperationStmt.SetOperand operand : operands) {
+                    if (StmtRewriter.rewriteByPolicy(operand.getQueryStmt(), analyzer)) {
+                        reAnalyze = true;
+                    }
+                }
+            }
+            if (parsedStmt instanceof InsertStmt) {
+                QueryStmt queryStmt = ((InsertStmt) parsedStmt).getQueryStmt();
+                if (queryStmt != null && StmtRewriter.rewriteByPolicy(queryStmt, analyzer)) {
+                    reAnalyze = true;
+                }
+            }
             if (reAnalyze) {
                 // The rewrites should have no user-visible effect. Remember the original result
                 // types and column labels to restore them after the rewritten stmt has been
@@ -677,14 +721,6 @@ public class StmtExecutor implements ProfileWriter {
                     LOG.trace("rewrittenStmt: " + parsedStmt.toSql());
                 }
                 if (explainOptions != null) parsedStmt.setIsExplain(explainOptions);
-            }
-
-            if (parsedStmt instanceof InsertStmt && parsedStmt.isExplain()) {
-                if (ConnectContext.get() != null &&
-                        ConnectContext.get().getExecutor() != null &&
-                        ConnectContext.get().getExecutor().getParsedStmt() != null) {
-                    ConnectContext.get().getExecutor().getParsedStmt().setIsExplain(new ExplainOptions(true, false));
-                }
             }
         }
         plannerProfile.setQueryAnalysisFinishTime();
@@ -1216,14 +1252,14 @@ public class StmtExecutor implements ProfileWriter {
         context.getMysqlChannel().reset();
         // create plan
         InsertStmt insertStmt = (InsertStmt) parsedStmt;
-
         if (insertStmt.getQueryStmt().hasOutFileClause()) {
             throw new DdlException("Not support OUTFILE clause in INSERT statement");
         }
 
         if (insertStmt.getQueryStmt().isExplain()) {
-            insertStmt.setIsExplain(new ExplainOptions(true, false));
-            String explainString = planner.getExplainString(planner.getFragments(), new ExplainOptions(true, false));
+            ExplainOptions explainOptions = insertStmt.getQueryStmt().getExplainOptions();
+            insertStmt.setIsExplain(explainOptions);
+            String explainString = planner.getExplainString(planner.getFragments(), explainOptions);
             handleExplainStmt(explainString);
             return;
         }
@@ -1536,6 +1572,37 @@ public class StmtExecutor implements ProfileWriter {
         context.getCatalog().getExportMgr().addExportJob(exportStmt);
     }
 
+    private void handleCtasStmt() {
+        CreateTableAsSelectStmt ctasStmt = (CreateTableAsSelectStmt) this.parsedStmt;
+        try {
+            // create table
+            DdlExecutor.execute(context.getCatalog(), ctasStmt);
+            context.getState().setOk();
+        }  catch (Exception e) {
+            // Maybe our bug
+            LOG.warn("CTAS create table error, stmt={}", originStmt.originStmt, e);
+            context.getState().setError(ErrorCode.ERR_UNKNOWN_ERROR, "Unexpected exception: " + e.getMessage());
+        }
+        // after success create table insert data
+        if (MysqlStateType.OK.equals(context.getState().getStateType())) {
+            try {
+                parsedStmt = ctasStmt.getInsertStmt();
+                execute();
+            } catch (Exception e) {
+                LOG.warn("CTAS insert data error, stmt={}", parsedStmt.toSql(), e);
+                // insert error drop table
+                DropTableStmt dropTableStmt = new DropTableStmt(true, ctasStmt.getCreateTableStmt().getDbTbl(), true);
+                try {
+                    DdlExecutor.execute(context.getCatalog(), dropTableStmt);
+                } catch (Exception ex) {
+                    LOG.warn("CTAS drop table error, stmt={}", parsedStmt.toSql(), ex);
+                    context.getState().setError(ErrorCode.ERR_UNKNOWN_ERROR,
+                            "Unexpected exception: " + ex.getMessage());
+                }
+            }
+        }
+    }
+
     public Data.PQueryStatistics getQueryStatisticsForAuditLog() {
         if (statisticsForAuditLog == null) {
             statisticsForAuditLog = Data.PQueryStatistics.newBuilder();
@@ -1559,4 +1626,3 @@ public class StmtExecutor implements ProfileWriter {
         return exprs.stream().map(e -> e.getType().getPrimitiveType()).collect(Collectors.toList());
     }
 }
-

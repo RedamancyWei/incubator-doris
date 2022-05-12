@@ -18,7 +18,6 @@
 package org.apache.doris.common;
 
 import org.apache.doris.PaloFe;
-import org.apache.doris.http.HttpServer;
 
 public class Config extends ConfigBase {
 
@@ -327,22 +326,6 @@ public class Config extends ConfigBase {
      */
     @ConfField public static int http_port = 8030;
 
-    /*
-     * Netty http param
-     */
-    @ConfField public static int http_max_line_length = HttpServer.DEFAULT_MAX_LINE_LENGTH;
-
-    @ConfField public static int http_max_header_size = HttpServer.DEFAULT_MAX_HEADER_SIZE;
-
-    @ConfField public static int http_max_chunk_size = HttpServer.DEFAULT_MAX_CHUNK_SIZE;
-
-    /**
-     * The backlog_num for netty http server
-     * When you enlarge this backlog_num, you should enlarge the value in
-     * the linux /proc/sys/net/core/somaxconn file at the same time
-     */
-    @ConfField public static int http_backlog_num = 1024;
-
     /**
      * Jetty container default configuration
      * Jetty's thread architecture model is very simple, divided into three thread pools:
@@ -352,18 +335,38 @@ public class Config extends ConfigBase {
      * and one thread can handle the read and write of many sockets, so the number of thread pools is small.
      *
      * For most projects, only 1-2 acceptors threads are needed, and 2 to 4 selectors threads are sufficient.
-     * Workers are obstructive business logic, often have more database operations, and require a large number of threads. T
-     * he specific number depends on the proportion of QPS and IO events of the application. The higher the QPS,
-     * the more threads are required, the higher the proportion of IO,
-     * the more threads waiting, and the more total threads required.
+     * Workers are obstructive business logic, often have more database operations, and require a large number of
+     * threads. The specific number depends on the proportion of QPS and IO events of the application. The higher the
+     * QPS, the more threads are required, the higher the proportion of IO, the more threads waiting, and the more
+     * total threads required.
      */
     @ConfField public static int jetty_server_acceptors = 2;
     @ConfField public static int jetty_server_selectors = 4;
     @ConfField public static int jetty_server_workers = 0;
+
     /**
-     * jetty Maximum number of bytes in put or post method,default:100MB
+     * Configure the default minimum and maximum number of threads for jetty.
+     * The default minimum and maximum number of threads for jetty is 10 and the maximum is 200.
+     * If this is relatively small in a high-concurrency import scenario,
+     * users can adjust it according to their own conditions.
+     */
+    @ConfField public static int jetty_threadPool_minThreads = 20;
+    @ConfField public static int jetty_threadPool_maxThreads = 400;
+
+    /**
+     * Jetty maximum number of bytes in put or post method,default:100MB
      */
     @ConfField public static int jetty_server_max_http_post_size = 100 * 1024 * 1024;
+
+    /**
+     * http header size configuration parameter, the default value is 10K
+     */
+    @ConfField public static int jetty_server_max_http_header_size = 10240;
+
+    /**
+     * Mini load disabled by default
+     */
+    @ConfField public static boolean disable_mini_load = true;
 
     /**
      * The backlog_num for mysql nio server
@@ -1449,14 +1452,6 @@ public class Config extends ConfigBase {
     public static String http_api_extra_base_path = "";
 
     /**
-     * Whether to support the creation of alpha rowset tables.
-     * The default is false and should only be used in emergency situations,
-     * this config should be remove in some future version
-     */
-    @ConfField
-    public static boolean enable_alpha_rowset = false;
-
-    /**
      * If set to true, FE will be started in BDBJE debug mode
      */
     @ConfField
@@ -1632,11 +1627,6 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true, masterOnly = true)
     public static int cbo_max_statistics_job_num = 20;
     /*
-     * the max unfinished statistics task number
-     */
-    @ConfField(mutable = true, masterOnly = true)
-    public static int cbo_max_statistics_task_num = 512;
-    /*
      * the max timeout of a statistics task
      */
     @ConfField(mutable = true, masterOnly = true)
@@ -1668,4 +1658,6 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true, masterOnly = true)
     public static boolean enable_quantile_state_type = false;
 
+    @ConfField
+    public static boolean enable_vectorized_load = false;
 }

@@ -15,8 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef DORIS_BE_UTIL_FILE_UTILS_H
-#define DORIS_BE_UTIL_FILE_UTILS_H
+#pragma once
 
 #include <functional>
 #include <string>
@@ -53,8 +52,6 @@ public:
     static Status create_dir(const std::string& dir_path, Env* env);
 
     // Delete file recursively.
-    static Status remove_all(const std::string& dir_path, TStorageMedium::type store);
-
     static Status remove_all(const std::string& dir_path);
 
     static Status remove(const std::string& path);
@@ -112,5 +109,3 @@ public:
 };
 
 } // namespace doris
-
-#endif

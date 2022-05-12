@@ -14,9 +14,11 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/apache/impala/blob/branch-2.9.0/be/src/exec/exchange-node.h
+// and modified by Doris
 
-#ifndef DORIS_BE_SRC_QUERY_EXEC_EXCHANGE_NODE_H
-#define DORIS_BE_SRC_QUERY_EXEC_EXCHANGE_NODE_H
+#pragma once
 
 #include "exec/exec_node.h"
 #include "exec/sort_exec_exprs.h"
@@ -113,5 +115,3 @@ private:
 };
 
 }; // namespace doris
-
-#endif

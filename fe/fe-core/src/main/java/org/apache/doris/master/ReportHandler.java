@@ -257,10 +257,8 @@ public class ReportHandler extends Daemon {
         ListMultimap<Long, Long> tabletSyncMap = LinkedListMultimap.create();
         // db id -> tablet id
         ListMultimap<Long, Long> tabletDeleteFromMeta = LinkedListMultimap.create();
-        // tablet ids which schema hash is valid
-        Set<Long> foundTabletsWithValidSchema = Sets.newConcurrentHashSet();
-        // tablet ids which schema hash is invalid
-        Map<Long, TTabletInfo> foundTabletsWithInvalidSchema = Maps.newConcurrentMap();
+        // tablet ids which both in fe and be
+        Set<Long> tabletFoundInMeta = Sets.newConcurrentHashSet();
         // storage medium -> tablet id
         ListMultimap<TStorageMedium, Long> tabletMigrationMap = LinkedListMultimap.create();
 
@@ -277,8 +275,7 @@ public class ReportHandler extends Daemon {
         Catalog.getCurrentInvertedIndex().tabletReport(backendId, backendTablets, storageMediumMap,
                 tabletSyncMap,
                 tabletDeleteFromMeta,
-                foundTabletsWithValidSchema,
-                foundTabletsWithInvalidSchema,
+                tabletFoundInMeta,
                 tabletMigrationMap,
                 transactionsToPublish,
                 transactionsToClear,
@@ -297,8 +294,8 @@ public class ReportHandler extends Daemon {
         }
 
         // 4. handle (be - meta)
-        if (foundTabletsWithValidSchema.size() != backendTablets.size()) {
-            deleteFromBackend(backendTablets, foundTabletsWithValidSchema, foundTabletsWithInvalidSchema, backendId);
+        if (tabletFoundInMeta.size() != backendTablets.size()) {
+            deleteFromBackend(backendTablets, tabletFoundInMeta, backendId);
         }
 
         // 5. migration (ssd <-> hdd)
@@ -665,74 +662,49 @@ public class ReportHandler extends Daemon {
     }
 
     private static void deleteFromBackend(Map<Long, TTablet> backendTablets,
-                                          Set<Long> foundTabletsWithValidSchema,
-                                          Map<Long, TTabletInfo> foundTabletsWithInvalidSchema,
+                                          Set<Long> tabletFoundInMeta,
                                           long backendId) {
         int deleteFromBackendCounter = 0;
         int addToMetaCounter = 0;
         AgentBatchTask batchTask = new AgentBatchTask();
-        // This means that the meta of all backend tablets can be found in fe, we only need to process tablets with invalid Schema
-        if (foundTabletsWithValidSchema.size() + foundTabletsWithInvalidSchema.size() == backendTablets.size()) {
-            for (Long tabletId : foundTabletsWithInvalidSchema.keySet()) {
-                // this tablet is found in meta but with invalid schema hash. delete it.
-                int schemaHash = foundTabletsWithInvalidSchema.get(tabletId).getSchemaHash();
-                DropReplicaTask task = new DropReplicaTask(backendId, tabletId, schemaHash);
+        for (Long tabletId : backendTablets.keySet()) {
+            TTablet backendTablet = backendTablets.get(tabletId);
+            TTabletInfo backendTabletInfo = backendTablet.getTabletInfos().get(0);
+            boolean needDelete = false;
+            if (!tabletFoundInMeta.contains(tabletId)) {
+                if (isBackendReplicaHealthy(backendTabletInfo)) {
+                    // if this tablet is not in meta. try adding it.
+                    // if add failed. delete this tablet from backend.
+                    try {
+                        addReplica(tabletId, backendTabletInfo, backendId);
+                        // update counter
+                        needDelete = false;
+                        ++addToMetaCounter;
+                    } catch (MetaNotFoundException e) {
+                        LOG.warn("failed add to meta. tablet[{}], backend[{}]. {}",
+                                tabletId, backendId, e.getMessage());
+                        needDelete = true;
+                    }
+                } else {
+                    needDelete = true;
+                }
+            }
+
+            if (needDelete) {
+                // drop replica
+                DropReplicaTask task = new DropReplicaTask(backendId, tabletId, backendTabletInfo.getSchemaHash());
                 batchTask.addTask(task);
-                LOG.warn("delete tablet[" + tabletId + " - " + schemaHash + "] from backend[" + backendId
-                        + "] because invalid schema hash");
+                LOG.warn("delete tablet[" + tabletId + "] from backend[" + backendId + "] because not found in meta");
                 ++deleteFromBackendCounter;
             }
-        } else {
-            for (Long tabletId : backendTablets.keySet()) {
-                if (foundTabletsWithInvalidSchema.containsKey(tabletId)) {
-                    int schemaHash = foundTabletsWithInvalidSchema.get(tabletId).getSchemaHash();
-                    DropReplicaTask task = new DropReplicaTask(backendId, tabletId, schemaHash);
-                    batchTask.addTask(task);
-                    LOG.warn("delete tablet[" + tabletId + " - " + schemaHash + "] from backend[" + backendId
-                            + "] because invalid schema hash");
-                    ++deleteFromBackendCounter;
-                    continue;
-                }
-                TTablet backendTablet = backendTablets.get(tabletId);
-                for (TTabletInfo backendTabletInfo : backendTablet.getTabletInfos()) {
-                    boolean needDelete = false;
-                    if (!foundTabletsWithValidSchema.contains(tabletId)) {
-                        if (isBackendReplicaHealthy(backendTabletInfo)) {
-                            // if this tablet is not in meta. try adding it.
-                            // if add failed. delete this tablet from backend.
-                            try {
-                                addReplica(tabletId, backendTabletInfo, backendId);
-                                // update counter
-                                needDelete = false;
-                                ++addToMetaCounter;
-                            } catch (MetaNotFoundException e) {
-                                LOG.warn("failed add to meta. tablet[{}], backend[{}]. {}",
-                                        tabletId, backendId, e.getMessage());
-                                needDelete = true;
-                            }
-                        } else {
-                            needDelete = true;
-                        }
-                    }
-
-                    if (needDelete) {
-                        // drop replica
-                        DropReplicaTask task = new DropReplicaTask(backendId, tabletId, backendTabletInfo.getSchemaHash());
-                        batchTask.addTask(task);
-                        LOG.warn("delete tablet[" + tabletId + " - " + backendTabletInfo.getSchemaHash()
-                                + "] from backend[" + backendId + "] because not found in meta");
-                        ++deleteFromBackendCounter;
-                    }
-                } // end for tabletInfos
-            } // end for backendTabletIds
-        }
+        } // end for backendTabletIds
 
         if (batchTask.getTaskNum() != 0) {
             AgentTaskExecutor.submit(batchTask);
         }
 
-        LOG.info("delete {} tablet(s) from backend[{}]", deleteFromBackendCounter, backendId);
-        LOG.info("add {} replica(s) to meta. backend[{}]", addToMetaCounter, backendId);
+        LOG.info("delete {} tablet(s) and add {} replica(s) to meta from backend[{}]",
+                deleteFromBackendCounter, addToMetaCounter, backendId);
     }
 
     // replica is used and no version missing
@@ -856,11 +828,15 @@ public class ReportHandler extends Daemon {
                             }
 
                             if (tTabletInfo.isSetVersionMiss() && tTabletInfo.isVersionMiss()) {
-                                // The absolute value is meaningless, as long as it is greater than 0.
-                                // This way, in other checking logic, if lastFailedVersion is found to be greater than 0,
-                                // it will be considered a version missing replica and will be handled accordingly.
-                                replica.setLastFailedVersion(1L);
-                                backendReplicasInfo.addMissingVersionReplica(tabletId);
+                                // If the origin last failed version is larger than 0, not change it.
+                                // Otherwise, we set last failed version to replica'version + 1.
+                                // Because last failed version should always larger than replica's version.
+                                long newLastFailedVersion = replica.getLastFailedVersion();
+                                if (newLastFailedVersion < 0) {
+                                    newLastFailedVersion = replica.getVersion() + 1;
+                                }
+                                replica.updateLastFailedVersion(newLastFailedVersion);
+                                backendReplicasInfo.addMissingVersionReplica(tabletId, newLastFailedVersion);
                                 break;
                             }
                         }

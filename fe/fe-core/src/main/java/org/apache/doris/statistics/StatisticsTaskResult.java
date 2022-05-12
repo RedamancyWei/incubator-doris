@@ -17,7 +17,6 @@
 
 package org.apache.doris.statistics;
 
-import com.google.common.collect.Maps;
 import java.util.Map;
 
 public class StatisticsTaskResult {
@@ -33,24 +32,14 @@ public class StatisticsTaskResult {
     }
 
     public StatsGranularityDesc getGranularityDesc() {
-        return this.granularityDesc;
+        return granularityDesc;
     }
 
     public StatsCategoryDesc getCategoryDesc() {
-        return this.categoryDesc;
+        return categoryDesc;
     }
 
     public Map<StatsType, String> getStatsTypeToValue() {
-        return this.statsTypeToValue;
-    }
-
-    public Map<String, String> getStatsNameToValue() {
-        Map<String, String> statsNameToValue = Maps.newHashMap();
-        for (Map.Entry<StatsType, String> typeStringEntry : this.statsTypeToValue.entrySet()) {
-            String statsName = typeStringEntry.getKey().getValue();
-            String value = typeStringEntry.getValue();
-            statsNameToValue.put(statsName, value);
-        }
-        return statsNameToValue;
+        return statsTypeToValue;
     }
 }

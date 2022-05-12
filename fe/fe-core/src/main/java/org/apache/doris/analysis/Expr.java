@@ -14,6 +14,9 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/apache/impala/blob/branch-2.9.0/fe/src/main/java/org/apache/impala/Expr.java
+// and modified by Doris
 
 package org.apache.doris.analysis;
 
@@ -871,11 +874,24 @@ abstract public class Expr extends TreeNode<Expr> implements ParseNode, Cloneabl
         return (printSqlInParens) ? "(" + toSqlImpl() + ")" : toSqlImpl();
     }
 
+    public String toDigest() {
+        return (printSqlInParens) ? "(" + toDigestImpl() + ")" : toDigestImpl();
+    }
+
     /**
      * Returns a SQL string representing this expr. Subclasses should override this method
      * instead of toSql() to ensure that parenthesis are properly added around the toSql().
      */
     protected abstract String toSqlImpl();
+
+    /**
+     * !!!!!! Important !!!!!!
+     * Subclasses should override this method if
+     * sql digest should be represented different from tosqlImpl().
+     */
+    protected String toDigestImpl() {
+        return toSqlImpl();
+    }
 
     public String toMySql() {
         return toSql();
@@ -948,6 +964,14 @@ abstract public class Expr extends TreeNode<Expr> implements ParseNode, Cloneabl
     //                      ((SlotRef) this).getDesc().getParent().getId());
     //        }
     //    }
+
+    public List<String> childrenToDigest() {
+        List<String> childrenDigestList = Lists.newArrayList();
+        for (Expr child : children) {
+            childrenDigestList.add(child.toDigest());
+        }
+        return childrenDigestList;
+    }
 
     public static com.google.common.base.Predicate<Expr> isAggregatePredicate() {
         return IS_AGGREGATE_PREDICATE;

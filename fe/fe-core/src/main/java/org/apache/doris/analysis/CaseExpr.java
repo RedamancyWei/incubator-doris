@@ -14,6 +14,9 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/apache/impala/blob/branch-2.9.0/fe/src/main/java/org/apache/impala/CaseExpr.java
+// and modified by Doris
 
 package org.apache.doris.analysis;
 
@@ -124,6 +127,24 @@ public class CaseExpr extends Expr {
         }
         output.append(" END");
         return output.toString();
+    }
+
+    @Override
+    public String toDigestImpl() {
+        StringBuilder sb = new StringBuilder("CASE");
+        int childIdx = 0;
+        if (hasCaseExpr) {
+            sb.append(" ").append(children.get(childIdx++).toDigest());
+        }
+        while (childIdx + 2 <= children.size()) {
+            sb.append(" WHEN ").append(children.get(childIdx++).toDigest());
+            sb.append(" THEN ").append(children.get(childIdx++).toDigest());
+        }
+        if (hasElseExpr) {
+            sb.append(" ELSE ").append(children.get(children.size() - 1).toDigest());
+        }
+        sb.append(" END");
+        return sb.toString();
     }
 
     @Override

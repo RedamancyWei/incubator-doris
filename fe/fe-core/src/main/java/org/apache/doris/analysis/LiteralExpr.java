@@ -14,6 +14,9 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+// This file is copied from
+// https://github.com/apache/impala/blob/branch-2.9.0/fe/src/main/java/org/apache/impala/LiteralExpr.java
+// and modified by Doris
 
 package org.apache.doris.analysis;
 
@@ -193,6 +196,11 @@ public abstract class LiteralExpr extends Expr implements Comparable<LiteralExpr
             throw new RuntimeException(e);
         }
         return buffer;
+    }
+
+    @Override
+    public String toDigestImpl() {
+        return " ? ";
     }
 
     // Swaps the sign of numeric literals.

@@ -61,11 +61,11 @@ import org.apache.doris.thrift.TStatusCode;
 import org.apache.doris.thrift.TTabletInfo;
 import org.apache.doris.thrift.TTaskType;
 
+import com.google.common.base.Preconditions;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.thrift.TException;
-
-import com.google.common.base.Preconditions;
 
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -420,7 +420,6 @@ public class MasterImpl {
     private void checkReplica(TTabletInfo tTabletInfo, TabletMeta tabletMeta)
             throws MetaNotFoundException {
         long tabletId = tTabletInfo.getTabletId();
-        int schemaHash = tTabletInfo.getSchemaHash();
         // during finishing stage, index's schema hash switched, when old schema hash finished
         // current index hash != old schema hash and alter job's new schema hash != old schema hash
         // the check replica will failed
@@ -429,11 +428,6 @@ public class MasterImpl {
         if (tabletMeta == null || tabletMeta == TabletInvertedIndex.NOT_EXIST_TABLET_META) {
             // rollup may be dropped
             throw new MetaNotFoundException("tablet " + tabletId + " does not exist");
-        }
-        if (!tabletMeta.containsSchemaHash(schemaHash)) {
-            throw new MetaNotFoundException("tablet[" + tabletId
-                    + "] schemaHash is not equal to index's switchSchemaHash. "
-                    + tabletMeta.toString()+ " vs. " + schemaHash);
         }
     }
     
@@ -656,17 +650,6 @@ public class MasterImpl {
             return null;
         }
 
-        int currentSchemaHash = olapTable.getSchemaHashByIndexId(pushIndexId);
-        if (schemaHash != currentSchemaHash) {
-            if (pushState == PartitionState.SCHEMA_CHANGE) {
-                // Alter job is always null, so that not deal with it
-            } else {
-                // this should not happen. observe(cmy)
-                throw new MetaNotFoundException("Diff tablet[" + tabletId + "] schemaHash. index[" + pushIndexId + "]: "
-                        + currentSchemaHash + " vs. " + schemaHash);
-            }
-        }
-
         MaterializedIndex materializedIndex = partition.getIndex(pushIndexId);
         if (materializedIndex == null) {
             throw new MetaNotFoundException("Cannot find index[" + pushIndexId + "]");
@@ -769,7 +752,7 @@ public class MasterImpl {
         AlterReplicaTask alterTask = (AlterReplicaTask) task;
         try {
             if (alterTask.getJobType() == JobType.ROLLUP) {
-                Catalog.getCurrentCatalog().getRollupHandler().handleFinishAlterTask(alterTask);
+                Catalog.getCurrentCatalog().getMaterializedViewHandler().handleFinishAlterTask(alterTask);
             } else if (alterTask.getJobType() == JobType.SCHEMA_CHANGE) {
                 Catalog.getCurrentCatalog().getSchemaChangeHandler().handleFinishAlterTask(alterTask);
             }

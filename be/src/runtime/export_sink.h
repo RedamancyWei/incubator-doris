@@ -15,8 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef DORIS_BE_SRC_RUNTIME_EXPORT_SINK_H
-#define DORIS_BE_SRC_RUNTIME_EXPORT_SINK_H
+#pragma once
 
 #include <vector>
 
@@ -59,6 +58,7 @@ private:
     Status open_file_writer();
     Status gen_row_buffer(TupleRow* row, std::stringstream* ss);
     std::string gen_file_name();
+    Status write_csv_header();
 
     RuntimeState* _state;
 
@@ -77,8 +77,7 @@ private:
     RuntimeProfile::Counter* _bytes_written_counter;
     RuntimeProfile::Counter* _rows_written_counter;
     RuntimeProfile::Counter* _write_timer;
+    bool _header_sent;
 };
 
 } // end namespace doris
-
-#endif // DORIS_BE_SRC_RUNTIME_EXPORT_SINK_H
