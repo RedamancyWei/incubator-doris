@@ -398,34 +398,6 @@ public class StatisticsJobScheduler extends MasterDaemon {
             getColumnSizeSQLTask(job, rowCount, colCategory, colGranularity);
         }
 
-        // for (String colName : strColNames) {
-        //     if (rowCount < backendIds.size() * NDV_MAX_SCAN_PER_TASK) {
-        //         StatsCategory colCategory = getColumnStatsCategory(job.getDbId(), tableId, colName);
-        //         StatsGranularity colGranularity = getTableGranularity(tableId);
-        //         StatisticsDesc colStatsDesc = new StatisticsDesc(colCategory,
-        //                 colGranularity, Arrays.asList(StatsType.MAX_SIZE, StatsType.AVG_SIZE));
-        //         SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(),
-        //                 Collections.singletonList(colStatsDesc));
-        //         job.getTasks().add(sqlTask);
-        //     } else {
-        //         // divide subtasks by tablet
-        //         Collection<Partition> partitions = table.getPartitions();
-        //         for (Partition partition : partitions) {
-        //             Collection<Tablet> tablets = partition.getBaseIndex().getTablets();
-        //             tablets.forEach(tablet -> {
-        //                 StatsCategory colCategory = getColumnStatsCategory(job.getDbId(), tableId, colName);
-        //                 StatsGranularity colGranularity = getTabletGranularity(tablet.getId());
-        //                 StatisticsDesc colStatsDesc = new StatisticsDesc(colCategory,
-        //                         colGranularity, Arrays.asList(StatsType.MAX_SIZE, StatsType.AVG_SIZE));
-        //                 SQLStatisticsTask sqlTask = new SQLStatisticsTask(job.getId(),
-        //                         Collections.singletonList(colStatsDesc));
-        //                 job.getTasks().add(sqlTask);
-        //             });
-        //         }
-        //     }
-        // }
-
-        // column null nums
         for (String colName : colNames) {
             StatsCategory colCategory = getColumnStatsCategory(job.getDbId(), tableId, colName);
             StatsGranularity colGranularity = getTableGranularity(tableId);
