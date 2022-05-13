@@ -76,8 +76,8 @@ public class ColumnStats {
     private LiteralExpr minValue;
     private LiteralExpr maxValue;
 
-    public void updateStats(Type columnType, Map<StatsType, String> statsNameToValue) throws AnalysisException {
-        for (Map.Entry<StatsType, String> entry : statsNameToValue.entrySet()) {
+    public void updateStats(Type columnType, Map<StatsType, String> statsTypeToValue) throws AnalysisException {
+        for (Map.Entry<StatsType, String> entry : statsTypeToValue.entrySet()) {
             StatsType statsType = entry.getKey();
             switch (statsType) {
                 case NDV:

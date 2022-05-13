@@ -49,23 +49,16 @@ public abstract class StatisticsTask implements Callable<StatisticsTaskResult> {
 
     protected long id = Catalog.getCurrentCatalog().getNextId();
     protected long jobId;
-    protected StatsGranularityDesc granularityDesc;
-    protected StatsCategoryDesc categoryDesc;
-    protected List<StatsType> statsTypeList;
+    protected List<StatisticsDesc> statsDescs;
     protected TaskState taskState = TaskState.PENDING;
 
     protected final long createTime = System.currentTimeMillis();
     protected long startTime = -1L;
     protected long finishTime = -1L;
 
-    public StatisticsTask(long jobId,
-                          StatsGranularityDesc granularityDesc,
-                          StatsCategoryDesc categoryDesc,
-                          List<StatsType> statsTypeList) {
+    public StatisticsTask(long jobId, List<StatisticsDesc> statsDescs) {
         this.jobId = jobId;
-        this.granularityDesc = granularityDesc;
-        this.categoryDesc = categoryDesc;
-        this.statsTypeList = statsTypeList;
+        this.statsDescs = statsDescs;
     }
 
     public long getId() {
@@ -80,16 +73,8 @@ public abstract class StatisticsTask implements Callable<StatisticsTaskResult> {
         return jobId;
     }
 
-    public StatsGranularityDesc getGranularityDesc() {
-        return granularityDesc;
-    }
-
-    public StatsCategoryDesc getCategoryDesc() {
-        return categoryDesc;
-    }
-
-    public List<StatsType> getStatsTypeList() {
-        return statsTypeList;
+    public List<StatisticsDesc> getStatsDescs() {
+        return statsDescs;
     }
 
     public TaskState getTaskState() {

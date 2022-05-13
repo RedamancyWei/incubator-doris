@@ -17,24 +17,34 @@
 
 package org.apache.doris.statistics;
 
-public class StatsGranularityDesc {
-    public enum StatsGranularity {
+public class StatsCategory {
+    public enum Category {
         TABLE,
         PARTITION,
-        TABLET
+        COLUMN
     }
 
-    private StatsGranularity granularity;
+    private Category category;
+    private long dbId;
     private long tableId;
-    private long partitionId;
-    private long tabletId;
+    private String partitionName;
+    private String columnName;
+    private String statsValue;
 
-    public StatsGranularity getGranularity() {
-        return this.granularity;
+    public Category getCategory() {
+        return this.category;
     }
 
-    public void setGranularity(StatsGranularity granularity) {
-        this.granularity = granularity;
+    public void setCategory(Category category) {
+        this.category = category;
+    }
+
+    public long getDbId() {
+        return this.dbId;
+    }
+
+    public void setDbId(long dbId) {
+        this.dbId = dbId;
     }
 
     public long getTableId() {
@@ -45,19 +55,27 @@ public class StatsGranularityDesc {
         this.tableId = tableId;
     }
 
-    public long getPartitionId() {
-        return this.partitionId;
+    public String getPartitionName() {
+        return partitionName;
     }
 
-    public void setPartitionId(long partitionId) {
-        this.partitionId = partitionId;
+    public void setPartitionName(String partitionName) {
+        this.partitionName = partitionName;
     }
 
-    public long getTabletId() {
-        return this.tabletId;
+    public String getColumnName() {
+        return this.columnName;
     }
 
-    public void setTabletId(long tabletId) {
-        this.tabletId = tabletId;
+    public void setColumnName(String columnName) {
+        this.columnName = columnName;
+    }
+
+    public String getStatsValue() {
+        return statsValue;
+    }
+
+    public void setStatsValue(String statsValue) {
+        this.statsValue = statsValue;
     }
 }

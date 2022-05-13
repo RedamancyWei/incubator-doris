@@ -18,7 +18,10 @@
 package org.apache.doris.analysis;
 
 import org.apache.doris.catalog.Column;
+import org.apache.doris.catalog.Database;
+import org.apache.doris.catalog.Partition;
 import org.apache.doris.catalog.ScalarType;
+import org.apache.doris.catalog.Table;
 import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.ErrorReport;
 import org.apache.doris.common.UserException;
@@ -26,8 +29,12 @@ import org.apache.doris.qe.ShowResultSetMetaData;
 import org.apache.doris.statistics.TableStats;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
+
 import org.apache.parquet.Preconditions;
 import org.apache.parquet.Strings;
+
+import java.util.List;
 
 public class ShowTableStatsStmt extends ShowStmt {
 
@@ -44,8 +51,11 @@ public class ShowTableStatsStmt extends ShowStmt {
     // There is only on attribute for both @tableName and @dbName at the same time.
     private String dbName;
 
-    public ShowTableStatsStmt(TableName tableName) {
+    private final PartitionNames partitionNames;
+
+    public ShowTableStatsStmt(TableName tableName, PartitionNames partitionNames) {
         this.tableName = tableName;
+        this.partitionNames = partitionNames;
     }
 
     public String getTableName() {
@@ -64,6 +74,13 @@ public class ShowTableStatsStmt extends ShowStmt {
         return tableName.getDb();
     }
 
+    public List<String> getPartitionNames() {
+        if (partitionNames == null) {
+            return Lists.newArrayList();
+        }
+        return partitionNames.getPartitionNames();
+    }
+
     @Override
     public void analyze(Analyzer analyzer) throws UserException {
         super.analyze(analyzer);
@@ -75,6 +92,10 @@ public class ShowTableStatsStmt extends ShowStmt {
             return;
         }
         tableName.analyze(analyzer);
+
+        if (partitionNames != null) {
+            partitionNames.analyze(analyzer);
+        }
     }
 
     @Override

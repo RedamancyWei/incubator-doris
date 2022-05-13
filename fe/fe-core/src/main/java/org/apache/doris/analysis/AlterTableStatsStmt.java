@@ -28,8 +28,10 @@ import org.apache.doris.statistics.StatsType;
 import org.apache.doris.statistics.TableStats;
 
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -41,12 +43,21 @@ public class AlterTableStatsStmt extends DdlStmt {
             .build();
 
     private TableName tableName;
+    private final PartitionNames partitionNames;
     private Map<String, String> properties;
     public final Map<StatsType, String> statsTypeToValue = Maps.newHashMap();
 
-    public AlterTableStatsStmt(TableName tableName, Map<String, String> properties) {
+    public AlterTableStatsStmt(TableName tableName, PartitionNames partitionNames, Map<String, String> properties) {
         this.tableName = tableName;
+        this.partitionNames = partitionNames;
         this.properties = properties;
+    }
+
+    public List<String> getPartitionNames() {
+        if (partitionNames == null) {
+            return Lists.newArrayList();
+        }
+        return partitionNames.getPartitionNames();
     }
 
     @Override
@@ -68,6 +79,12 @@ public class AlterTableStatsStmt extends DdlStmt {
                     ConnectContext.get().getRemoteIP(),
                     tableName.getDb() + ": " + tableName.getTbl());
         }
+
+        // check partition
+        if (partitionNames != null) {
+            partitionNames.analyze(analyzer);
+        }
+
         // get statsTypeToValue
         properties.forEach((key, value) -> {
             StatsType statsType = StatsType.fromString(key);

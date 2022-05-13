@@ -28,8 +28,10 @@ import org.apache.doris.statistics.ColumnStats;
 import org.apache.doris.statistics.StatsType;
 
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -45,14 +47,35 @@ public class AlterColumnStatsStmt extends DdlStmt {
             .build();
 
     private TableName tableName;
+    private final PartitionNames partitionNames;
     private String columnName;
     private Map<String, String> properties;
     public final Map<StatsType, String> statsTypeToValue = Maps.newHashMap();
 
-    public AlterColumnStatsStmt(TableName tableName, String columnName, Map<String, String> properties) {
+    public AlterColumnStatsStmt(TableName tableName, PartitionNames partitionNames, String columnName, Map<String, String> properties) {
         this.tableName = tableName;
+        this.partitionNames = partitionNames;
         this.columnName = columnName;
         this.properties = properties;
+    }
+
+    public TableName getTableName() {
+        return tableName;
+    }
+
+    public String getColumnName() {
+        return columnName;
+    }
+
+    public List<String> getPartitionNames() {
+        if (partitionNames == null) {
+            return Lists.newArrayList();
+        }
+        return partitionNames.getPartitionNames();
+    }
+
+    public Map<StatsType, String> getStatsTypeToValue() {
+        return statsTypeToValue;
     }
 
     @Override
@@ -74,22 +97,16 @@ public class AlterColumnStatsStmt extends DdlStmt {
                     ConnectContext.get().getRemoteIP(),
                     tableName.getDb() + ": " + tableName.getTbl());
         }
+
+        // check partition
+        if (partitionNames != null) {
+            partitionNames.analyze(analyzer);
+        }
+
         // get statsTypeToValue
         properties.forEach((key, value) -> {
             StatsType statsType = StatsType.fromString(key);
             statsTypeToValue.put(statsType, value);
         });
-    }
-
-    public TableName getTableName() {
-        return tableName;
-    }
-
-    public String getColumnName() {
-        return columnName;
-    }
-
-    public Map<StatsType, String> getStatsTypeToValue() {
-        return statsTypeToValue;
     }
 }

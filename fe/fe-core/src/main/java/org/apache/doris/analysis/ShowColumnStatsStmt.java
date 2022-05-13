@@ -25,6 +25,9 @@ import org.apache.doris.qe.ShowResultSetMetaData;
 import org.apache.doris.statistics.ColumnStats;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
+
+import java.util.List;
 
 public class ShowColumnStatsStmt extends ShowStmt {
 
@@ -40,19 +43,32 @@ public class ShowColumnStatsStmt extends ShowStmt {
                     .build();
 
     private TableName tableName;
+    private final PartitionNames partitionNames;
 
-    public ShowColumnStatsStmt(TableName tableName) {
+    public ShowColumnStatsStmt(TableName tableName, PartitionNames partitionNames) {
         this.tableName = tableName;
+        this.partitionNames = partitionNames;
     }
 
     public TableName getTableName() {
         return tableName;
     }
 
+    public List<String> getPartitionNames() {
+        if (partitionNames == null) {
+            return Lists.newArrayList();
+        }
+        return partitionNames.getPartitionNames();
+    }
+
     @Override
     public void analyze(Analyzer analyzer) throws AnalysisException, UserException {
         super.analyze(analyzer);
         tableName.analyze(analyzer);
+
+        if (partitionNames != null) {
+            partitionNames.analyze(analyzer);
+        }
     }
 
     @Override
