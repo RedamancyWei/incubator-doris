@@ -393,9 +393,15 @@ public class Tablet extends MetaObject implements Writable {
         return singleReplica ? Double.valueOf(s.average().orElse(0)).longValue() : s.sum();
     }
 
+    /**
+     * Get the tablet row count.
+     *
+     * @param singleReplica whether to return the row count of all replicas
+     * @return the row count of all replicas
+     */
     public long getRowCount(boolean singleReplica) {
         LongStream s = replicas.stream().filter(r -> r.getState() == Replica.ReplicaState.NORMAL)
-            .mapToLong(Replica::getRowCount);
+                .mapToLong(Replica::getRowCount);
         return singleReplica ? Double.valueOf(s.average().orElse(0)).longValue() : s.sum();
     }
 

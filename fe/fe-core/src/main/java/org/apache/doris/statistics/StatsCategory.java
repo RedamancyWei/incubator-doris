@@ -19,8 +19,17 @@ package org.apache.doris.statistics;
 
 public class StatsCategory {
     public enum Category {
+        /**
+         * The category of the table.
+         */
         TABLE,
+        /**
+         * The category of the column.
+         */
         PARTITION,
+        /**
+         * The category of the column.
+         */
         COLUMN
     }
 

@@ -40,14 +40,17 @@ import java.util.function.Predicate;
  * Those @ColumnStats are recorded in @nameToColumnStats form of MAP.
  * This facilitates the optimizer to quickly find the corresponding
  *
- * @ColumnStats based on the column name.
+ * @ColumnStats: based on the column name.
  * @rowCount: The row count of partition.
  * @dataSize: The data size of partition.
+ *
  * The granularity of the statistics is whole partition.
+ *
  * For example:
- * "@rowCount = 1000" means that the row count is 1000 in the whole partition.
+ *     "@rowCount = 1000" means that the row count is 1000 in the whole partition.
+ *
  * Note: when users do not use Partition to build a table, the system will automatically generate
- * a un-visible Partition with the same name as the table name. so for non-partitioned table, we'll use the table id.
+ *     a un-visible Partition with the same name as the table name. so for non-partitioned table, we'll use the table id.
  */
 public class PartitionStats {
 
@@ -61,6 +64,12 @@ public class PartitionStats {
     private long dataSize = -1;
     private final Map<String, ColumnStats> nameToColumnStats = Maps.newConcurrentMap();
 
+    /**
+     * Update the partition stats.
+     *
+     * @param statsTypeToValue the map of stats type to value
+     * @throws AnalysisException if the stats value is not valid
+     */
     public void updatePartitionStats(Map<StatsType, String> statsTypeToValue) throws AnalysisException {
         for (Map.Entry<StatsType, String> entry : statsTypeToValue.entrySet()) {
             StatsType statsType = entry.getKey();
@@ -96,6 +105,9 @@ public class PartitionStats {
         return columnStats;
     }
 
+    /**
+     * show the partition row count and data size.
+     */
     public List<String> getShowInfo() {
         List<String> result = Lists.newArrayList();
         result.add(Long.toString(rowCount));
