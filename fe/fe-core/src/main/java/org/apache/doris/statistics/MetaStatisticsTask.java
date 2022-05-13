@@ -27,6 +27,7 @@ import org.apache.doris.catalog.Tablet;
 import org.apache.doris.common.DdlException;
 import org.apache.doris.statistics.StatisticsTaskResult.TaskResult;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
@@ -46,6 +47,7 @@ public class MetaStatisticsTask extends StatisticsTask {
         List<TaskResult> taskResults = Lists.newArrayList();
 
         for (StatisticsDesc statsDesc : statsDescs) {
+            checkStatisticsDesc(statsDesc);
             StatsCategory category = statsDesc.getCategory();
             StatsGranularity granularity = statsDesc.getGranularity();
 
@@ -82,7 +84,8 @@ public class MetaStatisticsTask extends StatisticsTask {
 
     private void getColSize(StatsCategory category, StatsType statsType, StatsGranularity granularity,
                             TaskResult result) throws DdlException {
-
+        Preconditions.checkState(category.getDbId() > 0L);
+        Preconditions.checkState(category.getTableId() > 0L);
         Database db = Catalog.getCurrentCatalog().getDbOrDdlException(category.getDbId());
         OlapTable table = (OlapTable) db.getTableOrDdlException(category.getTableId());
 
@@ -106,6 +109,8 @@ public class MetaStatisticsTask extends StatisticsTask {
 
     private void getRowCount(long dbId, long tableId, StatsGranularity granularity,
                              TaskResult result) throws DdlException {
+        Preconditions.checkState(dbId > 0L);
+        Preconditions.checkState(tableId > 0L);
         Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbId);
         OlapTable table = (OlapTable) db.getTableOrDdlException(tableId);
 
@@ -124,8 +129,7 @@ public class MetaStatisticsTask extends StatisticsTask {
                 Partition tabletPartition = getNotNullPartition(granularity, table);
                 result.setPartitionName(tabletPartition.getName());
                 Tablet tablet = getNotNullTablet(granularity, tabletPartition);
-                boolean singleReplica = tablet.getReplicas().size() == 1;
-                long tabletRowCount = tablet.getRowCount(singleReplica);
+                long tabletRowCount = tablet.getRowCount(true);
                 result.getStatsTypeToValue().put(StatsType.ROW_COUNT, String.valueOf(tabletRowCount));
                 break;
             default:
@@ -135,6 +139,8 @@ public class MetaStatisticsTask extends StatisticsTask {
 
     private void getDataSize(long dbId, long tableId, StatsGranularity granularity,
                              TaskResult result) throws DdlException {
+        Preconditions.checkState(dbId > 0L);
+        Preconditions.checkState(tableId > 0L);
         Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbId);
         OlapTable table = (OlapTable) db.getTableOrDdlException(tableId);
 
@@ -184,5 +190,19 @@ public class MetaStatisticsTask extends StatisticsTask {
             throw new DdlException("Column(" + colName + ") not found.");
         }
         return column;
+    }
+
+    private void checkStatisticsDesc(StatisticsDesc statisticsDesc) throws DdlException {
+        if (statisticsDesc == null) {
+            throw new DdlException("StatisticsDesc is null.");
+        }
+
+        if (statisticsDesc.getCategory() == null) {
+            throw new DdlException("Category is null.");
+        }
+
+        if (statisticsDesc.getGranularity() == null) {
+            throw new DdlException("Granularity is null.");
+        }
     }
 }
