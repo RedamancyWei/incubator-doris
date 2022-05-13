@@ -46,7 +46,6 @@ public class MetaStatisticsTask extends StatisticsTask {
         List<TaskResult> taskResults = Lists.newArrayList();
 
         for (StatisticsDesc statsDesc : statsDescs) {
-            List<StatsType> statsTypes = statsDesc.getStatsTypes();
             StatsCategory category = statsDesc.getCategory();
             StatsGranularity granularity = statsDesc.getGranularity();
 
@@ -55,6 +54,8 @@ public class MetaStatisticsTask extends StatisticsTask {
             result.setTableId(category.getTableId());
             result.setStatsTypeToValue(Maps.newHashMap());
             result.setGranularity(granularity.getGranularity());
+
+            List<StatsType> statsTypes = statsDesc.getStatsTypes();
 
             for (StatsType statsType : statsTypes) {
                 switch (statsType) {

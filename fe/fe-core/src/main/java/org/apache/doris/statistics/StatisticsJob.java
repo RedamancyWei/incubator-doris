@@ -131,6 +131,7 @@ public class StatisticsJob {
     public Map<Long, List<String>> getTableIdToPartitionName() {
         return tableIdToPartitionName;
     }
+
     public Map<Long, List<String>> getTableIdToColumnName() {
         return tableIdToColumnName;
     }

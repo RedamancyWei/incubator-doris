@@ -32,7 +32,7 @@ import java.util.function.Predicate;
 /**
  * There are the statistics of table.
  * The table stats are mainly used to provide input for the Optimizer's cost model.
- * <p>
+ *
  * The description of table stats are following:
  * 1. @rowCount: The row count of table.
  * 2. @dataSize: The data size of table.
