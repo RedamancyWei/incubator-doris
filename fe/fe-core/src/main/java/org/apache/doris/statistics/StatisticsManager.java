@@ -42,7 +42,9 @@ import com.google.common.collect.Maps;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.jetbrains.annotations.NotNull;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -95,12 +97,11 @@ public class StatisticsManager {
 
         Map<StatsType, String> statsTypeToValue = stmt.getStatsTypeToValue();
 
-        if ((partitionNames == null || partitionNames.isEmpty())
-                && table.isPartitioned()) {
+        if ((partitionNames.isEmpty()) && table.isPartitioned()) {
             throw new AnalysisException("Partitioned table must specify partition name.");
         }
 
-        if (partitionNames == null || partitionNames.isEmpty()) {
+        if (partitionNames.isEmpty()) {
             Column column = validateColumn(table, "", colName);
             Type colType = column.getType();
             statistics.updateColumnStats(table.getId(), colName, colType, statsTypeToValue);
@@ -122,7 +123,7 @@ public class StatisticsManager {
      * @throws AnalysisException if column, table or partition not exist
      */
     public void updateStatistics(List<StatisticsTaskResult> statsTaskResults) throws AnalysisException {
-        // tablet granularity stats(row count, max size, avg size)
+        // tablet granularity stats(row count, max value, min value, ndv)
         Map<StatsType, Map<TaskResult, List<String>>> tabletStats = Maps.newHashMap();
 
         for (StatisticsTaskResult statsTaskResult : statsTaskResults) {
@@ -210,11 +211,14 @@ public class StatisticsManager {
                     case ROW_COUNT:
                         updateTabletRowCount(result, values);
                         break;
-                    case MAX_SIZE:
-                        updateTabletMaxSize(result, values);
+                    case MAX_VALUE:
+                        updateTabletMaxValue(result, values);
                         break;
-                    case AVG_SIZE:
-                        updateTabletAvgSize(result, values);
+                    case MIN_VALUE:
+                        updateTabletMinValue(result, values);
+                        break;
+                    case NDV:
+                        updateTabletNDV(result, values);
                         break;
                     default:
                         throw new AnalysisException("Unknown stats type: " + statsType);
@@ -371,43 +375,48 @@ public class StatisticsManager {
         }
     }
 
-    private void updateTabletMaxSize(TaskResult result, List<String> values) throws AnalysisException {
-        long statsValue = values.stream().filter(NumberUtils::isCreatable)
-                .mapToLong(Long::parseLong).max().orElse(0L);
-
-        Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(result.getDbId());
-        Table table = db.getTableOrAnalysisException(result.getTableId());
-        Column column = table.getColumn(result.getColumnName());
+    private void updateTabletMaxValue(TaskResult result, List<String> values) throws AnalysisException {
+        Column column = getNotNullColumn(result);
+        Type type = column.getType();
+        String maxValue = getNumericMaxOrMinValue(values, type, true);
 
         Map<StatsType, String> statsTypeToValue = Maps.newHashMap();
-        statsTypeToValue.put(StatsType.MAX_SIZE, String.valueOf(statsValue));
+        statsTypeToValue.put(StatsType.MAX_VALUE, maxValue);
 
-        if (result.getCategory() == StatsCategory.Category.TABLE) {
-            statistics.updateColumnStats(result.getTableId(),
-                    result.getColumnName(), column.getType(), statsTypeToValue);
-        } else if (result.getCategory() == StatsCategory.Category.PARTITION) {
-            statistics.updateColumnStats(result.getTableId(), result.getPartitionName(),
-                    result.getColumnName(), column.getType(), statsTypeToValue);
-        }
+        updateTabletGranularityStats(result, type, statsTypeToValue);
     }
 
-    private void updateTabletAvgSize(TaskResult result, List<String> values) throws AnalysisException {
-        double statsValue = values.stream().filter(NumberUtils::isCreatable)
-                .mapToLong(Long::parseLong).average().orElse(0.0);
-
-        Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(result.getDbId());
-        Table table = db.getTableOrAnalysisException(result.getTableId());
-        Column column = table.getColumn(result.getColumnName());
+    private void updateTabletMinValue(TaskResult result, List<String> values) throws AnalysisException {
+        Column column = getNotNullColumn(result);
+        Type type = column.getType();
+        String minValue = getNumericMaxOrMinValue(values, type, true);
 
         Map<StatsType, String> statsTypeToValue = Maps.newHashMap();
-        statsTypeToValue.put(StatsType.AVG_SIZE, String.valueOf(statsValue));
+        statsTypeToValue.put(StatsType.MIN_VALUE, minValue);
 
+        updateTabletGranularityStats(result, type, statsTypeToValue);
+    }
+
+    private void updateTabletNDV(TaskResult result, List<String> values) throws AnalysisException {
+        double statsValue = values.stream().filter(NumberUtils::isCreatable)
+                .mapToLong(Long::parseLong).sum();
+
+        Map<StatsType, String> statsTypeToValue = Maps.newHashMap();
+        statsTypeToValue.put(StatsType.NDV, String.valueOf(statsValue));
+
+        Column column = getNotNullColumn(result);
+        Type type = column.getType();
+        updateTabletGranularityStats(result, type, statsTypeToValue);
+    }
+
+    private void updateTabletGranularityStats(TaskResult result, Type columnType, Map<StatsType, String> statsTypeToValue)
+            throws AnalysisException {
         if (result.getCategory() == StatsCategory.Category.TABLE) {
             statistics.updateColumnStats(result.getTableId(),
-                    result.getColumnName(), column.getType(), statsTypeToValue);
+                    result.getColumnName(), columnType, statsTypeToValue);
         } else if (result.getCategory() == StatsCategory.Category.PARTITION) {
             statistics.updateColumnStats(result.getTableId(), result.getPartitionName(),
-                    result.getColumnName(), column.getType(), statsTypeToValue);
+                    result.getColumnName(), columnType, statsTypeToValue);
         }
     }
 
@@ -469,5 +478,59 @@ public class StatisticsManager {
         if (statsTypeToValue == null || statsTypeToValue.isEmpty()) {
             throw new AnalysisException("StatsTypeToValue is empty.");
         }
+    }
+
+    private Column getNotNullColumn(TaskResult result) throws AnalysisException {
+        Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(result.getDbId());
+        Table table = db.getTableOrAnalysisException(result.getTableId());
+        Column column = table.getColumn(result.getColumnName());
+        if (column == null) {
+            throw new AnalysisException("Column " + result.getColumnName() + " does not exist");
+        }
+        return column;
+    }
+
+    /**
+     * Get the max/min value of the column.
+     *
+     * @param values String List of values
+     * @param type column type
+     * @param maxOrMin true for max, false for min
+     * @return the max/min value of the column.
+     */
+    private String getNumericMaxOrMinValue(List<String> values, Type type, boolean maxOrMin) {
+        if (type.isFixedPointType()) {
+            long maxValue = 0L;
+            for (String value : values) {
+                if (NumberUtils.isCreatable(value)) {
+                    long temp = Long.parseLong(value);
+                    if (maxOrMin) {
+                        maxValue = Math.max(maxValue, temp);
+                    } else {
+                        maxValue = Math.min(maxValue, temp);
+                    }
+                }
+            }
+            return String.valueOf(maxValue);
+        }
+
+        if (type.isFloatingPointType()) {
+            double maxValue = 0.0;
+            for (String value : values) {
+                if (NumberUtils.isCreatable(value)) {
+                    double temp = Double.parseDouble(value);
+                    if (maxOrMin) {
+                        maxValue = Math.max(maxValue, temp);
+                    } else {
+                        maxValue = Math.min(maxValue, temp);
+                    }
+                }
+            }
+            return String.valueOf(maxValue);
+        }
+
+        // is not numeric type
+        values.sort(Comparator.naturalOrder());
+        return values.size() > 0 ? values.get(values.size() - 1) : null;
     }
 }
