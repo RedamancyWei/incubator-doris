@@ -138,14 +138,28 @@ public class TableStats {
     }
 
     public long getRowCount() {
+        if  (rowCount == -1) {
+            return nameToPartitionStats.values().stream()
+                    .filter(partitionStats -> partitionStats.getRowCount() != -1)
+                    .mapToLong(PartitionStats::getRowCount).sum();
+        }
         return rowCount;
     }
 
     public long getDataSize() {
+        if (dataSize == -1) {
+            return nameToPartitionStats.values().stream()
+                    .filter(partitionStats -> partitionStats.getDataSize() != -1)
+                    .mapToLong(PartitionStats::getDataSize).sum();
+        }
         return dataSize;
     }
 
     public void setRowCount(long rowCount) {
         this.rowCount = rowCount;
+    }
+
+    public void setDataSize(long dataSize) {
+        this.dataSize = dataSize;
     }
 }

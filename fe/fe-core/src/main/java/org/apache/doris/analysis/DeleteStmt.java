@@ -158,5 +158,5 @@ public class DeleteStmt extends DdlStmt {
         sb.append(" WHERE ").append(wherePredicate.toSql());
         return sb.toString();
     }
-
+//    非分区表datasize
 }
