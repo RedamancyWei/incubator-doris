@@ -56,13 +56,18 @@ public:
                   const TBrokerScanRangeParams& params, const std::vector<TBrokerRangeDesc>& ranges,
                   const std::vector<TNetworkAddress>& broker_addresses,
                   const std::vector<TExpr>& pre_filter_texprs, ScannerCounter* counter);
-    virtual ~BrokerScanner();
+    ~BrokerScanner() override;
 
     // Open this scanner, will initialize information need to
     Status open() override;
 
     // Get next tuple
-    Status get_next(Tuple* tuple, MemPool* tuple_pool, bool* eof, bool* fill_tuple) override;
+    virtual Status get_next(Tuple* tuple, MemPool* tuple_pool, bool* eof,
+                            bool* fill_tuple) override;
+
+    Status get_next(vectorized::Block* block, bool* eof) override {
+        return Status::NotSupported("Not Implemented get block");
+    }
 
     // Close this scanner
     void close() override;
@@ -72,6 +77,8 @@ protected:
     Status open_next_reader();
 
     Status _line_to_src_tuple(const Slice& line);
+
+    Status _line_split_to_values(const Slice& line);
 
 private:
     Status open_file_reader();

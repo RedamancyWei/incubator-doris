@@ -79,4 +79,3 @@ public class StatsCategory {
         this.statsValue = statsValue;
     }
 }
-

@@ -61,4 +61,3 @@ public class StatsGranularity {
         this.tabletId = tabletId;
     }
 }
-

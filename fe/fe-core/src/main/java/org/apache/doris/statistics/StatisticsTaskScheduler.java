@@ -30,7 +30,6 @@ import org.apache.doris.statistics.StatisticsTask.TaskState;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Queues;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
