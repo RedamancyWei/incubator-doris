@@ -17,19 +17,16 @@
 
 package org.apache.doris.statistics;
 
+/**
+ * Describes the basic statistics information.
+ */
 public class StatsCategory {
+    /**
+     * The category of the statistics.
+     */
     public enum Category {
-        /**
-         * The category of the table.
-         */
         TABLE,
-        /**
-         * The category of the column.
-         */
         PARTITION,
-        /**
-         * The category of the column.
-         */
         COLUMN
     }
 

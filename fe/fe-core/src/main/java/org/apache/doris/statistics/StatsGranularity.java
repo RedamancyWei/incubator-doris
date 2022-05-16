@@ -17,6 +17,9 @@
 
 package org.apache.doris.statistics;
 
+/**
+ * The granularity of the statistics.
+ */
 public class StatsGranularity {
     public enum Granularity {
         TABLE,

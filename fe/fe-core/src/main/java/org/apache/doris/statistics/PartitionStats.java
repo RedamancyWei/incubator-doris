@@ -33,24 +33,19 @@ import java.util.function.Predicate;
  * There are the statistics of partition.
  * The partition stats are mainly used to provide input for the Optimizer's cost model.
  * The description of partition stats are following:
- * 1. @rowCount: The row count of partition.
- * 2. @dataSize: The data size of partition.
- * 3. @nameToColumnStats: <@String columnName, @ColumnStats columnStats>
+ *     1. @rowCount: The row count of partition.
+ *     2. @dataSize: The data size of partition.
+ *     3. @nameToColumnStats: <@String columnName, @ColumnStats columnStats>
+ *
  * Each column in the Table will have corresponding @ColumnStats.
  * Those @ColumnStats are recorded in @nameToColumnStats form of MAP.
- * This facilitates the optimizer to quickly find the corresponding
- *
- * @ColumnStats: based on the column name.
- * @rowCount: The row count of partition.
- * @dataSize: The data size of partition.
+ * This facilitates the optimizer to quickly find the corresponding:
+ *     @ColumnStats: based on the column name.
+ *     @rowCount: The row count of partition.
+ *     @dataSize: The data size of partition.
  *
  * The granularity of the statistics is whole partition.
- *
- * For example:
- *     "@rowCount = 1000" means that the row count is 1000 in the whole partition.
- *
- * Note: when users do not use Partition to build a table, the system will automatically generate
- *     a un-visible Partition with the same name as the table name. so for non-partitioned table, we'll use the table id.
+ * For example: "@rowCount = 1000" means that the row count is 1000 in the whole partition.
  */
 public class PartitionStats {
 

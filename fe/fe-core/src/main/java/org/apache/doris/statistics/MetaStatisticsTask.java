@@ -36,6 +36,9 @@ import java.util.List;
 /**
  * A statistics task that directly collects statistics by reading FE meta.
  * e.g. for fixed-length types such as Int type and Long type we get their size from metadata.
+ * 1.The granularity of row count can be table or partition, and the type should be table or partition
+ * 2.The granularity of data size can be table or partition, and the type should be table or partition
+ * 3.The granularity of max and min size can be table or partition, and the type should be column
  */
 public class MetaStatisticsTask extends StatisticsTask {
     public MetaStatisticsTask(long jobId, List<StatisticsDesc> statsDescs) {

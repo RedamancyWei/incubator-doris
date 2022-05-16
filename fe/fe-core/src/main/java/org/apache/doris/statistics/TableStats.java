@@ -32,22 +32,18 @@ import java.util.function.Predicate;
 /**
  * There are the statistics of table.
  * The table stats are mainly used to provide input for the Optimizer's cost model.
- *
  * The description of table stats are following:
- * 1. @rowCount: The row count of table.
- * 2. @dataSize: The data size of table.
- * 3. @nameToColumnStats: <@String columnName, @ColumnStats columnStats>
- *      Each column in the Table will have corresponding @ColumnStats.
- *      Those @ColumnStats are recorded in @nameToColumnStats form of MAP.
- *      This facilitates the optimizer to quickly find the corresponding
- *      @ColumnStats based on the column name.
- *
- * @rowCount: The row count of table.
- * @dataSize: The data size of table.
- * <p>
- * The granularity of the statistics is whole table.
- * For example:
- * "@rowCount = 1000" means that the row count is 1000 in the whole table.
+ *     1.@rowCount: The row count of table.
+ *     2.@dataSize: The data size of table.
+ *     3.@nameToColumnStats: <@String columnName, @ColumnStats columnStats>
+ * <p>Each column in the Table will have corresponding @ColumnStats.
+ * Those @ColumnStats are recorded in @nameToColumnStats form of MAP.
+ * This facilitates the optimizer to quickly find the corresponding:
+ *     @ColumnStats based on the column name.
+ *     @rowCount: The row count of table.
+ *     @dataSize: The data size of table.
+ * <p>The granularity of the statistics is whole table.
+ * For example: "@rowCount = 1000" means that the row count is 1000 in the whole table.
  */
 public class TableStats {
 
