@@ -137,13 +137,12 @@ public class AnalyzeStmt extends DdlStmt {
         Preconditions.checkArgument(isAnalyzed(),
                 "The partitionIds must be obtained after the parsing is complete");
         Map<Long, List<String>> tableIdToPartitionName = Maps.newHashMap();
-        List<String> partitionNames = getPartitionNames();
 
         for (Table table : getTables()) {
             table.readLock();
             try {
-                // OlapTable olapTable = (OlapTable) table;
                 OlapTable olapTable = (OlapTable) table;
+                List<String> partitionNames = getPartitionNames();
                 if (partitionNames.isEmpty()) {
                     partitionNames.addAll(olapTable.getPartitionNames());
                 }
@@ -285,10 +284,10 @@ public class AnalyzeStmt extends DdlStmt {
     @Override
     public String toSql() {
         StringBuilder sb = new StringBuilder();
-
-        sb.append("ANALYZE ");
+        sb.append("ANALYZE");
 
         if (dbTableName != null) {
+            sb.append(" ");
             sb.append(dbTableName.toSql());
         }
 
@@ -298,7 +297,8 @@ public class AnalyzeStmt extends DdlStmt {
         }
 
         if (properties != null) {
-            sb.append(" PROPERTIES(");
+            sb.append(" ");
+            sb.append("PROPERTIES(");
             sb.append(new PrintableMap<>(properties, " = ",
                     true,
                     false));

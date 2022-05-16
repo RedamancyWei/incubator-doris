@@ -397,7 +397,7 @@ public class Tablet extends MetaObject implements Writable {
      * Get the tablet row count.
      *
      * @param singleReplica whether to return the row count of all replicas
-     * @return the row count of all replicas
+     * @return the row count of tablet
      */
     public long getRowCount(boolean singleReplica) {
         LongStream s = replicas.stream().filter(r -> r.getState() == Replica.ReplicaState.NORMAL)

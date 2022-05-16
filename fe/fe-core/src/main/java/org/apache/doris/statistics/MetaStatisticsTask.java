@@ -104,8 +104,8 @@ public class MetaStatisticsTask extends StatisticsTask {
                 result.setPartitionName(partition.getName());
                 result.getStatsTypeToValue().put(statsType, String.valueOf(colSize));
                 break;
-            case TABLET:
             default:
+                // the granularity of max and min size only can be table or partition
                 throw new DdlException("Unsupported granularity(" + granularity + ").");
         }
     }
@@ -162,8 +162,7 @@ public class MetaStatisticsTask extends StatisticsTask {
                 Partition tabletPartition = getNotNullPartition(granularity, table);
                 result.setPartitionName(tabletPartition.getName());
                 Tablet tablet = getNotNullTablet(granularity, tabletPartition);
-                boolean singleReplica = tablet.getReplicas().size() == 1;
-                long tabletSize = tablet.getDataSize(singleReplica);
+                long tabletSize = tablet.getDataSize(false);
                 result.getStatsTypeToValue().put(StatsType.DATA_SIZE, String.valueOf(tabletSize));
                 break;
             default:
