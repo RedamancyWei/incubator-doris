@@ -46,17 +46,21 @@ public class AlterColumnStatsStmt extends DdlStmt {
             .add(ColumnStats.MAX_VALUE)
             .build();
 
-    private TableName tableName;
+    private final TableName tableName;
     private final PartitionNames partitionNames;
-    private String columnName;
-    private Map<String, String> properties;
-    public final Map<StatsType, String> statsTypeToValue = Maps.newHashMap();
+    private final String columnName;
+    private final Map<String, String> properties;
 
-    public AlterColumnStatsStmt(TableName tableName, PartitionNames partitionNames, String columnName, Map<String, String> properties) {
+    private final Map<StatsType, String> statsTypeToValue = Maps.newHashMap();
+
+    public AlterColumnStatsStmt(TableName tableName,
+            PartitionNames partitionNames,
+            String columnName,
+            Map<String, String> properties) {
         this.tableName = tableName;
         this.partitionNames = partitionNames;
         this.columnName = columnName;
-        this.properties = properties;
+        this.properties = properties == null ? Maps.newHashMap() : properties;
     }
 
     public TableName getTableName() {
@@ -81,14 +85,17 @@ public class AlterColumnStatsStmt extends DdlStmt {
     @Override
     public void analyze(Analyzer analyzer) throws UserException {
         super.analyze(analyzer);
+
         // check table name
         tableName.analyze(analyzer);
+
         // check properties
         Optional<StatsType> optional = properties.keySet().stream().map(StatsType::fromString)
                 .filter(statsType -> !CONFIGURABLE_PROPERTIES_SET.contains(statsType)).findFirst();
         if (optional.isPresent()) {
             throw new AnalysisException(optional.get() + " is invalid statistic");
         }
+
         // check auth
         if (!Catalog.getCurrentCatalog().getAuth().checkTblPriv(
                 ConnectContext.get(), tableName.getDb(), tableName.getTbl(), PrivPredicate.ALTER)) {

@@ -42,7 +42,7 @@ public class ShowColumnStatsStmt extends ShowStmt {
                     .add(ColumnStats.MAX_VALUE.getValue())
                     .build();
 
-    private TableName tableName;
+    private final TableName tableName;
     private final PartitionNames partitionNames;
 
     public ShowColumnStatsStmt(TableName tableName, PartitionNames partitionNames) {

@@ -42,15 +42,24 @@ public class AlterTableStatsStmt extends DdlStmt {
             .add(TableStats.ROW_COUNT)
             .build();
 
-    private TableName tableName;
+    private final TableName tableName;
     private final PartitionNames partitionNames;
-    private Map<String, String> properties;
+    private final Map<String, String> properties;
+
     public final Map<StatsType, String> statsTypeToValue = Maps.newHashMap();
 
     public AlterTableStatsStmt(TableName tableName, PartitionNames partitionNames, Map<String, String> properties) {
         this.tableName = tableName;
         this.partitionNames = partitionNames;
-        this.properties = properties;
+        this.properties = properties == null ? Maps.newHashMap() : properties;
+    }
+
+    public TableName getTableName() {
+        return tableName;
+    }
+
+    public Map<StatsType, String> getStatsTypeToValue() {
+        return statsTypeToValue;
     }
 
     public List<String> getPartitionNames() {
@@ -63,14 +72,17 @@ public class AlterTableStatsStmt extends DdlStmt {
     @Override
     public void analyze(Analyzer analyzer) throws UserException {
         super.analyze(analyzer);
+
         // check table name
         tableName.analyze(analyzer);
+
         // check properties
         Optional<StatsType> optional = properties.keySet().stream().map(StatsType::fromString)
                 .filter(statsType -> !CONFIGURABLE_PROPERTIES_SET.contains(statsType)).findFirst();
         if (optional.isPresent()) {
             throw new AnalysisException(optional.get() + " is invalid statistic");
         }
+
         // check auth
         if (!Catalog.getCurrentCatalog().getAuth().checkTblPriv(
                 ConnectContext.get(), tableName.getDb(), tableName.getTbl(), PrivPredicate.ALTER)) {
@@ -90,13 +102,5 @@ public class AlterTableStatsStmt extends DdlStmt {
             StatsType statsType = StatsType.fromString(key);
             statsTypeToValue.put(statsType, value);
         });
-    }
-
-    public TableName getTableName() {
-        return tableName;
-    }
-
-    public Map<StatsType, String> getStatsTypeToValue() {
-        return statsTypeToValue;
     }
 }
