@@ -27,7 +27,6 @@
 #include "exec/es/es_scroll_query.h"
 #include "exprs/expr.h"
 #include "exprs/expr_context.h"
-#include "runtime/dpp_sink_internal.h"
 #include "runtime/row_batch.h"
 #include "runtime/runtime_state.h"
 #include "service/backend_options.h"
@@ -163,7 +162,7 @@ Status EsHttpScanNode::open(RuntimeState* state) {
     auto checker = [&](int index) {
         return _conjunct_to_predicate[index] != -1 && list[_conjunct_to_predicate[index]];
     };
-    std::string vconjunct_information = _peel_pushed_vconjunct(checker);
+    std::string vconjunct_information = _peel_pushed_vconjunct(state, checker);
     _scanner_profile->add_info_string("VconjunctExprTree", vconjunct_information);
 
     RETURN_IF_ERROR(start_scanners());

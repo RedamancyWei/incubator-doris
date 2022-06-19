@@ -18,7 +18,9 @@
 package org.apache.doris.nereids.trees.expressions;
 
 import org.apache.doris.nereids.exceptions.UnboundException;
-import org.apache.doris.nereids.trees.TreeNode;
+import org.apache.doris.nereids.rules.expression.rewrite.ExpressionVisitor;
+import org.apache.doris.nereids.trees.AbstractTreeNode;
+import org.apache.doris.nereids.trees.NodeType;
 import org.apache.doris.nereids.types.DataType;
 
 import java.util.List;
@@ -26,17 +28,52 @@ import java.util.List;
 /**
  * Abstract class for all Expression in Nereids.
  */
-public interface Expression<EXPR_TYPE extends Expression<EXPR_TYPE>> extends TreeNode<EXPR_TYPE> {
+public abstract class Expression extends AbstractTreeNode<Expression> {
 
-    DataType getDataType() throws UnboundException;
+    public Expression(NodeType type, Expression... children) {
+        super(type, children);
+    }
 
-    String sql() throws UnboundException;
+    public DataType getDataType() throws UnboundException {
+        throw new UnboundException("dataType");
+    }
 
-    boolean nullable() throws UnboundException;
+    public String sql() throws UnboundException {
+        throw new UnboundException("sql");
+    }
+
+    public boolean nullable() throws UnboundException {
+        throw new UnboundException("nullable");
+    }
+
+    public <R, C> R accept(ExpressionVisitor<R, C> visitor, C context) {
+        return visitor.visitExpression(this, context);
+    }
 
     @Override
-    List<Expression> children();
+    public List<Expression> children() {
+        return (List) children;
+    }
 
     @Override
-    Expression child(int index);
+    public Expression child(int index) {
+        return (Expression) children.get(index);
+    }
+
+    @Override
+    public Expression withChildren(List<Expression> children) {
+        throw new RuntimeException();
+    }
+
+    /**
+     * Whether the expression is a constant.
+     */
+    public boolean isConstant() {
+        for (Expression child : children()) {
+            if (child.isConstant()) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

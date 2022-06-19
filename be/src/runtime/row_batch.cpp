@@ -173,8 +173,8 @@ RowBatch::RowBatch(const RowDescriptor& row_desc, const PRowBatch& input_batch)
 
                 CollectionValue* array_val =
                         tuple->get_collection_slot(slot_collection->tuple_offset());
-                CollectionValue::deserialize_collection(array_val, tuple_data,
-                                                        slot_collection->type());
+                const auto& item_type_desc = slot_collection->type().children[0];
+                CollectionValue::deserialize_collection(array_val, tuple_data, item_type_desc);
             }
         }
     }
@@ -210,7 +210,7 @@ RowBatch::~RowBatch() {
 }
 
 Status RowBatch::serialize(PRowBatch* output_batch, size_t* uncompressed_size,
-                           size_t* compressed_size, std::string* allocated_buf) {
+                           size_t* compressed_size, bool allow_transfer_large_data) {
     // num_rows
     output_batch->set_num_rows(_num_rows);
     // row_tuples
@@ -226,18 +226,8 @@ Status RowBatch::serialize(PRowBatch* output_batch, size_t* uncompressed_size,
     output_batch->set_is_compressed(false);
     // tuple data
     size_t tuple_byte_size = total_byte_size();
-    std::string* mutable_tuple_data = nullptr;
-    if (allocated_buf != nullptr) {
-        allocated_buf->resize(tuple_byte_size);
-        // all tuple data will be written in the allocated_buf
-        // instead of tuple_data in PRowBatch
-        mutable_tuple_data = allocated_buf;
-        // tuple_data is a required field
-        output_batch->set_tuple_data("");
-    } else {
-        mutable_tuple_data = output_batch->mutable_tuple_data();
-        mutable_tuple_data->resize(tuple_byte_size);
-    }
+    std::string* mutable_tuple_data = output_batch->mutable_tuple_data();
+    mutable_tuple_data->resize(tuple_byte_size);
 
     // Copy tuple data, including strings, into output_batch (converting string
     // pointers into offsets in the process)
@@ -273,10 +263,6 @@ Status RowBatch::serialize(PRowBatch* output_batch, size_t* uncompressed_size,
         try {
             // Allocation of extra-long contiguous memory may fail, and data compression cannot be used if it fails
             _compression_scratch.resize(max_compressed_size);
-        } catch (const std::bad_alloc& e) {
-            can_compress = false;
-            LOG(WARNING) << "Try to alloc " << max_compressed_size
-                         << " bytes for compression scratch failed. " << e.what();
         } catch (...) {
             can_compress = false;
             std::exception_ptr p = std::current_exception();
@@ -304,20 +290,12 @@ Status RowBatch::serialize(PRowBatch* output_batch, size_t* uncompressed_size,
 
     // return compressed and uncompressed size
     size_t pb_size = get_batch_size(*output_batch);
-    if (allocated_buf == nullptr) {
-        *uncompressed_size = pb_size - mutable_tuple_data->size() + tuple_byte_size;
-        *compressed_size = pb_size;
-        if (pb_size > std::numeric_limits<int32_t>::max()) {
-            // the protobuf has a hard limit of 2GB for serialized data.
-            return Status::InternalError(
-                    fmt::format("The rowbatch is large than 2GB({}), can not send by Protobuf. "
-                                "please set BE config 'transfer_data_by_brpc_attachment' to true "
-                                "and restart BE.",
-                                pb_size));
-        }
-    } else {
-        *uncompressed_size = pb_size + tuple_byte_size;
-        *compressed_size = pb_size + mutable_tuple_data->size();
+    *uncompressed_size = pb_size - mutable_tuple_data->size() + tuple_byte_size;
+    *compressed_size = pb_size;
+    if (!allow_transfer_large_data && pb_size > std::numeric_limits<int32_t>::max()) {
+        // the protobuf has a hard limit of 2GB for serialized data.
+        return Status::InternalError(fmt::format(
+                "The rowbatch is large than 2GB({}), can not send by Protobuf.", pb_size));
     }
     return Status::OK();
 }
@@ -580,10 +558,10 @@ size_t RowBatch::total_byte_size() const {
                 if (tuple->is_null(slot_collection->null_indicator_offset())) {
                     continue;
                 }
-                // compute data null_signs size
                 CollectionValue* array_val =
                         tuple->get_collection_slot(slot_collection->tuple_offset());
-                result += array_val->get_byte_size(slot_collection->type());
+                const auto& item_type_desc = slot_collection->type().children[0];
+                result += array_val->get_byte_size(item_type_desc);
             }
         }
     }

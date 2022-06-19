@@ -84,10 +84,10 @@ public class DateLiteral extends LiteralExpr {
     private static Map<String, Integer> MONTH_NAME_DICT = Maps.newHashMap();
     private static Map<String, Integer> MONTH_ABBR_NAME_DICT = Maps.newHashMap();
     private static Map<String, Integer> WEEK_DAY_NAME_DICT = Maps.newHashMap();
-    private final static int[] DAYS_IN_MONTH = new int[] {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-    private final static int ALLOW_SPACE_MASK = 4 | 64;
-    private final static int MAX_DATE_PARTS = 8;
-    private final static int YY_PART_YEAR = 70;
+    private static final int[] DAYS_IN_MONTH = new int[] {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    private static final int ALLOW_SPACE_MASK = 4 | 64;
+    private static final int MAX_DATE_PARTS = 8;
+    private static final int YY_PART_YEAR = 70;
 
     static {
         try {
@@ -148,6 +148,7 @@ public class DateLiteral extends LiteralExpr {
 
     //Regex used to determine if the TIME field exists int date_format
     private static final Pattern HAS_TIME_PART = Pattern.compile("^.*[HhIiklrSsTp]+.*$");
+
     //Date Literal persist type in meta
     private enum  DateLiteralType {
         DATETIME(0),
@@ -428,8 +429,8 @@ public class DateLiteral extends LiteralExpr {
     private long makePackedDatetime() {
         long ymd = ((year * 13 + month) << 5) | day;
         long hms = (hour << 12) | (minute << 6) | second;
-        long packed_datetime = ((ymd << 17) | hms) << 24 + microsecond;
-        return packed_datetime;
+        long packedDatetime = ((ymd << 17) | hms) << 24 + microsecond;
+        return packedDatetime;
     }
 
     @Override
@@ -446,9 +447,9 @@ public class DateLiteral extends LiteralExpr {
         out.writeLong(makePackedDatetime());
     }
 
-    private void fromPackedDatetime(long packed_time) {
-        microsecond = (packed_time % (1L << 24));
-        long ymdhms = (packed_time >> 24);
+    private void fromPackedDatetime(long packedTime) {
+        microsecond = (packedTime % (1L << 24));
+        long ymdhms = (packedTime >> 24);
         long ymd = ymdhms >> 17;
         long hms = ymdhms % (1 << 17);
 
@@ -467,11 +468,11 @@ public class DateLiteral extends LiteralExpr {
 
     public void readFields(DataInput in) throws IOException {
         super.readFields(in);
-        short date_literal_type = in.readShort();
+        short dateLiteralType = in.readShort();
         fromPackedDatetime(in.readLong());
-        if (date_literal_type == DateLiteralType.DATETIME.value()) {
+        if (dateLiteralType == DateLiteralType.DATETIME.value()) {
             this.type = Type.DATETIME;
-        } else if (date_literal_type == DateLiteralType.DATE.value()) {
+        } else if (dateLiteralType == DateLiteralType.DATE.value()) {
             this.type = Type.DATE;
         } else {
             throw new IOException("Error date literal type : " + type);
@@ -597,7 +598,9 @@ public class DateLiteral extends LiteralExpr {
                     case 'v': // %v Week (01..53), where Monday is the first day of the week; used with %x
                         builder.appendWeekOfWeekyear(2);
                         break;
-                    case 'x': // %x Year for the week, where Monday is the first day of the week, numeric, four digits; used with %v
+                    case 'x':
+                        // %x Year for the week, where Monday is the first day of the week,
+                        // numeric, four digits; used with %v
                         builder.appendWeekyear(4, 4);
                         break;
                     case 'W': // %W Weekday name (Sunday..Saturday)
@@ -614,9 +617,12 @@ public class DateLiteral extends LiteralExpr {
                     case 'U': // %U Week (00..53), where Sunday is the first day of the week
                     case 'u': // %u Week (00..53), where Monday is the first day of the week
                     case 'V': // %V Week (01..53), where Sunday is the first day of the week; used with %X
-                    case 'X': // %X Year for the week where Sunday is the first day of the week, numeric, four digits; used with %V
+                    case 'X':
+                        // %X Year for the week where Sunday is the first day of the week,
+                        // numeric, four digits; used with %V
                     case 'D': // %D Day of the month with English suffix (0th, 1st, 2nd, 3rd, …)
-                        throw new AnalysisException(String.format("%%%s not supported in date format string", character));
+                        throw new AnalysisException(
+                                String.format("%%%s not supported in date format string", character));
                     case '%': // %% A literal "%" character
                         builder.appendLiteral('%');
                         break;
@@ -815,8 +821,7 @@ public class DateLiteral extends LiteralExpr {
                     case 'I':
                     case 'l':
                         usaTime = true;
-                        // Fall through
-                    case 'k':
+                    case 'k': // CHECKSTYLE IGNORE THIS LINE: Fall through
                     case 'H':
                         tmp = findNumber(value, vp, 2);
                         intValue = strToLong(value.substring(vp, tmp));
@@ -958,7 +963,8 @@ public class DateLiteral extends LiteralExpr {
                 }
             } else if (format.charAt(fp) != ' ') {
                 if (format.charAt(fp) != value.charAt(vp)) {
-                    throw new InvalidFormatException("Invalid char: " + value.charAt(vp) + ", expected: " + format.charAt(fp));
+                    throw new InvalidFormatException("Invalid char: " + value.charAt(vp)
+                            + ", expected: " + format.charAt(fp));
                 }
                 fp++;
                 vp++;
@@ -1024,12 +1030,12 @@ public class DateLiteral extends LiteralExpr {
             }
             long days = calcDaynr(strictWeekNumber ? strictWeekNumberYear : this.year, 1, 1);
 
-            long weekday_b = calcWeekday(days, sundayFirst);
+            long weekdayB = calcWeekday(days, sundayFirst);
 
             if (sundayFirst) {
-                days += ((weekday_b == 0) ? 0 : 7) - weekday_b + (weekNum - 1) * 7 + weekday % 7;
+                days += ((weekdayB == 0) ? 0 : 7) - weekdayB + (weekNum - 1) * 7 + weekday % 7;
             } else {
-                days += ((weekday_b <= 3) ? 0 : 7) - weekday_b + (weekNum - 1) * 7 + weekday - 1;
+                days += ((weekdayB <= 3) ? 0 : 7) - weekdayB + (weekNum - 1) * 7 + weekday - 1;
             }
             getDateFromDaynr(days);
         }
@@ -1054,8 +1060,9 @@ public class DateLiteral extends LiteralExpr {
                 || hour > MAX_DATETIME.hour || minute > MAX_DATETIME.minute || second > MAX_DATETIME.second
                 || microsecond > MAX_MICROSECOND;
     }
+
     private boolean checkDate() {
-        if (month != 0 && day > DAYS_IN_MONTH[((int) month)]){
+        if (month != 0 && day > DAYS_IN_MONTH[((int) month)]) {
             if (month == 2 && day == 29 && Year.isLeap(year)) {
                 return false;
             }
@@ -1194,12 +1201,13 @@ public class DateLiteral extends LiteralExpr {
         int fieldLen = yearLen;
         while (pre < dateStr.length() && Character.isDigit(dateStr.charAt(pre)) && fieldIdx < MAX_DATE_PARTS - 1) {
             int start = pre;
-            int temp_val = 0;
+            int tempVal = 0;
             boolean scanToDelim = (!isIntervalFormat) && (fieldIdx != 6);
-            while (pre < dateStr.length() && Character.isDigit(dateStr.charAt(pre)) && (scanToDelim || fieldLen-- != 0)) {
-                temp_val = temp_val * 10 + (dateStr.charAt(pre++) - '0');
+            while (pre < dateStr.length() && Character.isDigit(dateStr.charAt(pre))
+                    && (scanToDelim || fieldLen-- != 0)) {
+                tempVal = tempVal * 10 + (dateStr.charAt(pre++) - '0');
             }
-            dateVal[fieldIdx] = temp_val;
+            dateVal[fieldIdx] = tempVal;
             dateLen[fieldIdx] = pre - start;
             fieldLen = 2;
 

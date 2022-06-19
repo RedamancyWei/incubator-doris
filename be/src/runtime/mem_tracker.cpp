@@ -124,14 +124,17 @@ std::shared_ptr<MemTracker> MemTracker::create_tracker_impl(
     std::string reset_label;
     MemTracker* task_parent_tracker = reset_parent->parent_task_mem_tracker();
     if (task_parent_tracker) {
-        reset_label = fmt::format("{}:{}", label, split(task_parent_tracker->label(), ":")[1]);
+        reset_label = fmt::format("{}#{}", label, split(task_parent_tracker->label(), "#")[1]);
     } else {
         reset_label = label;
     }
+    if (byte_limit == -1) byte_limit = reset_parent->limit();
 
     std::shared_ptr<MemTracker> tracker(
             new MemTracker(byte_limit, reset_label, reset_parent,
                            level > reset_parent->_level ? level : reset_parent->_level, profile));
+    // Do not check limit exceed when add_child_tracker, otherwise it will cause deadlock when log_usage is called.
+    STOP_CHECK_LIMIT_THREAD_LOCAL_MEM_TRACKER();
     reset_parent->add_child_tracker(tracker);
     return tracker;
 }
@@ -178,7 +181,7 @@ void MemTracker::init_virtual() {
 MemTracker::~MemTracker() {
     consume(_untracked_mem.exchange(0)); // before memory_leak_check
     // TCMalloc hook will be triggered during destructor memtracker, may cause crash.
-    if (_label == "Process") GLOBAL_STOP_THREAD_LOCAL_MEM_TRACKER();
+    if (_label == "Process") STOP_THREAD_LOCAL_MEM_TRACKER(false);
     if (!_virtual && config::memory_leak_detection) MemTracker::memory_leak_check(this);
     if (!_virtual && parent()) {
         // Do not call release on the parent tracker to avoid repeated releases.
@@ -285,6 +288,7 @@ std::string MemTracker::log_usage(int max_recursive_depth,
 
 Status MemTracker::mem_limit_exceeded(RuntimeState* state, const std::string& details,
                                       int64_t failed_allocation_size, Status failed_alloc) {
+    STOP_CHECK_LIMIT_THREAD_LOCAL_MEM_TRACKER();
     MemTracker* process_tracker = MemTracker::get_raw_process_tracker();
     std::string detail =
             "Memory exceed limit. fragment={}, details={}, on backend={}. Memory left in process "

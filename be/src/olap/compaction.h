@@ -48,10 +48,13 @@ public:
 
     // This is only for http CompactionAction
     Status compact();
+    Status quick_rowsets_compact();
 
     virtual Status prepare_compact() = 0;
     Status execute_compact();
     virtual Status execute_compact_impl() = 0;
+
+    std::shared_ptr<MemTracker>& get_mem_tracker() { return _mem_tracker; }
 
 protected:
     virtual Status pick_rowsets_to_compact() = 0;
@@ -61,7 +64,7 @@ protected:
     Status do_compaction(int64_t permits);
     Status do_compaction_impl(int64_t permits);
 
-    void modify_rowsets();
+    Status modify_rowsets();
     void gc_output_rowset();
 
     Status construct_output_rowset_writer();
@@ -77,9 +80,6 @@ private:
     // get num rows from segment group meta of input rowsets.
     // return -1 if these are not alpha rowsets.
     int64_t _get_input_num_rows_from_seg_grps();
-
-    // check whether we should enable vectorized compaction.
-    bool _should_use_vectorized_compaction();
 
 protected:
     // the root tracker for this compaction

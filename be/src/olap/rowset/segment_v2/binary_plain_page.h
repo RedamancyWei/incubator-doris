@@ -208,7 +208,7 @@ public:
         }
 
         // use SIMD instruction to speed up call function `RoundUpToPowerOfTwo`
-        auto mem_size = 0;
+        size_t mem_size = 0;
         for (int i = 0; i < max_fetch; ++i) {
             mem_len[i] = BitUtil::RoundUpToPowerOf2Int32(mem_len[i], MemPool::DEFAULT_ALIGNMENT);
             mem_size += mem_len[i];
@@ -271,7 +271,8 @@ public:
     }
 
     void get_dict_word_info(StringRef* dict_word_info) {
-        if (_num_elems <= 0) [[unlikely]] return;
+        if (_num_elems <= 0) [[unlikely]]
+            return;
 
         char* data_begin = (char*)&_data[0];
         char* offset_ptr = (char*)&_data[_offsets_pos];

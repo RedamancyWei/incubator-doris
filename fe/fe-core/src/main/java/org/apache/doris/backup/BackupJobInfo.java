@@ -29,7 +29,7 @@ import org.apache.doris.catalog.OlapTable;
 import org.apache.doris.catalog.Partition;
 import org.apache.doris.catalog.Resource;
 import org.apache.doris.catalog.Table;
-import org.apache.doris.catalog.Table.TableType;
+import org.apache.doris.catalog.TableIf.TableType;
 import org.apache.doris.catalog.Tablet;
 import org.apache.doris.catalog.View;
 import org.apache.doris.common.FeConstants;
@@ -521,7 +521,7 @@ public class BackupJobInfo implements Writable {
                         partitionInfo.indexes.put(olapTbl.getIndexNameById(index.getId()), idxInfo);
                         // tablets
                         if (content == BackupContent.METADATA_ONLY) {
-                            for (Tablet tablet: index.getTablets()) {
+                            for (Tablet tablet : index.getTablets()) {
                                 idxInfo.tablets.put(tablet.getId(), Lists.newArrayList());
                             }
                         } else {

@@ -17,7 +17,6 @@
 
 #include "exprs/array_functions.h"
 
-#include "common/logging.h"
 #include "runtime/collection_value.h"
 
 namespace doris {
@@ -30,8 +29,9 @@ void ArrayFunctions::init() {}
         DCHECK_EQ(context->get_return_type().children.size(), 1);                   \
         CollectionValue v;                                                          \
         CollectionValue::init_collection(context, num_children, PRIMARY_TYPE, &v);  \
-        for (int i = 0; i < num_children; ++i) {                                    \
-            v.set(i, PRIMARY_TYPE, values + i);                                     \
+        auto iterator = v.iterator(PRIMARY_TYPE);                                   \
+        for (int i = 0; i < num_children; ++i, iterator.next()) {                   \
+            iterator.set(values + i);                                               \
         }                                                                           \
         CollectionVal ret;                                                          \
         v.to_collection_val(&ret);                                                  \

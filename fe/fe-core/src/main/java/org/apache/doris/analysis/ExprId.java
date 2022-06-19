@@ -27,7 +27,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 public class ExprId extends Id<ExprId> {
-    private final static Logger LOG = LogManager.getLogger(ExprId.class);
+    private static final Logger LOG = LogManager.getLogger(ExprId.class);
 
     // Construction only allowed via an IdGenerator.
     public ExprId(int id) {
@@ -37,9 +37,14 @@ public class ExprId extends Id<ExprId> {
     public static IdGenerator<ExprId> createGenerator() {
         return new IdGenerator<ExprId>() {
             @Override
-            public ExprId getNextId() { return new ExprId(nextId_++); }
+            public ExprId getNextId() {
+                return new ExprId(nextId++);
+            }
+
             @Override
-            public ExprId getMaxId() { return new ExprId(nextId_ - 1); }
+            public ExprId getMaxId() {
+                return new ExprId(nextId - 1);
+            }
         };
     }
 }

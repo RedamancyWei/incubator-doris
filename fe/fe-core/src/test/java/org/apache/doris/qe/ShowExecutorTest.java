@@ -45,7 +45,7 @@ import org.apache.doris.catalog.PrimitiveType;
 import org.apache.doris.catalog.RandomDistributionInfo;
 import org.apache.doris.catalog.SinglePartitionInfo;
 import org.apache.doris.catalog.Table;
-import org.apache.doris.catalog.Table.TableType;
+import org.apache.doris.catalog.TableIf.TableType;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.PatternMatcher;
 import org.apache.doris.common.UserException;
@@ -89,9 +89,6 @@ public class ShowExecutorTest {
         column2.setIsKey(true);
         // mock index 1
         MaterializedIndex index1 = new MaterializedIndex();
-
-        // mock index 2
-        MaterializedIndex index2 = new MaterializedIndex();
 
         // mock partition
         Partition partition = Deencapsulation.newInstance(Partition.class);
@@ -256,7 +253,7 @@ public class ShowExecutorTest {
         ShowDbStmt stmt = new ShowDbStmt(null);
         ShowExecutor executor = new ShowExecutor(ctx, stmt);
         ctx.setCatalog(AccessTestUtil.fetchBlockCatalog());
-        ShowResultSet resultSet = executor.execute();
+        executor.execute();
     }
 
     @Test
@@ -300,6 +297,7 @@ public class ShowExecutorTest {
             Catalog getCurrentCatalog() {
                 return catalog;
             }
+
             @Mock
             SystemInfoService getCurrentSystemInfo() {
                 return clusterInfo;
@@ -399,7 +397,7 @@ public class ShowExecutorTest {
 
         ShowCreateDbStmt stmt = new ShowCreateDbStmt("testCluster:emptyDb");
         ShowExecutor executor = new ShowExecutor(ctx, stmt);
-        ShowResultSet resultSet = executor.execute();
+        executor.execute();
 
         Assert.fail("No exception throws.");
     }
@@ -408,7 +406,7 @@ public class ShowExecutorTest {
     public void testShowCreateTableEmptyDb() throws AnalysisException {
         ShowCreateTableStmt stmt = new ShowCreateTableStmt(new TableName("testCluster:emptyDb", "testTable"));
         ShowExecutor executor = new ShowExecutor(ctx, stmt);
-        ShowResultSet resultSet = executor.execute();
+        executor.execute();
 
         Assert.fail("No Exception throws.");
     }

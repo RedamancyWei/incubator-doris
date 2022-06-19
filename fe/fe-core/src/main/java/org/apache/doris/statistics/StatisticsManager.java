@@ -533,4 +533,5 @@ public class StatisticsManager {
         values.sort(Comparator.naturalOrder());
         return values.size() > 0 ? values.get(values.size() - 1) : null;
     }
+
 }

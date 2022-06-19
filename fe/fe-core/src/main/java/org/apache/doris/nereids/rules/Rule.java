@@ -17,9 +17,10 @@
 
 package org.apache.doris.nereids.rules;
 
-import org.apache.doris.common.AnalysisException;
 import org.apache.doris.nereids.PlannerContext;
+import org.apache.doris.nereids.exceptions.TransformException;
 import org.apache.doris.nereids.pattern.Pattern;
+import org.apache.doris.nereids.rules.RuleType.RuleTypeClass;
 import org.apache.doris.nereids.trees.TreeNode;
 
 import java.util.List;
@@ -27,9 +28,9 @@ import java.util.List;
 /**
  * Abstract class for all rules.
  */
-public abstract class Rule<TYPE extends TreeNode> {
+public abstract class Rule<TYPE extends TreeNode<TYPE>> {
     private final RuleType ruleType;
-    private final Pattern pattern;
+    private final Pattern<? extends TYPE, TYPE> pattern;
     private final RulePromise rulePromise;
 
     /**
@@ -39,7 +40,7 @@ public abstract class Rule<TYPE extends TreeNode> {
      * @param pattern target pattern of rule
      * @param rulePromise rule promise
      */
-    public Rule(RuleType ruleType, Pattern pattern, RulePromise rulePromise) {
+    public Rule(RuleType ruleType, Pattern<? extends TYPE, TYPE> pattern, RulePromise rulePromise) {
         this.ruleType = ruleType;
         this.pattern = pattern;
         this.rulePromise = rulePromise;
@@ -53,13 +54,13 @@ public abstract class Rule<TYPE extends TreeNode> {
         return rulePromise;
     }
 
-    public Pattern getPattern() {
+    public Pattern<? extends TYPE, TYPE> getPattern() {
         return pattern;
     }
 
-    public boolean check(TYPE node, PlannerContext context) {
-        return true;
+    public boolean isRewrite() {
+        return ruleType.getRuleTypeClass() == RuleTypeClass.REWRITE;
     }
 
-    public abstract List<TYPE> transform(TYPE node, PlannerContext context) throws AnalysisException;
+    public abstract List<TYPE> transform(TYPE node, PlannerContext context) throws TransformException;
 }

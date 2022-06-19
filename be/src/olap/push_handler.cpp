@@ -22,21 +22,16 @@
 #include <iostream>
 #include <sstream>
 
+#include "common/object_pool.h"
 #include "common/status.h"
 #include "exec/parquet_scanner.h"
 #include "olap/row.h"
-#include "olap/rowset/rowset_factory.h"
 #include "olap/rowset/rowset_id_generator.h"
 #include "olap/rowset/rowset_meta_manager.h"
 #include "olap/schema_change.h"
 #include "olap/storage_engine.h"
 #include "olap/tablet.h"
 #include "runtime/exec_env.h"
-
-using std::list;
-using std::map;
-using std::string;
-using std::vector;
 
 namespace doris {
 
@@ -61,6 +56,9 @@ Status PushHandler::process_streaming_ingestion(TabletSharedPtr tablet, const TP
 
     Status res = Status::OK();
     _request = request;
+
+    DescriptorTbl::create(&_pool, _request.desc_tbl, &_desc_tbl);
+
     std::vector<TabletVars> tablet_vars(1);
     tablet_vars[0].tablet = tablet;
     res = _do_streaming_ingestion(tablet, request, push_type, &tablet_vars, tablet_info_vec);
@@ -221,29 +219,12 @@ Status PushHandler::_convert_v2(TabletSharedPtr cur_tablet, TabletSharedPtr new_
         // 1. init RowsetBuilder of cur_tablet for current push
         VLOG_NOTICE << "init rowset builder. tablet=" << cur_tablet->full_name()
                     << ", block_row_size=" << cur_tablet->num_rows_per_row_block();
-        RowsetWriterContext context;
-        context.rowset_id = StorageEngine::instance()->next_rowset_id();
-        context.tablet_uid = cur_tablet->tablet_uid();
-        context.tablet_id = cur_tablet->tablet_id();
-        context.partition_id = _request.partition_id;
-        context.tablet_schema_hash = cur_tablet->schema_hash();
-        context.data_dir = cur_tablet->data_dir();
-        context.rowset_type = StorageEngine::instance()->default_rowset_type();
-        if (cur_tablet->tablet_meta()->preferred_rowset_type() == BETA_ROWSET) {
-            context.rowset_type = BETA_ROWSET;
-        }
-        context.path_desc = cur_tablet->tablet_path_desc();
-        context.tablet_schema = &(cur_tablet->tablet_schema());
-        context.rowset_state = PREPARED;
-        context.txn_id = _request.transaction_id;
-        context.load_id = load_id;
         // although the spark load output files are fully sorted,
         // but it depends on thirparty implementation, so we conservatively
         // set this value to OVERLAP_UNKNOWN
-        context.segments_overlap = OVERLAP_UNKNOWN;
-
         std::unique_ptr<RowsetWriter> rowset_writer;
-        res = RowsetFactory::create_rowset_writer(context, &rowset_writer);
+        res = cur_tablet->create_rowset_writer(_request.transaction_id, load_id, PREPARED,
+                                               OVERLAP_UNKNOWN, &rowset_writer);
         if (!res.ok()) {
             LOG(WARNING) << "failed to init rowset writer, tablet=" << cur_tablet->full_name()
                          << ", txn_id=" << _request.transaction_id << ", res=" << res;
@@ -333,16 +314,15 @@ Status PushHandler::_convert_v2(TabletSharedPtr cur_tablet, TabletSharedPtr new_
         // 5. Convert data for schema change tables
         VLOG_TRACE << "load to related tables of schema_change if possible.";
         if (new_tablet != nullptr) {
-            auto schema_change_handler = SchemaChangeHandler::instance();
-            res = schema_change_handler->schema_version_convert(cur_tablet, new_tablet, cur_rowset,
-                                                                new_rowset);
+            res = SchemaChangeHandler::schema_version_convert(cur_tablet, new_tablet, cur_rowset,
+                                                              new_rowset, *_desc_tbl);
             if (!res.ok()) {
                 LOG(WARNING) << "failed to change schema version for delta."
                              << "[res=" << res << " new_tablet='" << new_tablet->full_name()
                              << "']";
             }
         }
-    } while (0);
+    } while (false);
 
     VLOG_TRACE << "convert delta file end. res=" << res << ", tablet=" << cur_tablet->full_name()
                << ", processed_rows" << num_rows;
@@ -407,30 +387,9 @@ Status PushHandler::_convert(TabletSharedPtr cur_tablet, TabletSharedPtr new_tab
         }
 
         // 2. init RowsetBuilder of cur_tablet for current push
-        VLOG_NOTICE << "init RowsetBuilder.";
-        RowsetWriterContext context;
-        context.rowset_id = StorageEngine::instance()->next_rowset_id();
-        context.tablet_uid = cur_tablet->tablet_uid();
-        context.tablet_id = cur_tablet->tablet_id();
-        context.partition_id = _request.partition_id;
-        context.tablet_schema_hash = cur_tablet->schema_hash();
-        context.data_dir = cur_tablet->data_dir();
-        context.rowset_type = StorageEngine::instance()->default_rowset_type();
-        if (cur_tablet->tablet_meta()->preferred_rowset_type() == BETA_ROWSET) {
-            context.rowset_type = BETA_ROWSET;
-        }
-        context.path_desc = cur_tablet->tablet_path_desc();
-        context.tablet_schema = &(cur_tablet->tablet_schema());
-        context.rowset_state = PREPARED;
-        context.txn_id = _request.transaction_id;
-        context.load_id = load_id;
-        // although the hadoop load output files are fully sorted,
-        // but it depends on thirparty implementation, so we conservatively
-        // set this value to OVERLAP_UNKNOWN
-        context.segments_overlap = OVERLAP_UNKNOWN;
-
         std::unique_ptr<RowsetWriter> rowset_writer;
-        res = RowsetFactory::create_rowset_writer(context, &rowset_writer);
+        res = cur_tablet->create_rowset_writer(_request.transaction_id, load_id, PREPARED,
+                                               OVERLAP_UNKNOWN, &rowset_writer);
         if (!res.ok()) {
             LOG(WARNING) << "failed to init rowset writer, tablet=" << cur_tablet->full_name()
                          << ", txn_id=" << _request.transaction_id << ", res=" << res;
@@ -495,16 +454,15 @@ Status PushHandler::_convert(TabletSharedPtr cur_tablet, TabletSharedPtr new_tab
         // 7. Convert data for schema change tables
         VLOG_TRACE << "load to related tables of schema_change if possible.";
         if (new_tablet != nullptr) {
-            auto schema_change_handler = SchemaChangeHandler::instance();
-            res = schema_change_handler->schema_version_convert(cur_tablet, new_tablet, cur_rowset,
-                                                                new_rowset);
+            res = SchemaChangeHandler::schema_version_convert(cur_tablet, new_tablet, cur_rowset,
+                                                              new_rowset, *_desc_tbl);
             if (!res.ok()) {
                 LOG(WARNING) << "failed to change schema version for delta."
                              << "[res=" << res << " new_tablet='" << new_tablet->full_name()
                              << "']";
             }
         }
-    } while (0);
+    } while (false);
 
     SAFE_DELETE(reader);
     VLOG_TRACE << "convert delta file end. res=" << res << ", tablet=" << cur_tablet->full_name()
@@ -541,7 +499,7 @@ IBinaryReader* IBinaryReader::create(bool need_decompress) {
     return reader;
 }
 
-BinaryReader::BinaryReader() : IBinaryReader(), _row_buf(nullptr), _row_buf_size(0) {}
+BinaryReader::BinaryReader() : _row_buf(nullptr), _row_buf_size(0) {}
 
 Status BinaryReader::init(TabletSharedPtr tablet, BinaryFile* file) {
     Status res = Status::OK();
@@ -566,7 +524,7 @@ Status BinaryReader::init(TabletSharedPtr tablet, BinaryFile* file) {
 
         _tablet = tablet;
         _ready = true;
-    } while (0);
+    } while (false);
 
     if (!res.ok()) {
         SAFE_DELETE_ARRAY(_row_buf);
@@ -676,8 +634,7 @@ Status BinaryReader::next(RowCursor* row) {
 }
 
 LzoBinaryReader::LzoBinaryReader()
-        : IBinaryReader(),
-          _row_buf(nullptr),
+        : _row_buf(nullptr),
           _row_compressed_buf(nullptr),
           _row_info_buf(nullptr),
           _max_row_num(0),
@@ -709,7 +666,7 @@ Status LzoBinaryReader::init(TabletSharedPtr tablet, BinaryFile* file) {
 
         _tablet = tablet;
         _ready = true;
-    } while (0);
+    } while (false);
 
     if (!res.ok()) {
         SAFE_DELETE_ARRAY(_row_info_buf);

@@ -45,16 +45,16 @@ import java.io.IOException;
 // cmy@192.168.%
 // cmy@[domain.name]
 public class UserIdentity implements Writable {
-    
+
     @SerializedName(value = "user")
     private String user;
-    
+
     @SerializedName(value = "host")
     private String host;
-    
+
     @SerializedName(value = "isDomain")
     private boolean isDomain;
-    
+
     private boolean isAnalyzed = false;
 
     public static final UserIdentity ROOT;
@@ -98,7 +98,8 @@ public class UserIdentity implements Writable {
     }
 
     public static UserIdentity fromThrift(TUserIdentity tUserIdent) {
-        UserIdentity userIdentity = new UserIdentity(tUserIdent.getUsername(), tUserIdent.getHost(), tUserIdent.is_domain);
+        UserIdentity userIdentity = new UserIdentity(tUserIdent.getUsername(),
+                tUserIdent.getHost(), tUserIdent.is_domain);
         userIdentity.setIsAnalyzed();
         return userIdentity;
     }

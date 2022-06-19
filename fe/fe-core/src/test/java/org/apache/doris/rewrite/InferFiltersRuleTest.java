@@ -130,6 +130,7 @@ public class InferFiltersRuleTest {
         String planString = dorisAssert.query(query).explainQuery();
         Assert.assertFalse(planString.contains("`tb1`.`k1` = 1"));
     }
+
     @Test
     public void testOn2TablesLeftAntiJoinEqLiteralAt1st() throws Exception {
         SessionVariable sessionVariable = dorisAssert.getSessionVariable();
@@ -298,7 +299,7 @@ public class InferFiltersRuleTest {
     }
 
     @Test
-    public void testOnAndWhere2TablesLeftJoin() throws Exception {
+    public void testOnAndWhere2TablesLeftJoin2ndIsLiteral() throws Exception {
         SessionVariable sessionVariable = dorisAssert.getSessionVariable();
         sessionVariable.setEnableInferPredicate(true);
         Assert.assertTrue(sessionVariable.isEnableInferPredicate());
@@ -308,7 +309,7 @@ public class InferFiltersRuleTest {
     }
 
     @Test
-    public void testOnAndWhere2TablesInnerJoin() throws Exception {
+    public void testOnAndWhere2TablesInnerJoin2ndIsLiteral() throws Exception {
         SessionVariable sessionVariable = dorisAssert.getSessionVariable();
         sessionVariable.setEnableInferPredicate(true);
         Assert.assertTrue(sessionVariable.isEnableInferPredicate());
@@ -317,4 +318,23 @@ public class InferFiltersRuleTest {
         Assert.assertTrue(planString.contains("`tb1`.`k1` = 1"));
     }
 
+    @Test
+    public void testOnAndWhere2TableLeftJoin1stIsLiteral() throws Exception {
+        SessionVariable sessionVariable = dorisAssert.getSessionVariable();
+        sessionVariable.setEnableInferPredicate(true);
+        Assert.assertTrue(sessionVariable.isEnableInferPredicate());
+        String query = "select * from tb1 left join tb2 on tb1.k1 = tb2.k1 where tb1.k1 = 1";
+        String planString = dorisAssert.query(query).explainQuery();
+        Assert.assertTrue(planString.contains("`tb2`.`k1` = 1"));
+    }
+
+    @Test
+    public void testOnAndWhere2TablesInnerJoin1stIsLiteral() throws Exception {
+        SessionVariable sessionVariable = dorisAssert.getSessionVariable();
+        sessionVariable.setEnableInferPredicate(true);
+        Assert.assertTrue(sessionVariable.isEnableInferPredicate());
+        String query = "select * from tb1 inner join tb2 on tb1.k1 = tb2.k1 where tb1.k1 = 1";
+        String planString = dorisAssert.query(query).explainQuery();
+        Assert.assertTrue(planString.contains("`tb2`.`k1` = 1"));
+    }
 }

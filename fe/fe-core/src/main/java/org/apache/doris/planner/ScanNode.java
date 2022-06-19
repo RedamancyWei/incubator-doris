@@ -53,8 +53,8 @@ import java.util.Set;
 /**
  * Representation of the common elements of all scan nodes.
  */
-abstract public class ScanNode extends PlanNode {
-    private final static Logger LOG = LogManager.getLogger(ScanNode.class);
+public abstract class ScanNode extends PlanNode {
+    private static final Logger LOG = LogManager.getLogger(ScanNode.class);
     protected final TupleDescriptor desc;
     // Use this if partition_prune_algorithm_version is 1.
     protected Map<String, PartitionColumnFilter> columnFilters = Maps.newHashMap();
@@ -64,8 +64,7 @@ abstract public class ScanNode extends PlanNode {
     protected Analyzer analyzer;
 
     public ScanNode(PlanNodeId id, TupleDescriptor desc, String planNodeName, NodeType nodeType) {
-        super(id, desc.getId().asList(), planNodeName);
-        super.nodeType = nodeType;
+        super(id, desc.getId().asList(), planNodeName, nodeType);
         this.desc = desc;
     }
 
@@ -118,7 +117,7 @@ abstract public class ScanNode extends PlanNode {
      *                           only applicable to HDFS; less than or equal to zero means no
      *                           maximum.
      */
-    abstract public List<TScanRangeLocations> getScanRangeLocations(long maxScanRangeLength);
+    public abstract List<TScanRangeLocations> getScanRangeLocations(long maxScanRangeLength);
 
     // TODO(ML): move it into PrunerOptimizer
     public void computeColumnFilter() {
@@ -153,8 +152,8 @@ abstract public class ScanNode extends PlanNode {
                 continue;
             }
 
-            if (expr instanceof CompoundPredicate &&
-                ((CompoundPredicate) expr).getOp() == CompoundPredicate.Operator.OR) {
+            if (expr instanceof CompoundPredicate
+                    && ((CompoundPredicate) expr).getOp() == CompoundPredicate.Operator.OR) {
                 // Try to get column filter from disjunctive predicates.
                 List<Expr> disjunctivePredicates = PredicateUtils.splitDisjunctivePredicates(expr);
                 if (disjunctivePredicates.isEmpty()) {
@@ -191,6 +190,7 @@ abstract public class ScanNode extends PlanNode {
                         break;
                     case CONVERT_SUCCESS:
                         result.intersect(ranges.ranges);
+                        break;
                     case CONVERT_FAILURE:
                     default:
                         break;
@@ -214,8 +214,7 @@ abstract public class ScanNode extends PlanNode {
             BinaryPredicate binPred = (BinaryPredicate) expr;
             Expr slotBinding = binPred.getSlotBinding(desc.getId());
 
-            if (slotBinding == null || !slotBinding.isConstant() ||
-                !(slotBinding instanceof LiteralExpr)) {
+            if (slotBinding == null || !slotBinding.isConstant() || !(slotBinding instanceof LiteralExpr)) {
                 return ColumnRanges.createFailure();
             }
 
@@ -258,8 +257,7 @@ abstract public class ScanNode extends PlanNode {
             }
 
             for (int i = 1; i < inPredicate.getChildren().size(); ++i) {
-                ColumnBound bound =
-                    ColumnBound.of((LiteralExpr) inPredicate.getChild(i));
+                ColumnBound bound = ColumnBound.of((LiteralExpr) inPredicate.getChild(i));
                 result.add(Range.closed(bound, bound));
             }
         }

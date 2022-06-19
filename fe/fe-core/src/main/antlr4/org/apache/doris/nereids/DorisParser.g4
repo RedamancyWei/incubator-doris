@@ -141,7 +141,8 @@ expression
     ;
 
 booleanExpression
-    : valueExpression                                              #predicated
+    : NOT booleanExpression                                                                  #not
+    | valueExpression                                                                        #predicated
     ;
 
 valueExpression
@@ -170,7 +171,7 @@ constant
     ;
 
 comparisonOperator
-    : EQ | NEQ | NEQJ | LT | LTE | GT | GTE | NSEQ
+    : EQ | NEQ | LT | LTE | GT | GTE | NSEQ
     ;
 
 booleanValue

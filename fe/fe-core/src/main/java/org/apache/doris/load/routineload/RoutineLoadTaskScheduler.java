@@ -89,7 +89,6 @@ public class RoutineLoadTaskScheduler extends MasterDaemon {
         // update the max slot num of each backend periodically
         updateBackendSlotIfNecessary();
 
-        long start = System.currentTimeMillis();
         // if size of queue is zero, tasks will be submitted by batch
         int idleSlotNum = routineLoadManager.getClusterIdleSlotNum();
         // scheduler will be blocked when there is no slot for task in cluster
@@ -101,7 +100,8 @@ public class RoutineLoadTaskScheduler extends MasterDaemon {
         try {
             // This step will be blocked when queue is empty
             RoutineLoadTaskInfo routineLoadTaskInfo = needScheduleTasksQueue.take();
-            if (System.currentTimeMillis() - routineLoadTaskInfo.getLastScheduledTime() < routineLoadTaskInfo.getTimeoutMs()) {
+            if (System.currentTimeMillis() - routineLoadTaskInfo.getLastScheduledTime()
+                    < routineLoadTaskInfo.getTimeoutMs()) {
                 // try to delay scheduling this task for 'timeout', to void too many failure
                 needScheduleTasksQueue.put(routineLoadTaskInfo);
                 return;
@@ -115,7 +115,8 @@ public class RoutineLoadTaskScheduler extends MasterDaemon {
 
     private void scheduleOneTask(RoutineLoadTaskInfo routineLoadTaskInfo) throws Exception {
         routineLoadTaskInfo.setLastScheduledTime(System.currentTimeMillis());
-        LOG.debug("schedule routine load task info {} for job {}", routineLoadTaskInfo.id, routineLoadTaskInfo.getJobId());
+        LOG.debug("schedule routine load task info {} for job {}",
+                routineLoadTaskInfo.id, routineLoadTaskInfo.getJobId());
         // check if task has been abandoned
         if (!routineLoadManager.checkTaskInJob(routineLoadTaskInfo)) {
             // task has been abandoned while renew task has been added in queue
@@ -141,14 +142,14 @@ public class RoutineLoadTaskScheduler extends MasterDaemon {
                 return;
             }
         } catch (UserException e) {
-            routineLoadManager.getJob(routineLoadTaskInfo.getJobId()).
-                    updateState(JobState.PAUSED,
-                    new ErrorReason(e.getErrorCode(), e.getMessage()), false);
+            routineLoadManager.getJob(routineLoadTaskInfo.getJobId())
+                    .updateState(JobState.PAUSED, new ErrorReason(e.getErrorCode(), e.getMessage()), false);
             throw e;
         } catch (Exception e) {
             // exception happens, PAUSE the job
             routineLoadManager.getJob(routineLoadTaskInfo.getJobId()).updateState(JobState.PAUSED,
-                    new ErrorReason(InternalErrorCode.CREATE_TASKS_ERR, "failed to allocate task: " + e.getMessage()), false);
+                    new ErrorReason(InternalErrorCode.CREATE_TASKS_ERR,
+                            "failed to allocate task: " + e.getMessage()), false);
             LOG.warn(new LogBuilder(LogKey.ROUTINE_LOAD_TASK, routineLoadTaskInfo.getId()).add("error_msg",
                     "allocate task encounter exception: " + e.getMessage()).build(), e);
             throw e;
@@ -208,7 +209,8 @@ public class RoutineLoadTaskScheduler extends MasterDaemon {
                     (System.currentTimeMillis() - startTime), routineLoadTaskInfo.getJobId());
             if (tRoutineLoadTask.isSetKafkaLoadInfo()) {
                 LOG.debug("send kafka routine load task {} with partition offset: {}, job: {}",
-                        tRoutineLoadTask.label, tRoutineLoadTask.kafka_load_info.partition_begin_offset, tRoutineLoadTask.getJobId());
+                        tRoutineLoadTask.label, tRoutineLoadTask.kafka_load_info.partition_begin_offset,
+                        tRoutineLoadTask.getJobId());
             }
         } catch (LoadException e) {
             // submit task failed (such as TOO_MANY_TASKS error), but txn has already begun.
@@ -286,7 +288,8 @@ public class RoutineLoadTaskScheduler extends MasterDaemon {
     // return true if allocate successfully. return false if failed.
     // throw exception if unrecoverable errors happen.
     private boolean allocateTaskToBe(RoutineLoadTaskInfo routineLoadTaskInfo) throws LoadException {
-        long beId = routineLoadManager.getAvailableBeForTask(routineLoadTaskInfo.getPreviousBeId(), routineLoadTaskInfo.getClusterName());
+        long beId = routineLoadManager.getAvailableBeForTask(routineLoadTaskInfo.getJobId(),
+                routineLoadTaskInfo.getPreviousBeId(), routineLoadTaskInfo.getClusterName());
         if (beId == -1L) {
             return false;
         }

@@ -178,8 +178,10 @@ public class BrokerFileGroupAggInfo implements Writable {
         if (fileGroupList == null) {
             // check if there are overlapping partitions of same table
             if (tableIdToPartitionIds.containsKey(fileGroup.getTableId())
-                    && tableIdToPartitionIds.get(fileGroup.getTableId()).stream().anyMatch(id -> fileGroup.getPartitionIds().contains(id))) {
-                throw new DdlException("There are overlapping partitions of same table in data description of load job stmt");
+                    && tableIdToPartitionIds.get(fileGroup.getTableId()).stream()
+                    .anyMatch(id -> fileGroup.getPartitionIds().contains(id))) {
+                throw new DdlException("There are overlapping partitions of same table"
+                        + " in data description of load job stmt");
             }
 
             fileGroupList = Lists.newArrayList();
@@ -228,10 +230,10 @@ public class BrokerFileGroupAggInfo implements Writable {
         int mapSize = in.readInt();
         // just for compatibility, the following read objects are useless
         for (int i = 0; i < mapSize; ++i) {
-            long id = in.readLong();
+            long id = in.readLong(); // CHECKSTYLE IGNORE THIS LINE
             int listSize = in.readInt();
             for (int j = 0; j < listSize; ++j) {
-                BrokerFileGroup fileGroup = BrokerFileGroup.read(in);
+                BrokerFileGroup fileGroup = BrokerFileGroup.read(in); // CHECKSTYLE IGNORE THIS LINE
             }
         }
     }

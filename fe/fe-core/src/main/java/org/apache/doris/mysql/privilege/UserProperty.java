@@ -133,7 +133,7 @@ public class UserProperty implements Writable {
     }
 
     public long getMaxQueryInstances() {
-        return commonProperties.getMaxQueryInstances();// maxQueryInstances;
+        return commonProperties.getMaxQueryInstances(); // maxQueryInstances;
     }
 
     public String[] getSqlBlockRules() {
@@ -275,8 +275,8 @@ public class UserProperty implements Writable {
                 }
 
                 // check if sql_block_rule has already exist
-                for (String ruleName : value.replaceAll(" ","").split(",")){
-                    if (!ruleName.equals("") && !Catalog.getCurrentCatalog().getSqlBlockRuleMgr().existRule(ruleName)){
+                for (String ruleName : value.replaceAll(" ", "").split(",")) {
+                    if (!ruleName.equals("") && !Catalog.getCurrentCatalog().getSqlBlockRuleMgr().existRule(ruleName)) {
                         throw new DdlException("the sql block rule " + ruleName + " not exist");
                     }
                 }
@@ -450,7 +450,8 @@ public class UserProperty implements Writable {
         result.add(Lists.newArrayList(PROP_MAX_USER_CONNECTIONS, String.valueOf(commonProperties.getMaxConn())));
 
         // max query instance
-        result.add(Lists.newArrayList(PROP_MAX_QUERY_INSTANCES, String.valueOf(commonProperties.getMaxQueryInstances())));
+        result.add(Lists.newArrayList(PROP_MAX_QUERY_INSTANCES,
+                String.valueOf(commonProperties.getMaxQueryInstances())));
 
         // sql block rules
         result.add(Lists.newArrayList(PROP_SQL_BLOCK_RULES, commonProperties.getSqlBlockRules()));

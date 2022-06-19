@@ -36,19 +36,20 @@ public class ReplicaPersistInfo implements Writable {
         CLEAR_ROLLUPINFO(7),
         // this default op is used for upgrate to femeta_45, add default op to solve this scenario
         // the old image and old persist log does not have op field, so the op field is null when upgrate to fe meta 45
-        // then fe will dump image and want to write op type to image, op type is null and then throw null pointer exception
+        // then fe will dump image and want to write op type to image,
+        // op type is null and then throw null pointer exception
         // add the default op, when read from image and op type == null ,set op type to default op to skip the exception
         DEFAULT_OP(8),
         TABLET_INFO(9);
 
         private final int value;
 
-        private ReplicaOperationType(int value) {
-          this.value = value;
+        ReplicaOperationType(int value) {
+            this.value = value;
         }
 
         public int getValue() {
-          return value;
+            return value;
         }
 
         public static ReplicaOperationType findByValue(int value) {
@@ -77,7 +78,7 @@ public class ReplicaPersistInfo implements Writable {
                     return null;
             }
         }
-      }
+    }
 
     // required
     private ReplicaOperationType opType;
@@ -188,10 +189,10 @@ public class ReplicaPersistInfo implements Writable {
                 dbId, tableId, partitionId, indexId, -1L, -1L, -1L, -1L, -1, -1L, -1L, -1L, -1L);
     }
 
-    public static ReplicaPersistInfo createForReport(long dbId, long tblId, long partitionId, long indexId, long tabletId,
-                                                     long backendId, long replicaId) {
-        return new ReplicaPersistInfo(ReplicaOperationType.TABLET_INFO, dbId, tblId, partitionId, indexId, tabletId, backendId, replicaId,
-                -1L, -1, -1L, -1L, -1L, -1L);
+    public static ReplicaPersistInfo createForReport(long dbId, long tblId, long partitionId, long indexId,
+            long tabletId, long backendId, long replicaId) {
+        return new ReplicaPersistInfo(ReplicaOperationType.TABLET_INFO, dbId, tblId, partitionId,
+                indexId, tabletId, backendId, replicaId, -1L, -1, -1L, -1L, -1L, -1L);
     }
 
 

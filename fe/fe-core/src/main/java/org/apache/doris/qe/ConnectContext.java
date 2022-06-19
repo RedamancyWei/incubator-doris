@@ -23,6 +23,7 @@ import org.apache.doris.catalog.Database;
 import org.apache.doris.cluster.ClusterNamespace;
 import org.apache.doris.common.UserException;
 import org.apache.doris.common.util.DebugUtil;
+import org.apache.doris.datasource.SessionContext;
 import org.apache.doris.mysql.MysqlCapability;
 import org.apache.doris.mysql.MysqlChannel;
 import org.apache.doris.mysql.MysqlCommand;
@@ -79,7 +80,8 @@ public class ConnectContext {
     protected volatile String clusterName = "";
     // username@host of current login user
     protected volatile String qualifiedUser;
-    // LDAP authenticated but the Doris account does not exist, set the flag, and the user login Doris as Temporary user.
+    // LDAP authenticated but the Doris account does not exist,
+    // set the flag, and the user login Doris as Temporary user.
     protected volatile boolean isTempUser = false;
     // Save the privs from the ldap groups.
     protected volatile PaloRole ldapGroupsPrivs = null;
@@ -109,7 +111,6 @@ public class ConnectContext {
     protected boolean isSend;
 
     protected AuditEventBuilder auditEventBuilder = new AuditEventBuilder();
-    ;
 
     protected String remoteIP;
 
@@ -135,6 +136,12 @@ public class ConnectContext {
     private String currentConnectedFEIp = "";
 
     private InsertResult insertResult;
+
+    private SessionContext sessionContext;
+
+    public SessionContext getSessionContext() {
+        return sessionContext;
+    }
 
     public void setOrUpdateInsertResult(long txnId, String label, String db, String tbl,
                                         TransactionStatus txnStatus, long loadedRows, int filteredRows) {

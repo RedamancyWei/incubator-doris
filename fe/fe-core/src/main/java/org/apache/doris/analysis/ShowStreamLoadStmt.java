@@ -51,9 +51,9 @@ public class ShowStreamLoadStmt extends ShowStmt {
     }
 
     private String dbName;
-    private Expr whereClause;
-    private LimitElement limitElement;
-    private List<OrderByElement> orderByElements;
+    private final Expr whereClause;
+    private final LimitElement limitElement;
+    private final List<OrderByElement> orderByElements;
 
     private String labelValue;
     private String stateValue;
@@ -61,14 +61,15 @@ public class ShowStreamLoadStmt extends ShowStmt {
 
     private ArrayList<OrderByPair> orderByPairs;
 
-    private ImmutableList<String> TITLE_NAMES = new ImmutableList.Builder<String>()
+    private static final ImmutableList<String> TITLE_NAMES = new ImmutableList.Builder<String>()
             .add("Label").add("Db").add("Table").add("User")
             .add("ClientIp").add("Status").add("Message").add("Url").add("TotalRows")
             .add("LoadedRows").add("FilteredRows").add("UnselectedRows").add("LoadBytes")
             .add("StartTime").add("FinishTime")
             .build();
 
-    public ShowStreamLoadStmt(String db, Expr labelExpr, List<OrderByElement> orderByElements, LimitElement limitElement) {
+    public ShowStreamLoadStmt(String db, Expr labelExpr,
+            List<OrderByElement> orderByElements, LimitElement limitElement) {
         this.dbName = db;
         this.whereClause = labelExpr;
         this.orderByElements = orderByElements;
@@ -93,6 +94,7 @@ public class ShowStreamLoadStmt extends ShowStmt {
         try {
             index = analyzeColumn("FinishTime");
         } catch (AnalysisException e) {
+            // CHECKSTYLE IGNORE THIS LINE
         }
         OrderByPair orderByPair = new OrderByPair(index, false);
         orderByFinishTime.add(orderByPair);
@@ -126,6 +128,7 @@ public class ShowStreamLoadStmt extends ShowStmt {
         try {
             state = StreamLoadState.valueOf(stateValue);
         } catch (Exception e) {
+            // CHECKSTYLE IGNORE THIS LINE
         }
         return state;
     }

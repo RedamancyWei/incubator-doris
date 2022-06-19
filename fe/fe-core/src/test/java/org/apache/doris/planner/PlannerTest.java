@@ -38,31 +38,45 @@ public class PlannerTest extends TestWithFeService {
         createDatabase("db1");
 
         // Create tables.
-        String tbl1 = "create table db1.tbl1(" +
-                          "k1 varchar(32), " +
-                          "k2 varchar(32), " +
-                          "k3 varchar(32), " +
-                          "k4 int) " +
-                          "AGGREGATE KEY(k1, k2,k3,k4) " +
-                          "distributed by hash(k1) buckets 3 " +
-                          "properties('replication_num' = '1');";
+        String tbl1 = "create table db1.tbl1("
+                          + "k1 varchar(32), "
+                          + "k2 varchar(32), "
+                          + "k3 varchar(32), "
+                          + "k4 int) "
+                          + "AGGREGATE KEY(k1, k2,k3,k4) "
+                          + "distributed by hash(k1) buckets 3 "
+                          + "properties('replication_num' = '1');";
 
-        String tbl2 = "create table db1.tbl2(" +
-                          "k1 int, " +
-                          "k2 int sum) " +
-                          "AGGREGATE KEY(k1) " +
-                          "partition by range(k1) () " +
-                          "distributed by hash(k1) buckets 3 " +
-                          "properties('replication_num' = '1');";
+        String tbl2 = "create table db1.tbl2("
+                          + "k1 int, "
+                          + "k2 int sum) "
+                          + "AGGREGATE KEY(k1) "
+                          + "partition by range(k1) () "
+                          + "distributed by hash(k1) buckets 3 "
+                          + "properties('replication_num' = '1');";
 
-        String tbl3 = "create table db1.tbl3 (" +
-                        "k1 date, " +
-                        "k2 varchar(128) NULL, " +
-                        "k3 varchar(5000) NULL) " +
-                        "DUPLICATE KEY(k1, k2, k3) " +
-                        "distributed by hash(k1) buckets 1 " +
-                        "properties ('replication_num' = '1');";
-        createTables(tbl1, tbl2, tbl3);
+        String tbl3 = "create table db1.tbl3 ("
+                        + "k1 date, "
+                        + "k2 varchar(128) NULL, "
+                        + "k3 varchar(5000) NULL) "
+                        + "DUPLICATE KEY(k1, k2, k3) "
+                        + "distributed by hash(k1) buckets 1 "
+                        + "properties ('replication_num' = '1');";
+
+        String tbl4 = "create table db1.tbl4("
+                + "k1 int,"
+                + " k2 int,"
+                + " v1 int)"
+                + " distributed by hash(k1)"
+                + " properties('replication_num' = '1');";
+
+        String tbl5 = "create table db1.tbl5("
+                        + "k1 int,"
+                        + "k2 int) "
+                        + "DISTRIBUTED BY HASH(k2) "
+                        + "BUCKETS 3 PROPERTIES ('replication_num' = '1');";
+
+        createTables(tbl1, tbl2, tbl3, tbl4, tbl5);
     }
 
     @Test
@@ -253,56 +267,56 @@ public class PlannerTest extends TestWithFeService {
         Assert.assertTrue(fragments10.get(0).getPlanRoot()
                 .getFragment().getPlanRoot().getChild(1) instanceof UnionNode);
 
-        String sql11 = "SELECT a.x FROM\n" +
-                "(SELECT '01' x) a \n" +
-                "INNER JOIN\n" +
-                "(SELECT '01' x UNION all SELECT '02') b";
+        String sql11 = "SELECT a.x FROM\n"
+                + "(SELECT '01' x) a \n"
+                + "INNER JOIN\n"
+                + "(SELECT '01' x UNION all SELECT '02') b";
         StmtExecutor stmtExecutor11 = new StmtExecutor(connectContext, sql11);
         stmtExecutor11.execute();
         Planner planner11 = stmtExecutor11.planner();
-        SetOperationNode setNode11 = (SetOperationNode)(planner11.getFragments().get(1).getPlanRoot());
-        Assert.assertEquals(2, setNode11.getMaterializedConstExprLists_().size());
+        SetOperationNode setNode11 = (SetOperationNode) (planner11.getFragments().get(1).getPlanRoot());
+        Assert.assertEquals(2, setNode11.getMaterializedConstExprLists().size());
 
-        String sql12 = "SELECT a.x \n" +
-                "FROM (SELECT '01' x) a \n" +
-                "INNER JOIN \n" +
-                "(SELECT k1 from db1.tbl1 \n" +
-                "UNION all \n" +
-                "SELECT k1 from db1.tbl1) b;";
+        String sql12 = "SELECT a.x \n"
+                + "FROM (SELECT '01' x) a \n"
+                + "INNER JOIN \n"
+                + "(SELECT k1 from db1.tbl1 \n"
+                + "UNION all \n"
+                + "SELECT k1 from db1.tbl1) b;";
         StmtExecutor stmtExecutor12 = new StmtExecutor(connectContext, sql12);
         stmtExecutor12.execute();
         Planner planner12 = stmtExecutor12.planner();
-        SetOperationNode setNode12 = (SetOperationNode)(planner12.getFragments().get(1).getPlanRoot());
-        Assert.assertEquals(2, setNode12.getMaterializedResultExprLists_().size());
+        SetOperationNode setNode12 = (SetOperationNode) (planner12.getFragments().get(1).getPlanRoot());
+        Assertions.assertEquals(2, setNode12.getMaterializedResultExprLists().size());
     }
 
     @Test
-    public void testPushDown() throws Exception{
+    public void testPushDown() throws Exception {
         String sql1 =
-                "SELECT\n" +
-                "    IF(k2 IS NULL, 'ALL', k2) AS k2,\n" +
-                "    IF(k3 IS NULL, 'ALL', k3) AS k3,\n" +
-                "    k4\n" +
-                "FROM\n" +
-                "(\n" +
-                "    SELECT\n" +
-                "        k1,\n" +
-                "        k2,\n" +
-                "        k3,\n" +
-                "        SUM(k4) AS k4\n" +
-                "    FROM  db1.tbl1\n" +
-                "    WHERE k1 = 0\n" +
-                "        AND k4 = 1\n" +
-                "        AND k3 = 'foo'\n" +
-                "    GROUP BY \n" +
-                "    GROUPING SETS (\n" +
-                "        (k1),\n" +
-                "        (k1, k2),\n" +
-                "        (k1, k3),\n" +
-                "        (k1, k2, k3)\n" +
-                "    )\n" +
-                ") t\n" +
-                "WHERE IF(k2 IS NULL, 'ALL', k2) = 'ALL'";
+                "SELECT\n"
+                + "    IF(k2 IS NULL, 'ALL', k2) AS k2,\n"
+                + "    IF(k3 IS NULL, 'ALL', k3) AS k3,\n"
+                + "    k4\n"
+                + "FROM\n"
+                + "(\n"
+                + "    SELECT\n"
+                + "        k1,\n"
+                + "        k2,\n"
+                + "        k3,\n"
+                + "        SUM(k4) AS k4\n"
+                + "    FROM  db1.tbl1\n"
+                + "    WHERE k1 = 0\n"
+                + "        AND k4 = 1\n"
+                + "        AND k3 = 'foo'\n"
+                + "    GROUP BY \n"
+                + "    GROUPING SETS (\n"
+                + "        (k1),\n"
+                + "        (k1, k2),\n"
+                + "        (k1, k3),\n"
+                + "        (k1, k2, k3)\n"
+                + "    )\n"
+                + ") t\n"
+                + "WHERE IF(k2 IS NULL, 'ALL', k2) = 'ALL'";
         StmtExecutor stmtExecutor1 = new StmtExecutor(connectContext, sql1);
         stmtExecutor1.execute();
         Planner planner1 = stmtExecutor1.planner();
@@ -312,24 +326,24 @@ public class PlannerTest extends TestWithFeService {
         Assert.assertEquals(3, fragments1.get(0).getPlanRoot().getChild(0).getChild(0).conjuncts.size());
 
         String sql2 =
-                "SELECT\n" +
-                        "    IF(k2 IS NULL, 'ALL', k2) AS k2,\n" +
-                        "    IF(k3 IS NULL, 'ALL', k3) AS k3,\n" +
-                        "    k4\n" +
-                        "FROM\n" +
-                        "(\n" +
-                        "    SELECT\n" +
-                        "        k1,\n" +
-                        "        k2,\n" +
-                        "        k3,\n" +
-                        "        SUM(k4) AS k4\n" +
-                        "    FROM  db1.tbl1\n" +
-                        "    WHERE k1 = 0\n" +
-                        "        AND k4 = 1\n" +
-                        "        AND k3 = 'foo'\n" +
-                        "    GROUP BY k1, k2, k3\n" +
-                        ") t\n" +
-                        "WHERE IF(k2 IS NULL, 'ALL', k2) = 'ALL'";
+                "SELECT\n"
+                        + "    IF(k2 IS NULL, 'ALL', k2) AS k2,\n"
+                        + "    IF(k3 IS NULL, 'ALL', k3) AS k3,\n"
+                        + "    k4\n"
+                        + "FROM\n"
+                        + "(\n"
+                        + "    SELECT\n"
+                        + "        k1,\n"
+                        + "        k2,\n"
+                        + "        k3,\n"
+                        + "        SUM(k4) AS k4\n"
+                        + "    FROM  db1.tbl1\n"
+                        + "    WHERE k1 = 0\n"
+                        + "        AND k4 = 1\n"
+                        + "        AND k3 = 'foo'\n"
+                        + "    GROUP BY k1, k2, k3\n"
+                        + ") t\n"
+                        + "WHERE IF(k2 IS NULL, 'ALL', k2) = 'ALL'";
         StmtExecutor stmtExecutor2 = new StmtExecutor(connectContext, sql2);
         stmtExecutor2.execute();
         Planner planner2 = stmtExecutor2.planner();
@@ -341,9 +355,9 @@ public class PlannerTest extends TestWithFeService {
     @Test
     public void testWithStmtSlotIsAllowNull() throws Exception {
         // union
-        String sql1 = "with a as (select NULL as user_id ), " +
-                "b as ( select '543' as user_id) " +
-                "select user_id from a union all select user_id from b";
+        String sql1 = "with a as (select NULL as user_id ), "
+                + "b as ( select '543' as user_id) "
+                + "select user_id from a union all select user_id from b";
 
         StmtExecutor stmtExecutor1 = new StmtExecutor(connectContext, sql1);
         stmtExecutor1.execute();
@@ -363,11 +377,11 @@ public class PlannerTest extends TestWithFeService {
 
     @Test
     public void testAnalyticSortNodeLeftJoin() throws Exception {
-        String sql = "SELECT a.k1, a.k3, SUM(COUNT(t.k2)) OVER (PARTITION BY a.k3 ORDER BY a.k1) AS c\n" +
-                "FROM ( SELECT k1, k3 FROM db1.tbl3) a\n" +
-                "LEFT JOIN (SELECT 1 AS line, k1, k2, k3 FROM db1.tbl3) t\n" +
-                "ON t.k1 = a.k1 AND t.k3 = a.k3\n" +
-                "GROUP BY a.k1, a.k3";
+        String sql = "SELECT a.k1, a.k3, SUM(COUNT(t.k2)) OVER (PARTITION BY a.k3 ORDER BY a.k1) AS c\n"
+                + "FROM ( SELECT k1, k3 FROM db1.tbl3) a\n"
+                + "LEFT JOIN (SELECT 1 AS line, k1, k2, k3 FROM db1.tbl3) t\n"
+                + "ON t.k1 = a.k1 AND t.k3 = a.k3\n"
+                + "GROUP BY a.k1, a.k3";
         StmtExecutor stmtExecutor = new StmtExecutor(connectContext, sql);
         stmtExecutor.execute();
         Assert.assertNotNull(stmtExecutor.planner());
@@ -433,8 +447,69 @@ public class PlannerTest extends TestWithFeService {
     public void testStringType() {
         String createTbl1 = "create table db1.tbl1(k1 string, k2 varchar(32), k3 varchar(32), k4 int) "
                 + "AGGREGATE KEY(k1, k2,k3,k4) distributed by hash(k1) buckets 3 properties('replication_num' = '1')";
-        AnalysisException exception =
-            Assertions.assertThrows(AnalysisException.class, () -> parseAndAnalyzeStmt(createTbl1));
+        AnalysisException exception = Assertions.assertThrows(
+                AnalysisException.class, () -> parseAndAnalyzeStmt(createTbl1));
         Assertions.assertTrue(exception.getMessage().contains("String Type should not be used in key column[k1]."));
     }
+
+    @Test
+    public void testPushDownPredicateOnGroupingSetAggregate() throws Exception {
+        String sql = "explain select k1, k2, count(distinct v1) from db1.tbl4"
+                + " group by grouping sets((k1), (k1, k2)) having k1 = 1 and k2 = 1";
+        StmtExecutor stmtExecutor = new StmtExecutor(connectContext, sql);
+        stmtExecutor.execute();
+        Planner planner = stmtExecutor.planner();
+        List<PlanFragment> fragments = planner.getFragments();
+        String plan = planner.getExplainString(fragments, new ExplainOptions(false, false));
+        Assertions.assertTrue(plan.contains("PREDICATES: `k1` = 1\n"));
+    }
+
+    @Test
+    public void testPushDownPredicateOnRollupAggregate() throws Exception {
+        String sql = "explain select k1, k2, count(distinct v1) from db1.tbl4"
+                + " group by rollup(k1, k2) having k1 = 1 and k2 = 1";
+        StmtExecutor stmtExecutor = new StmtExecutor(connectContext, sql);
+        stmtExecutor.execute();
+        Planner planner = stmtExecutor.planner();
+        List<PlanFragment> fragments = planner.getFragments();
+        String plan = planner.getExplainString(fragments, new ExplainOptions(false, false));
+        Assertions.assertFalse(plan.contains("PREDICATES:"));
+    }
+
+    @Test
+    public void testPushDownPredicateOnNormalAggregate() throws Exception {
+        String sql = "explain select k1, k2, count(distinct v1) from db1.tbl4"
+                + " group by k1, k2 having k1 = 1 and k2 = 1";
+        StmtExecutor stmtExecutor = new StmtExecutor(connectContext, sql);
+        stmtExecutor.execute();
+        Planner planner = stmtExecutor.planner();
+        List<PlanFragment> fragments = planner.getFragments();
+        String plan = planner.getExplainString(fragments, new ExplainOptions(false, false));
+        Assertions.assertTrue(plan.contains("PREDICATES: `k1` = 1, `k2` = 1\n"));
+    }
+
+    @Test
+    public void testPushDownPredicateOnWindowFunction() throws Exception {
+        String sql = "explain select v1, k1,"
+                + " sum(v1) over (partition by k1 order by v1 rows between 1 preceding and 1 following)"
+                + " as 'moving total' from db1.tbl4 where k1 = 1";
+        StmtExecutor stmtExecutor = new StmtExecutor(connectContext, sql);
+        stmtExecutor.execute();
+        Planner planner = stmtExecutor.planner();
+        List<PlanFragment> fragments = planner.getFragments();
+        String plan = planner.getExplainString(fragments, new ExplainOptions(false, false));
+        Assertions.assertTrue(plan.contains("PREDICATES: `k1` = 1\n"));
+    }
+
+    @Test
+    public void testRewriteNestedUnionStmt() throws Exception {
+        String qSQL = "SELECT k1 FROM db1.tbl5 WHERE k1 IN "
+                + "( SELECT k1 FROM ( SELECT k1 FROM db1.tbl5 ORDER BY k2 DESC, k1 DESC LIMIT 300 INTERSECT "
+                + "(SELECT k1 FROM db1.tbl5 ORDER BY k2 DESC, k1 DESC LIMIT 9 EXCEPT SELECT k1 "
+                + "FROM db1.tbl5 ORDER BY k2 DESC, k1 DESC LIMIT 2) ) t )";
+
+        StmtExecutor stmtExecutor = new StmtExecutor(connectContext, qSQL);
+        stmtExecutor.execute();
+    }
+
 }

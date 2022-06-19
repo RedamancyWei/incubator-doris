@@ -29,6 +29,7 @@ import org.apache.doris.analysis.SlotRef;
 import org.apache.doris.analysis.SortInfo;
 import org.apache.doris.common.NotImplementedException;
 import org.apache.doris.common.UserException;
+import org.apache.doris.statistics.StatsRecursiveDerive;
 import org.apache.doris.thrift.TExplainLevel;
 import org.apache.doris.thrift.TPlanNode;
 import org.apache.doris.thrift.TPlanNodeType;
@@ -51,7 +52,7 @@ import java.util.Set;
  * Sorting.
  */
 public class SortNode extends PlanNode {
-    private final static Logger LOG = LogManager.getLogger(SortNode.class);
+    private static final Logger LOG = LogManager.getLogger(SortNode.class);
     private final SortInfo info;
     private final boolean  useTopN;
     private final boolean  isDefaultLimit;
@@ -66,20 +67,24 @@ public class SortNode extends PlanNode {
     public void setIsAnalyticSort(boolean v) {
         isAnalyticSort = v;
     }
+
     public boolean isAnalyticSort() {
         return isAnalyticSort;
     }
+
     private DataPartition inputPartition;
+
     public void setInputPartition(DataPartition inputPartition) {
         this.inputPartition = inputPartition;
     }
+
     public DataPartition getInputPartition() {
         return inputPartition;
     }
 
     public SortNode(PlanNodeId id, PlanNode input, SortInfo info, boolean useTopN,
                     boolean isDefaultLimit, long offset) {
-        super(id, useTopN ? "TOP-N" : "SORT");
+        super(id, useTopN ? "TOP-N" : "SORT", NodeType.SORT_NODE);
         this.info = info;
         this.useTopN = useTopN;
         this.isDefaultLimit = isDefaultLimit;
@@ -95,7 +100,7 @@ public class SortNode extends PlanNode {
      * Clone 'inputSortNode' for distributed Top-N
      */
     public SortNode(PlanNodeId id, SortNode inputSortNode, PlanNode child) {
-        super(id, inputSortNode, inputSortNode.useTopN ? "TOP-N" : "SORT");
+        super(id, inputSortNode, inputSortNode.useTopN ? "TOP-N" : "SORT", NodeType.SORT_NODE);
         this.info = inputSortNode.info;
         this.useTopN = inputSortNode.useTopN;
         this.isDefaultLimit = inputSortNode.isDefaultLimit;
@@ -127,14 +132,15 @@ public class SortNode extends PlanNode {
     }
 
     @Override
-    protected void computeStats(Analyzer analyzer) {
+    protected void computeStats(Analyzer analyzer) throws UserException {
         super.computeStats(analyzer);
         if (!analyzer.safeIsEnableJoinReorderBasedCost()) {
             return;
         }
-        cardinality = getChild(0).cardinality;
-        applyConjunctsSelectivity();
-        capCardinalityAtLimit();
+
+        StatsRecursiveDerive.getStatsRecursiveDerive().statsRecursiveDerive(this);
+        cardinality = statsDeriveResult.getRowCount();
+
         if (LOG.isDebugEnabled()) {
             LOG.debug("stats Sort: cardinality=" + cardinality);
         }
@@ -254,8 +260,8 @@ public class SortNode extends PlanNode {
 
         // Remap the ordering exprs to the tuple materialized by this sort node. The mapping
         // is a composition of the childSmap and the outputSmap_ because the child node may
-        // have also remapped its input (e.g., as in a a series of (sort->analytic)* nodes).
-        // Parent nodes have have to do the same so set the composition as the outputSmap_.
+        // have also remapped its input (e.g., as in a series of (sort->analytic)* nodes).
+        // Parent nodes have to do the same so set the composition as the outputSmap_.
         outputSmap = ExprSubstitutionMap.compose(childSmap, outputSmap, analyzer);
         info.substituteOrderingExprs(outputSmap, analyzer);
 

@@ -81,6 +81,7 @@ public class RestoreJobTest {
         public MockBackupHandler(Catalog catalog) {
             super(catalog);
         }
+
         @Override
         public RepositoryMgr getRepoMgr() {
             return repoMgr;
@@ -92,6 +93,7 @@ public class RestoreJobTest {
         public MockRepositoryMgr() {
             super();
         }
+
         @Override
         public Repository getRepo(long repoId) {
             return repo;
@@ -222,7 +224,7 @@ public class RestoreJobTest {
 
                 for (Tablet tablet : index.getTablets()) {
                     List<String> files = Lists.newArrayList(tablet.getId() + ".dat",
-                            tablet.getId()+ ".idx",  tablet.getId()+".hdr");
+                            tablet.getId() + ".idx",  tablet.getId() + ".hdr");
                     BackupTabletInfo tabletInfo = new BackupTabletInfo(tablet.getId(), files);
                     idxInfo.sortedTabletInfoList.add(tabletInfo);
                 }

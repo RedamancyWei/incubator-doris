@@ -35,11 +35,9 @@
 #include "gen_cpp/Types_types.h"
 #include "runtime/descriptors.h"
 #include "runtime/mem_pool.h"
-#include "runtime/small_file_mgr.h"
-#include "runtime/stream_load/load_stream_mgr.h"
+#include "runtime/stream_load/stream_load_pipe.h"
 #include "runtime/tuple.h"
 #include "util/runtime_profile.h"
-#include "util/slice.h"
 
 namespace doris {
 class Tuple;
@@ -64,6 +62,10 @@ public:
     // Get next tuple
     Status get_next(Tuple* tuple, MemPool* tuple_pool, bool* eof, bool* fill_tuple) override;
 
+    Status get_next(vectorized::Block* block, bool* eof) override {
+        return Status::NotSupported("Not Implemented get block");
+    }
+
     // Close this scanner
     void close() override;
 
@@ -78,9 +80,6 @@ protected:
                             bool& num_as_string, bool& fuzzy_parse);
 
 protected:
-    const std::vector<TBrokerRangeDesc>& _ranges;
-    const std::vector<TNetworkAddress>& _broker_addresses;
-
     std::string _jsonpath;
     std::string _jsonpath_file;
 
@@ -88,19 +87,15 @@ protected:
     int _line_delimiter_length;
 
     // Reader
-    FileReader* _cur_file_reader;
+    std::shared_ptr<FileReader> _cur_file_reader;
     LineReader* _cur_line_reader;
     JsonReader* _cur_json_reader;
-    int _next_range;
     bool _cur_reader_eof;
     bool _read_json_by_line;
 
     // When we fetch range doesn't start from 0,
     // we will read to one ahead, and skip the first line
     bool _skip_next_line;
-
-    // used to hold current StreamLoadPipe
-    std::shared_ptr<StreamLoadPipe> _stream_load_pipe;
 };
 
 class JsonDataInternal {

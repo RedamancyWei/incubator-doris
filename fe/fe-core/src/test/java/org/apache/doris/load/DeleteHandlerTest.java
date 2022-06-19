@@ -121,6 +121,7 @@ public class DeleteHandlerTest {
             @Mock
             public void logSaveTransactionId(long transactionId) {
             }
+
             @Mock
             public void logInsertTransactionState(TransactionState transactionState) {
             }
@@ -196,6 +197,7 @@ public class DeleteHandlerTest {
                 try {
                     globalTransactionMgr.abortTransaction(db.getId(), anyLong, anyString);
                 } catch (UserException e) {
+                    // CHECKSTYLE IGNORE THIS LINE
                 }
                 minTimes = 0;
             }
@@ -246,7 +248,8 @@ public class DeleteHandlerTest {
         }
         try {
             deleteHandler.process(deleteStmt);
-        }catch (QueryStateException e) {
+        } catch (QueryStateException e) {
+            // CHECKSTYLE IGNORE THIS LINE
         }
 
         Map<Long, DeleteJob> idToDeleteJob = Deencapsulation.getField(deleteHandler, "idToDeleteJob");
@@ -297,6 +300,7 @@ public class DeleteHandlerTest {
         try {
             deleteHandler.process(deleteStmt);
         } catch (QueryStateException e) {
+            // CHECKSTYLE IGNORE THIS LINE
         }
 
         Map<Long, DeleteJob> idToDeleteJob = Deencapsulation.getField(deleteHandler, "idToDeleteJob");
@@ -334,6 +338,7 @@ public class DeleteHandlerTest {
                 try {
                     countDownLatch.await(anyLong, (TimeUnit) any);
                 } catch (InterruptedException e) {
+                    // CHECKSTYLE IGNORE THIS LINE
                 }
                 result = false;
             }
@@ -344,6 +349,7 @@ public class DeleteHandlerTest {
                 try {
                     globalTransactionMgr.commitTransaction(anyLong, (List<Table>) any, anyLong, (List<TabletCommitInfo>) any, (TxnCommitAttachment) any);
                 } catch (UserException e) {
+                    // CHECKSTYLE IGNORE THIS LINE
                 }
                 result = new UserException("commit fail");
             }
@@ -365,6 +371,7 @@ public class DeleteHandlerTest {
             }
             throw e;
         } catch (QueryStateException e) {
+            // CHECKSTYLE IGNORE THIS LINE
         }
         Assert.fail();
     }
@@ -396,6 +403,7 @@ public class DeleteHandlerTest {
                 try {
                     countDownLatch.await(anyLong, (TimeUnit) any);
                 } catch (InterruptedException e) {
+                    // CHECKSTYLE IGNORE THIS LINE
                 }
                 result = false;
             }
@@ -416,6 +424,7 @@ public class DeleteHandlerTest {
         try {
             deleteHandler.process(deleteStmt);
         } catch (QueryStateException e) {
+            // CHECKSTYLE IGNORE THIS LINE
         }
 
         Map<Long, DeleteJob> idToDeleteJob = Deencapsulation.getField(deleteHandler, "idToDeleteJob");
@@ -453,6 +462,7 @@ public class DeleteHandlerTest {
                 try {
                     countDownLatch.await(anyLong, (TimeUnit) any);
                 } catch (InterruptedException e) {
+                    // CHECKSTYLE IGNORE THIS LINE
                 }
                 result = false;
             }
@@ -466,6 +476,7 @@ public class DeleteHandlerTest {
         try {
             deleteHandler.process(deleteStmt);
         } catch (QueryStateException e) {
+            // CHECKSTYLE IGNORE THIS LINE
         }
 
         Map<Long, DeleteJob> idToDeleteJob = Deencapsulation.getField(deleteHandler, "idToDeleteJob");

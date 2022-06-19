@@ -23,11 +23,9 @@ import org.apache.doris.catalog.MaterializedIndex;
 import org.apache.doris.catalog.MaterializedIndex.IndexExtState;
 import org.apache.doris.catalog.OlapTable;
 import org.apache.doris.catalog.Partition;
-import org.apache.doris.catalog.ReplicaAllocation;
-import org.apache.doris.catalog.Table.TableType;
+import org.apache.doris.catalog.TableIf.TableType;
 import org.apache.doris.catalog.Tablet;
 import org.apache.doris.common.AnalysisException;
-import org.apache.doris.system.SystemInfoService;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -90,16 +88,15 @@ public class StatisticProcNode implements ProcNodeInterface {
             this.db = db;
             this.dbNum = 1;
 
-            SystemInfoService infoService = Catalog.getCurrentSystemInfo();
             db.getTables().stream().filter(t -> t != null && t.getType() == TableType.OLAP).forEach(t -> {
                 ++tableNum;
                 OlapTable olapTable = (OlapTable) t;
                 olapTable.readLock();
                 try {
                     for (Partition partition : olapTable.getAllPartitions()) {
-                        ReplicaAllocation replicaAlloc = olapTable.getPartitionInfo().getReplicaAllocation(partition.getId());
                         ++partitionNum;
-                        for (MaterializedIndex materializedIndex : partition.getMaterializedIndices(IndexExtState.VISIBLE)) {
+                        for (MaterializedIndex materializedIndex
+                                : partition.getMaterializedIndices(IndexExtState.VISIBLE)) {
                             ++indexNum;
                             List<Tablet> tablets = materializedIndex.getTablets();
                             for (int i = 0; i < tablets.size(); ++i) {

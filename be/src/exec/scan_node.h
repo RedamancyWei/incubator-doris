@@ -25,7 +25,6 @@
 #include "exec/exec_node.h"
 #include "gen_cpp/PaloInternalService_types.h"
 #include "util/runtime_profile.h"
-#include "vec/exprs/vexpr.h"
 
 namespace doris {
 
@@ -94,6 +93,7 @@ public:
 
 protected:
     std::string _peel_pushed_vconjunct(
+            RuntimeState* state,
             const std::function<bool(int)>& checker); // remove pushed expr from conjunct tree
 
     RuntimeProfile::Counter* _bytes_read_counter; // # bytes read from the scanner

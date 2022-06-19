@@ -17,7 +17,8 @@
 
 package org.apache.doris.nereids.trees.plans;
 
-import org.apache.doris.nereids.exceptions.UnboundException;
+import org.apache.doris.nereids.operators.plans.PlanOperator;
+import org.apache.doris.nereids.properties.LogicalProperties;
 import org.apache.doris.nereids.trees.TreeNode;
 import org.apache.doris.nereids.trees.expressions.Slot;
 
@@ -26,15 +27,15 @@ import java.util.List;
 /**
  * Abstract class for all plan node.
  */
-public interface Plan<PLAN_TYPE extends Plan<PLAN_TYPE>> extends TreeNode<PLAN_TYPE> {
+public interface Plan extends TreeNode<Plan> {
 
-    List<Slot> getOutput() throws UnboundException;
+    PlanOperator getOperator();
+
+    LogicalProperties getLogicalProperties();
+
+    List<Slot> getOutput();
 
     String treeString();
 
-    @Override
-    List<Plan> children();
-
-    @Override
-    Plan child(int index);
+    Plan withOutput(List<Slot> output);
 }

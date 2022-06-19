@@ -54,7 +54,7 @@ import java.util.UUID;
 //          [PROPERTIES("key"="value")]
 //          BY BROKER 'broker_name' [( $broker_attrs)]
 public class ExportStmt extends StatementBase {
-    private final static Logger LOG = LogManager.getLogger(ExportStmt.class);
+    private static final Logger LOG = LogManager.getLogger(ExportStmt.class);
 
     public static final String TABLET_NUMBER_PER_TASK_PROP = "tablet_num_per_task";
     public static final String LABEL = "label";
@@ -72,7 +72,7 @@ public class ExportStmt extends StatementBase {
     private Map<String, String> properties = Maps.newHashMap();
     private String columnSeparator;
     private String lineDelimiter;
-    private String columns ;
+    private String columns;
 
     private TableRef tableRef;
 
@@ -243,17 +243,17 @@ public class ExportStmt extends StatementBase {
             if (schema == null || !schema.equalsIgnoreCase("s3")) {
                 throw new AnalysisException("Invalid export path. please use valid 'S3://' path.");
             }
-            } else if (type == StorageBackend.StorageType.HDFS) {
-                if (schema == null || !schema.equalsIgnoreCase("hdfs")) {
-                    throw new AnalysisException("Invalid export path. please use valid 'HDFS://' path.");
-                }
-            } else if (type == StorageBackend.StorageType.LOCAL) {
-                if (schema != null && !schema.equalsIgnoreCase("file")) {
-                    throw new AnalysisException("Invalid export path. please use valid '"
-                            + OutFileClause.LOCAL_FILE_PREFIX + "' path.");
-                }
-                path = path.substring(OutFileClause.LOCAL_FILE_PREFIX.length() - 1);
+        } else if (type == StorageBackend.StorageType.HDFS) {
+            if (schema == null || !schema.equalsIgnoreCase("hdfs")) {
+                throw new AnalysisException("Invalid export path. please use valid 'HDFS://' path.");
             }
+        } else if (type == StorageBackend.StorageType.LOCAL) {
+            if (schema != null && !schema.equalsIgnoreCase("file")) {
+                throw new AnalysisException(
+                        "Invalid export path. please use valid '" + OutFileClause.LOCAL_FILE_PREFIX + "' path.");
+            }
+            path = path.substring(OutFileClause.LOCAL_FILE_PREFIX.length() - 1);
+        }
         return path;
     }
 

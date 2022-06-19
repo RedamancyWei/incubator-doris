@@ -51,12 +51,12 @@ import java.util.stream.Collectors;
  * analysis of the ORDER BY and LIMIT clauses.
  */
 public abstract class QueryStmt extends StatementBase {
-    private final static Logger LOG = LogManager.getLogger(QueryStmt.class);
+    private static final Logger LOG = LogManager.getLogger(QueryStmt.class);
 
     /////////////////////////////////////////
     // BEGIN: Members that need to be reset()
 
-    protected WithClause withClause_;
+    protected WithClause withClause;
 
     protected ArrayList<OrderByElement> orderByElements;
     // Limit element could not be null, the default limit element is NO_LIMIT
@@ -173,17 +173,21 @@ public abstract class QueryStmt extends StatementBase {
 
     @Override
     public void analyze(Analyzer analyzer) throws AnalysisException, UserException {
-        if (isAnalyzed()) return;
+        if (isAnalyzed()) {
+            return;
+        }
         super.analyze(analyzer);
         analyzeLimit(analyzer);
-        if (hasWithClause()) withClause_.analyze(analyzer);
+        if (hasWithClause()) {
+            withClause.analyze(analyzer);
+        }
     }
 
     private void analyzeLimit(Analyzer analyzer) throws AnalysisException {
         // TODO chenhao
         if (limitElement.getOffset() > 0 && !hasOrderByClause()) {
-            throw new AnalysisException("OFFSET requires an ORDER BY clause: " +
-                    limitElement.toSql().trim());
+            throw new AnalysisException("OFFSET requires an ORDER BY clause: "
+                    + limitElement.toSql().trim());
         }
         limitElement.analyze(analyzer);
     }
@@ -218,7 +222,9 @@ public abstract class QueryStmt extends StatementBase {
         List<TableRef> tblRefs = Lists.newArrayList();
         collectTableRefs(tblRefs);
         for (TableRef tblRef : tblRefs) {
-            if (absoluteRef == null && !tblRef.isRelative()) absoluteRef = tblRef;
+            if (absoluteRef == null && !tblRef.isRelative()) {
+                absoluteRef = tblRef;
+            }
             /*if (tblRef.isCorrelated()) {
              *
              *   // Check if the correlated table ref is rooted at a tuple descriptor from within
@@ -235,8 +241,8 @@ public abstract class QueryStmt extends StatementBase {
             }*/
             if (correlatedRef != null && absoluteRef != null) {
                 throw new AnalysisException(String.format(
-                        "Nested query is illegal because it contains a table reference '%s' " +
-                                "correlated with an outer block as well as an uncorrelated one '%s':\n%s",
+                        "Nested query is illegal because it contains a table reference '%s' "
+                                + "correlated with an outer block as well as an uncorrelated one '%s':\n%s",
                         correlatedRef.tableRefToSql(), absoluteRef.tableRefToSql(), toSql()));
             }
             tblRefIds.add(tblRef.getId());
@@ -308,8 +314,8 @@ public abstract class QueryStmt extends StatementBase {
         }
 
         if (!analyzer.isRootAnalyzer() && hasOffset() && !hasLimit()) {
-            throw new AnalysisException("Order-by with offset without limit not supported" +
-                    " in nested queries.");
+            throw new AnalysisException("Order-by with offset without limit not supported"
+                    + " in nested queries.");
         }
 
         sortInfo = new SortInfo(orderingExprs, isAscOrder, nullsFirstParams);
@@ -385,7 +391,9 @@ public abstract class QueryStmt extends StatementBase {
      */
     protected Expr getFirstAmbiguousAlias(List<Expr> exprs) {
         for (Expr exp : exprs) {
-            if (ambiguousAliasList.contains(exp)) return exp;
+            if (ambiguousAliasList.contains(exp)) {
+                return exp;
+            }
         }
         return null;
     }
@@ -425,9 +433,13 @@ public abstract class QueryStmt extends StatementBase {
     // select list items.  Return null if not an ordinal expression.
     private Expr trySubstituteOrdinal(Expr expr, String errorPrefix,
                                       Analyzer analyzer) throws AnalysisException {
-        if (!(expr instanceof IntLiteral)) return null;
+        if (!(expr instanceof IntLiteral)) {
+            return null;
+        }
         expr.analyze(analyzer);
-        if (!expr.getType().isIntegerType()) return null;
+        if (!expr.getType().isIntegerType()) {
+            return null;
+        }
         long pos = ((IntLiteral) expr).getLongValue();
         if (pos < 1) {
             throw new AnalysisException(
@@ -443,15 +455,16 @@ public abstract class QueryStmt extends StatementBase {
         return resultExprs.get((int) pos - 1).clone();
     }
 
-    public void getWithClauseTables(Analyzer analyzer, Map<Long, Table> tableMap, Set<String> parentViewNameSet) throws AnalysisException {
-        if (withClause_ != null) {
-            withClause_.getTables(analyzer, tableMap, parentViewNameSet);
+    public void getWithClauseTables(Analyzer analyzer, Map<Long, Table> tableMap,
+            Set<String> parentViewNameSet) throws AnalysisException {
+        if (withClause != null) {
+            withClause.getTables(analyzer, tableMap, parentViewNameSet);
         }
     }
 
     public void getWithClauseTableRefs(Analyzer analyzer, List<TableRef> tblRefs, Set<String> parentViewNameSet) {
-        if (withClause_ != null) {
-            withClause_.getTableRefs(analyzer, tblRefs, parentViewNameSet);
+        if (withClause != null) {
+            withClause.getTableRefs(analyzer, tblRefs, parentViewNameSet);
         }
     }
 
@@ -520,8 +533,10 @@ public abstract class QueryStmt extends StatementBase {
     //                "select a.siteid, b.citycode, a.siteid from (select siteid, citycode from tmp) a " +
     //                "left join (select siteid, citycode from tmp) b on a.siteid = b.siteid;";
     // tmp in child stmt "(select siteid, citycode from tmp)" do not contain with_Clause
-    // so need to check is view name by parentViewNameSet. issue link: https://github.com/apache/incubator-doris/issues/4598
-    public abstract void getTables(Analyzer analyzer, Map<Long, Table> tables, Set<String> parentViewNameSet) throws AnalysisException;
+    // so need to check is view name by parentViewNameSet.
+    // issue link: https://github.com/apache/incubator-doris/issues/4598
+    public abstract void getTables(Analyzer analyzer, Map<Long, Table> tables, Set<String> parentViewNameSet)
+            throws AnalysisException;
 
     // get TableRefs in this query, including physical TableRefs of this statement and
     // nested statements of inline views and with_Clause.
@@ -560,15 +575,15 @@ public abstract class QueryStmt extends StatementBase {
     }
 
     public void setWithClause(WithClause withClause) {
-        this.withClause_ = withClause;
+        this.withClause = withClause;
     }
 
     public boolean hasWithClause() {
-        return withClause_ != null;
+        return withClause != null;
     }
 
     public WithClause getWithClause() {
-        return withClause_;
+        return withClause;
     }
 
     public boolean hasOrderByClause() {
@@ -689,15 +704,19 @@ public abstract class QueryStmt extends StatementBase {
     }
 
     public ArrayList<OrderByElement> cloneOrderByElements() {
-        if (orderByElements == null) return null;
+        if (orderByElements == null) {
+            return null;
+        }
         ArrayList<OrderByElement> result =
                 Lists.newArrayListWithCapacity(orderByElements.size());
-        for (OrderByElement o : orderByElements) result.add(o.clone());
+        for (OrderByElement o : orderByElements) {
+            result.add(o.clone());
+        }
         return result;
     }
 
     public WithClause cloneWithClause() {
-        return withClause_ != null ? withClause_.clone() : null;
+        return withClause != null ? withClause.clone() : null;
     }
 
     public OutFileClause cloneOutfileCluse() {
@@ -713,7 +732,7 @@ public abstract class QueryStmt extends StatementBase {
      */
     protected QueryStmt(QueryStmt other) {
         super(other);
-        withClause_ = other.cloneWithClause();
+        withClause = other.cloneWithClause();
         outFileClause = other.cloneOutfileCluse();
         orderByElements = other.cloneOrderByElements();
         limitElement = other.limitElement.clone();
@@ -730,8 +749,9 @@ public abstract class QueryStmt extends StatementBase {
     public void reset() {
         super.reset();
         if (orderByElements != null) {
-            for (OrderByElement o : orderByElements)
+            for (OrderByElement o : orderByElements) {
                 o.getExpr().reset();
+            }
         }
         limitElement.reset();
         resultExprs.clear();

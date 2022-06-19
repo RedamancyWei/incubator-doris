@@ -75,7 +75,8 @@ public enum ExpressionFunctions {
             // 2. Not in NonNullResultWithNullParamFunctions
             // 3. Has null parameter
             if ((fn.getNullableMode() == Function.NullableMode.DEPEND_ON_ARGUMENT
-                    || Catalog.getCurrentCatalog().isNullResultWithOneNullParamFunction(fn.getFunctionName().getFunction()))
+                    || Catalog.getCurrentCatalog().isNullResultWithOneNullParamFunction(
+                            fn.getFunctionName().getFunction()))
                     && !fn.isUdf()) {
                 for (Expr e : constExpr.getChildren()) {
                     if (e instanceof NullLiteral) {
@@ -192,7 +193,7 @@ public enum ExpressionFunctions {
         public LiteralExpr invoke(List<Expr> args) throws AnalysisException {
             final List<Object> invokeArgs = createInvokeArgs(args);
             try {
-                return (LiteralExpr)method.invoke(null, invokeArgs.toArray());
+                return (LiteralExpr) method.invoke(null, invokeArgs.toArray());
             } catch (InvocationTargetException | IllegalAccessException | IllegalArgumentException e) {
                 throw new AnalysisException(e.getLocalizedMessage());
             }
@@ -205,7 +206,8 @@ public enum ExpressionFunctions {
                 if (argType.isArray()) {
                     Preconditions.checkArgument(method.getParameterTypes().length == typeIndex + 1);
                     final List<Expr> variableLengthExprs = Lists.newArrayList();
-                    for (int variableLengthArgIndex = typeIndex; variableLengthArgIndex < args.size(); variableLengthArgIndex++) {
+                    for (int variableLengthArgIndex = typeIndex;
+                            variableLengthArgIndex < args.size(); variableLengthArgIndex++) {
                         variableLengthExprs.add(args.get(variableLengthArgIndex));
                     }
                     LiteralExpr[] variableLengthArgs = createVariableLengthArgs(variableLengthExprs, typeIndex);
@@ -288,10 +290,12 @@ public enum ExpressionFunctions {
 
         @Override
         public boolean equals(Object o) {
-            if (this == o)
+            if (this == o) {
                 return true;
-            if (o == null || getClass() != o.getClass())
+            }
+            if (o == null || getClass() != o.getClass()) {
                 return false;
+            }
             FEFunctionSignature signature = (FEFunctionSignature) o;
             return Objects.equals(name, signature.name) && Arrays.equals(argTypes, signature.argTypes)
                     && Objects.equals(returnType, signature.returnType);

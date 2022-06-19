@@ -181,13 +181,15 @@ public class BackendLoadStatistic {
             TStorageMedium medium = diskInfo.getStorageMedium();
             if (diskInfo.getState() == DiskState.ONLINE) {
                 // we only collect online disk's capacity
-                totalCapacityMap.put(medium, totalCapacityMap.getOrDefault(medium, 0L) + diskInfo.getTotalCapacityB());
-                totalUsedCapacityMap.put(medium, totalUsedCapacityMap.getOrDefault(medium, 0L) + (diskInfo.getTotalCapacityB() - diskInfo.getAvailableCapacityB()));
+                totalCapacityMap.put(medium, totalCapacityMap.getOrDefault(medium, 0L)
+                        + diskInfo.getTotalCapacityB());
+                totalUsedCapacityMap.put(medium, totalUsedCapacityMap.getOrDefault(medium, 0L)
+                        + (diskInfo.getTotalCapacityB() - diskInfo.getAvailableCapacityB()));
             }
 
             RootPathLoadStatistic pathStatistic = new RootPathLoadStatistic(beId, diskInfo.getRootPath(),
                     diskInfo.getPathHash(), diskInfo.getStorageMedium(),
-                    diskInfo.getTotalCapacityB(), diskInfo.getDataUsedCapacityB(), diskInfo.getState());
+                    diskInfo.getTotalCapacityB(), diskInfo.getDiskUsedCapacityB(), diskInfo.getState());
             pathStatistics.add(pathStatistic);
         }
 
@@ -314,7 +316,7 @@ public class BackendLoadStatistic {
         return status;
     }
 
-     /*
+    /**
      * Check whether the backend can be more balance if we migrate a tablet with size 'tabletSize' from
      * `srcPath` to 'destPath'
      * 1. recalculate the load score of src and dest path after migrate the tablet.
@@ -345,17 +347,17 @@ public class BackendLoadStatistic {
         }
         double avgUsedPercent = totalCapacity == 0 ? 0.0 : totalUsedCapacity / (double) totalCapacity;
         double currentSrcPathScore = srcPathStat.getCapacityB() == 0
-            ? 0.0 : srcPathStat.getUsedCapacityB() / (double) srcPathStat.getCapacityB();
+                ? 0.0 : srcPathStat.getUsedCapacityB() / (double) srcPathStat.getCapacityB();
         double currentDestPathScore = destPathStat.getCapacityB() == 0
-            ? 0.0 : destPathStat.getUsedCapacityB() / (double) destPathStat.getCapacityB();
+                ? 0.0 : destPathStat.getUsedCapacityB() / (double) destPathStat.getCapacityB();
 
         double newSrcPathScore = srcPathStat.getCapacityB() == 0
-            ? 0.0 : (srcPathStat.getUsedCapacityB() - tabletSize) / (double) srcPathStat.getCapacityB();
+                ? 0.0 : (srcPathStat.getUsedCapacityB() - tabletSize) / (double) srcPathStat.getCapacityB();
         double newDestPathScore = destPathStat.getCapacityB() == 0
-            ? 0.0 : (destPathStat.getUsedCapacityB() + tabletSize) / (double) destPathStat.getCapacityB();
+                ? 0.0 : (destPathStat.getUsedCapacityB() + tabletSize) / (double) destPathStat.getCapacityB();
 
         double currentDiff = Math.abs(currentSrcPathScore - avgUsedPercent)
-            + Math.abs(currentDestPathScore - avgUsedPercent);
+                + Math.abs(currentDestPathScore - avgUsedPercent);
         double newDiff = Math.abs(newSrcPathScore - avgUsedPercent) + Math.abs(newDestPathScore - avgUsedPercent);
 
         LOG.debug("after migrate {}(size: {}) from {} to {}, medium: {}, the load score changed."

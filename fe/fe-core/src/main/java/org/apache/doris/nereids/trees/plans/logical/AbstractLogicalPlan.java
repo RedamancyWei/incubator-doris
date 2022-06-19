@@ -17,18 +17,45 @@
 
 package org.apache.doris.nereids.trees.plans.logical;
 
+import org.apache.doris.nereids.memo.GroupExpression;
+import org.apache.doris.nereids.operators.plans.logical.LogicalOperator;
+import org.apache.doris.nereids.properties.LogicalProperties;
 import org.apache.doris.nereids.trees.NodeType;
+import org.apache.doris.nereids.trees.expressions.Slot;
 import org.apache.doris.nereids.trees.plans.AbstractPlan;
 import org.apache.doris.nereids.trees.plans.Plan;
+
+import java.util.List;
+import java.util.Optional;
 
 /**
  * Abstract class for all concrete logical plan.
  */
-public abstract class AbstractLogicalPlan<PLAN_TYPE extends AbstractLogicalPlan<PLAN_TYPE>>
-        extends AbstractPlan<PLAN_TYPE>
-        implements LogicalPlan<PLAN_TYPE> {
+public abstract class AbstractLogicalPlan<OP_TYPE extends LogicalOperator>
+        extends AbstractPlan<OP_TYPE> implements LogicalPlan {
 
-    public AbstractLogicalPlan(NodeType type, Plan... children) {
-        super(type, children);
+    public AbstractLogicalPlan(NodeType type, OP_TYPE operator, Plan... children) {
+        super(type, operator, operator.computeLogicalProperties(children), children);
+    }
+
+    public AbstractLogicalPlan(NodeType type, OP_TYPE operator,
+                               Optional<LogicalProperties> logicalProperties, Plan... children) {
+        super(type, operator, logicalProperties.orElseGet(() -> operator.computeLogicalProperties(children)), children);
+    }
+
+    public AbstractLogicalPlan(NodeType type, OP_TYPE operator, Optional<GroupExpression> groupExpression,
+                               Optional<LogicalProperties> logicalProperties, Plan... children) {
+        super(type, operator, groupExpression,
+                logicalProperties.orElseGet(() -> operator.computeLogicalProperties(children)), children);
+    }
+
+    @Override
+    public LogicalProperties getLogicalProperties() {
+        return logicalProperties;
+    }
+
+    @Override
+    public List<Slot> getOutput() {
+        return logicalProperties.getOutput();
     }
 }

@@ -119,9 +119,7 @@ public abstract class StatisticsTask implements Callable<StatisticsTaskResult> {
                 default:
                     throw new DdlException(errorMsg + taskState + " to " + newState);
             }
-        }
-        // RUNNING -> FINISHED/FAILED
-        else if (taskState == TaskState.RUNNING) {
+        } else if (taskState == TaskState.RUNNING) { // RUNNING -> FINISHED/FAILED
             switch (newState) {
                 case FINISHED:
                 case FAILED:
@@ -130,9 +128,7 @@ public abstract class StatisticsTask implements Callable<StatisticsTaskResult> {
                 default:
                     throw new DdlException(errorMsg + taskState + " to " + newState);
             }
-        }
-        // unsupported state transition
-        else {
+        } else { // unsupported state transition
             throw new DdlException(errorMsg + taskState + " to " + newState);
         }
 

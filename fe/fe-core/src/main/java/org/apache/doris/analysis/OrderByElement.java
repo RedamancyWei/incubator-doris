@@ -60,11 +60,13 @@ public class OrderByElement {
     public Boolean getNullsFirstParam() {
         return nullsFirstParam;
     }
+
     public OrderByElement clone() {
         OrderByElement clone = new OrderByElement(
                 expr.clone(), isAsc, nullsFirstParam);
         return clone;
     }
+
     /**
      * Returns a new list of OrderByElements with the same (cloned) expressions but the
      * ordering direction reversed (asc becomes desc, nulls first becomes nulls last, etc.)
@@ -75,20 +77,21 @@ public class OrderByElement {
         for (int i = 0; i < src.size(); ++i) {
             OrderByElement element = src.get(i);
             OrderByElement reverseElement =
-                new OrderByElement(element.getExpr().clone(), !element.isAsc,
-                       Boolean.valueOf(!nullsFirst(element.nullsFirstParam, element.isAsc)));
+                    new OrderByElement(element.getExpr().clone(), !element.isAsc,
+                            !nullsFirst(element.nullsFirstParam, element.isAsc));
             result.add(reverseElement);
         }
 
         return result;
     }
+
     /**
      * Extracts the order-by exprs from the list of order-by elements and returns them.
      */
     public static List<Expr> getOrderByExprs(List<OrderByElement> src) {
         List<Expr> result = Lists.newArrayListWithCapacity(src.size());
 
-        for (OrderByElement element: src) {
+        for (OrderByElement element : src) {
             result.add(element.getExpr());
         }
 
@@ -104,13 +107,14 @@ public class OrderByElement {
             ExprSubstitutionMap smap, Analyzer analyzer) throws AnalysisException {
         ArrayList<OrderByElement> result = Lists.newArrayListWithCapacity(src.size());
 
-        for (OrderByElement element: src) {
+        for (OrderByElement element : src) {
             result.add(new OrderByElement(element.getExpr().substitute(smap, analyzer, false),
                     element.isAsc, element.nullsFirstParam));
         }
 
         return result;
     }
+
     public String toSql() {
         StringBuilder strBuilder = new StringBuilder();
         strBuilder.append(expr.toSql());
@@ -164,9 +168,10 @@ public class OrderByElement {
             return false;
         }
 
-        OrderByElement o = (OrderByElement)obj;
+        OrderByElement o = (OrderByElement) obj;
         return expr.equals(o.expr) && isAsc == o.isAsc  && nullsFirstParam == o.nullsFirstParam;
     }
+
     /**
      * Compute nullsFirst.
      *

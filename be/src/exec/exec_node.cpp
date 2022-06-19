@@ -37,7 +37,6 @@
 #include "exec/exchange_node.h"
 #include "exec/hash_join_node.h"
 #include "exec/intersect_node.h"
-#include "exec/merge_join_node.h"
 #include "exec/merge_node.h"
 #include "exec/mysql_scan_node.h"
 #include "exec/odbc_scan_node.h"
@@ -55,7 +54,6 @@
 #include "runtime/descriptors.h"
 #include "runtime/exec_env.h"
 #include "runtime/initial_reservations.h"
-#include "runtime/mem_pool.h"
 #include "runtime/mem_tracker.h"
 #include "runtime/row_batch.h"
 #include "runtime/runtime_state.h"
@@ -473,10 +471,6 @@ Status ExecNode::create_node(RuntimeState* state, ObjectPool* pool, const TPlanN
         } else {
             *node = pool->add(new CrossJoinNode(pool, tnode, descs));
         }
-        return Status::OK();
-
-    case TPlanNodeType::MERGE_JOIN_NODE:
-        *node = pool->add(new MergeJoinNode(pool, tnode, descs));
         return Status::OK();
 
     case TPlanNodeType::EMPTY_SET_NODE:

@@ -17,8 +17,12 @@
 
 #include "vec/function/function_test_util.h"
 
+#include "vec/data_types/data_type_array.h"
+#include "vec/data_types/data_type_bitmap.h"
+#include "vec/data_types/data_type_decimal.h"
+
 namespace doris::vectorized {
-int64_t str_to_data_time(std::string datetime_str, bool data_time) {
+int64_t str_to_date_time(std::string datetime_str, bool data_time) {
     VecDateTimeValue v;
     v.from_date_str(datetime_str.c_str(), datetime_str.size());
     if (data_time) { //bool data_time only to simplifly means data_time or data to cast, just use in time-functions uint test
@@ -29,7 +33,8 @@ int64_t str_to_data_time(std::string datetime_str, bool data_time) {
     return binary_cast<VecDateTimeValue, Int64>(v);
 }
 size_t type_index_to_data_type(const std::vector<std::any>& input_types, size_t index,
-                               doris_udf::FunctionContext::TypeDesc& desc, DataTypePtr& type) {
+                               ut_type::UTDataTypeDesc& ut_desc, DataTypePtr& type) {
+    doris_udf::FunctionContext::TypeDesc& desc = ut_desc.type_desc;
     if (index < 0 || index >= input_types.size()) {
         return -1;
     }
@@ -92,14 +97,25 @@ size_t type_index_to_data_type(const std::vector<std::any>& input_types, size_t 
         return 1;
     case TypeIndex::Array: {
         desc.type = doris_udf::FunctionContext::TYPE_ARRAY;
-        doris_udf::FunctionContext::TypeDesc sub_desc;
+        ut_type::UTDataTypeDesc sub_desc;
         DataTypePtr sub_type = nullptr;
-        size_t ret = type_index_to_data_type(input_types, index + 1, sub_desc, sub_type);
+        ++index;
+        size_t ret = type_index_to_data_type(input_types, index, sub_desc, sub_type);
         if (ret <= 0) {
             return ret;
         }
-        desc.children.push_back(doris_udf::FunctionContext::TypeDesc());
-        type = std::make_shared<DataTypeArray>(std::move(sub_type));
+        desc.children.push_back(sub_desc.type_desc);
+        type = std::make_shared<DataTypeArray>(sub_type);
+        return ret + 1;
+    }
+    case TypeIndex::Nullable: {
+        ++index;
+        size_t ret = type_index_to_data_type(input_types, index, ut_desc, type);
+        if (ret <= 0) {
+            return ret;
+        }
+        ut_desc.is_nullable = true;
+        type = make_nullable(type);
         return ret + 1;
     }
     default:
@@ -115,7 +131,7 @@ bool parse_ut_data_type(const std::vector<std::any>& input_types, ut_type::UTDat
         if (input_types[i].type() == typeid(Consted)) {
             desc.is_const = true;
         }
-        size_t res = type_index_to_data_type(input_types, i, desc.type_desc, desc.data_type);
+        size_t res = type_index_to_data_type(input_types, i, desc, desc.data_type);
         if (res <= 0) {
             return false;
         }

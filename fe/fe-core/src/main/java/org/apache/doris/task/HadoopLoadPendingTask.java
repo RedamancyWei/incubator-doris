@@ -89,12 +89,14 @@ public class HadoopLoadPendingTask extends LoadPendingTask {
         Preconditions.checkNotNull(etlTaskConf);
 
         // add table indexes to transaction state
-        TransactionState txnState = Catalog.getCurrentGlobalTransactionMgr().getTransactionState(job.getDbId(), job.getTransactionId());
+        TransactionState txnState = Catalog.getCurrentGlobalTransactionMgr()
+                .getTransactionState(job.getDbId(), job.getTransactionId());
         if (txnState == null) {
             throw new LoadException("txn does not exist: " + job.getTransactionId());
         }
         for (long tableId : job.getIdToTableLoadInfo().keySet()) {
-            OlapTable table = (OlapTable) db.getTableOrException(tableId, s -> new LoadException("table does not exist. id: " + s));
+            OlapTable table = (OlapTable) db.getTableOrException(
+                    tableId, s -> new LoadException("table does not exist. id: " + s));
             table.readLock();
             try {
                 txnState.addTableIndexes(table);
@@ -128,7 +130,8 @@ public class HadoopLoadPendingTask extends LoadPendingTask {
             long tableId = tableEntry.getKey();
             TableLoadInfo tableLoadInfo = tableEntry.getValue();
 
-            OlapTable table = (OlapTable) db.getTableOrException(tableId, s -> new LoadException("table does not exist. id: " + s));
+            OlapTable table = (OlapTable) db.getTableOrException(
+                    tableId, s -> new LoadException("table does not exist. id: " + s));
             table.readLock();
             try {
                 // columns
@@ -210,7 +213,7 @@ public class HadoopLoadPendingTask extends LoadPendingTask {
                 } else {
                     dppColumn.put("is_key", false);
                     String aggregation = "none";
-                    if ("AGG_KEYS" == table.getKeysType().name()) {
+                    if ("AGG_KEYS".equals(table.getKeysType().name())) {
                         AggregateType aggregateType = column.getAggregationType();
                         if (AggregateType.SUM == aggregateType) {
                             aggregation = "ADD";

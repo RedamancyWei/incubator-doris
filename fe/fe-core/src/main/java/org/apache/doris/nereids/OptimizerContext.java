@@ -20,6 +20,8 @@ package org.apache.doris.nereids;
 import org.apache.doris.nereids.jobs.Job;
 import org.apache.doris.nereids.jobs.scheduler.JobPool;
 import org.apache.doris.nereids.jobs.scheduler.JobScheduler;
+import org.apache.doris.nereids.jobs.scheduler.JobStack;
+import org.apache.doris.nereids.jobs.scheduler.SimpleJobScheduler;
 import org.apache.doris.nereids.memo.Memo;
 import org.apache.doris.nereids.rules.RuleSet;
 
@@ -36,15 +38,12 @@ public class OptimizerContext {
      * Constructor of OptimizerContext.
      *
      * @param memo {@link Memo} reference
-     * @param ruleSet All rules to apply on query plan
-     * @param jobPool {@link JobPool} reference contain pending rules
-     * @param jobScheduler schedule pending jobs
      */
-    public OptimizerContext(Memo memo, RuleSet ruleSet, JobPool jobPool, JobScheduler jobScheduler) {
+    public OptimizerContext(Memo memo) {
         this.memo = memo;
-        this.ruleSet = ruleSet;
-        this.jobPool = jobPool;
-        this.jobScheduler = jobScheduler;
+        this.ruleSet = new RuleSet();
+        this.jobPool = new JobStack();
+        this.jobScheduler = new SimpleJobScheduler();
     }
 
     public JobPool getJobPool() {
@@ -67,8 +66,8 @@ public class OptimizerContext {
         return memo;
     }
 
-    public void pushTask(Job task) {
-        jobPool.push(task);
+    public void pushJob(Job job) {
+        jobPool.push(job);
     }
 
     public JobScheduler getJobScheduler() {

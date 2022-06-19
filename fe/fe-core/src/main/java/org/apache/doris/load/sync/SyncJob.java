@@ -188,7 +188,7 @@ public abstract class SyncJob implements Writable {
     }
 
     private void checkStateTransform(JobState newState) throws UserException {
-        switch (jobState) {
+        switch (jobState) { // CHECKSTYLE IGNORE THIS LINE: missing switch default
             case PENDING:
                 break;
             case RUNNING:
@@ -294,7 +294,8 @@ public abstract class SyncJob implements Writable {
         @SerializedName(value = "failMsg")
         protected SyncFailMsg failMsg;
 
-        public SyncJobUpdateStateInfo(long id, JobState jobState, long lastStartTimeMs, long lastStopTimeMs, long finishTimeMs, SyncFailMsg failMsg) {
+        public SyncJobUpdateStateInfo(long id, JobState jobState, long lastStartTimeMs,
+                long lastStopTimeMs, long finishTimeMs, SyncFailMsg failMsg) {
             this.id = id;
             this.jobState = jobState;
             this.lastStartTimeMs = lastStartTimeMs;

@@ -62,7 +62,7 @@ public final class RollupSelector {
     public long selectBestRollup(
             Collection<Long> partitionIds, List<Expr> conjuncts, boolean isPreAggregation)
             throws UserException {
-        Preconditions.checkArgument(partitionIds != null , "Paritition can't be null.");
+        Preconditions.checkArgument(partitionIds != null, "Paritition can't be null.");
 
         ConnectContext connectContext = ConnectContext.get();
         if (connectContext != null && connectContext.getSessionVariable().isUseV2Rollup()) {
@@ -74,7 +74,8 @@ public final class RollupSelector {
                 return v2RollupIndexId;
             }
         }
-        // Get first partition to select best prefix index rollups, because MaterializedIndex ids in one rollup's partitions are all same.
+        // Get first partition to select best prefix index rollups,
+        // because MaterializedIndex ids in one rollup's partitions are all same.
         final List<Long> bestPrefixIndexRollups = selectBestPrefixIndexRollup(conjuncts, isPreAggregation);
         return selectBestRowCountRollup(bestPrefixIndexRollups, partitionIds);
     }
@@ -113,7 +114,7 @@ public final class RollupSelector {
         return selectedIndexId;
     }
 
-    private List<Long> selectBestPrefixIndexRollup(List<Expr> conjuncts, boolean isPreAggregation) throws UserException {
+    private List<Long> selectBestPrefixIndexRollup(List<Expr> conjuncts, boolean isPreAggregation) {
 
         final List<String> outputColumns = Lists.newArrayList();
         for (SlotDescriptor slot : tupleDesc.getMaterializedSlots()) {
@@ -268,12 +269,12 @@ public final class RollupSelector {
             return false;
         }
         if (expr instanceof InPredicate) {
-            return isInPredicateUsedForPrefixIndex((InPredicate)expr);
+            return isInPredicateUsedForPrefixIndex((InPredicate) expr);
         } else if (expr instanceof BinaryPredicate) {
             if (isJoinConjunct) {
-                return isEqualJoinConjunctUsedForPrefixIndex((BinaryPredicate)expr);
+                return isEqualJoinConjunctUsedForPrefixIndex((BinaryPredicate) expr);
             } else {
-                return isBinaryPredicateUsedForPrefixIndex((BinaryPredicate)expr);
+                return isBinaryPredicateUsedForPrefixIndex((BinaryPredicate) expr);
             }
         }
         return true;

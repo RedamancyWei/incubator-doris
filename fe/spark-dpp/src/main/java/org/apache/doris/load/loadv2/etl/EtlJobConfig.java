@@ -137,7 +137,8 @@ public class EtlJobConfig implements Serializable {
 
     // hdfsEtlPath/jobs/dbId/loadLabel/PendingTaskSignature
     private static final String ETL_OUTPUT_PATH_FORMAT = "%s/jobs/%d/%s/%d";
-    private static final String ETL_OUTPUT_FILE_NAME_DESC_V1 = "version.label.tableId.partitionId.indexId.bucket.schemaHash.parquet";
+    private static final String ETL_OUTPUT_FILE_NAME_DESC_V1
+            = "version.label.tableId.partitionId.indexId.bucket.schemaHash.parquet";
     // tableId.partitionId.indexId.bucket.schemaHash
     public static final String TABLET_META_FORMAT = "%d.%d.%d.%d.%d";
     public static final String ETL_OUTPUT_FILE_FORMAT = "parquet";
@@ -170,14 +171,14 @@ public class EtlJobConfig implements Serializable {
 
     @Override
     public String toString() {
-        return "EtlJobConfig{" +
-                "tables=" + tables +
-                ", outputPath='" + outputPath + '\'' +
-                ", outputFilePattern='" + outputFilePattern + '\'' +
-                ", label='" + label + '\'' +
-                ", properties=" + properties +
-                ", version=" + configVersion +
-                '}';
+        return "EtlJobConfig{"
+                + "tables=" + tables
+                + ", outputPath='" + outputPath + '\''
+                + ", outputFilePattern='" + outputFilePattern + '\''
+                + ", label='" + label + '\''
+                + ", properties=" + properties
+                + ", version=" + configVersion
+                + '}';
     }
 
     public String getOutputPath() {
@@ -189,7 +190,8 @@ public class EtlJobConfig implements Serializable {
     }
 
     public static String getOutputFilePattern(String loadLabel, FilePatternVersion filePatternVersion) {
-        return String.format("%s.%s.%s.%s", filePatternVersion.name(), loadLabel, TABLET_META_FORMAT, ETL_OUTPUT_FILE_FORMAT);
+        return String.format("%s.%s.%s.%s", filePatternVersion.name(), loadLabel,
+                TABLET_META_FORMAT, ETL_OUTPUT_FILE_FORMAT);
     }
 
     public static String getDppResultFilePath(String outputPath) {
@@ -240,10 +242,10 @@ public class EtlJobConfig implements Serializable {
 
         @Override
         public String toString() {
-            return "EtlJobProperty{" +
-                    "strictMode=" + strictMode +
-                    ", timezone='" + timezone + '\'' +
-                    '}';
+            return "EtlJobProperty{"
+                    + "strictMode=" + strictMode
+                    + ", timezone='" + timezone + '\''
+                    + '}';
         }
     }
 
@@ -280,11 +282,11 @@ public class EtlJobConfig implements Serializable {
 
         @Override
         public String toString() {
-            return "EtlTable{" +
-                    "indexes=" + indexes +
-                    ", partitionInfo=" + partitionInfo +
-                    ", fileGroups=" + fileGroups +
-                    '}';
+            return "EtlTable{"
+                    + "indexes=" + indexes
+                    + ", partitionInfo=" + partitionInfo
+                    + ", fileGroups=" + fileGroups
+                    + '}';
         }
     }
 
@@ -329,18 +331,18 @@ public class EtlJobConfig implements Serializable {
 
         @Override
         public String toString() {
-            return "EtlColumn{" +
-                    "columnName='" + columnName + '\'' +
-                    ", columnType='" + columnType + '\'' +
-                    ", isAllowNull=" + isAllowNull +
-                    ", isKey=" + isKey +
-                    ", aggregationType='" + aggregationType + '\'' +
-                    ", defaultValue='" + defaultValue + '\'' +
-                    ", stringLength=" + stringLength +
-                    ", precision=" + precision +
-                    ", scale=" + scale +
-                    ", defineExpr='" + defineExpr + '\'' +
-                    '}';
+            return "EtlColumn{"
+                    + "columnName='" + columnName + '\''
+                    + ", columnType='" + columnType + '\''
+                    + ", isAllowNull=" + isAllowNull
+                    + ", isKey=" + isKey
+                    + ", aggregationType='" + aggregationType + '\''
+                    + ", defaultValue='" + defaultValue + '\''
+                    + ", stringLength=" + stringLength
+                    + ", precision=" + precision
+                    + ", scale=" + scale
+                    + ", defineExpr='" + defineExpr + '\''
+                    + '}';
         }
     }
 
@@ -390,13 +392,13 @@ public class EtlJobConfig implements Serializable {
 
         @Override
         public String toString() {
-            return "EtlIndex{" +
-                    "indexId=" + indexId +
-                    ", columns=" + columns +
-                    ", schemaHash=" + schemaHash +
-                    ", indexType='" + indexType + '\'' +
-                    ", isBaseIndex=" + isBaseIndex +
-                    '}';
+            return "EtlIndex{"
+                    + "indexId=" + indexId
+                    + ", columns=" + columns
+                    + ", schemaHash=" + schemaHash
+                    + ", indexType='" + indexType + '\''
+                    + ", isBaseIndex=" + isBaseIndex
+                    + '}';
         }
     }
 
@@ -420,12 +422,12 @@ public class EtlJobConfig implements Serializable {
 
         @Override
         public String toString() {
-            return "EtlPartitionInfo{" +
-                    "partitionType='" + partitionType + '\'' +
-                    ", partitionColumnRefs=" + partitionColumnRefs +
-                    ", distributionColumnRefs=" + distributionColumnRefs +
-                    ", partitions=" + partitions +
-                    '}';
+            return "EtlPartitionInfo{"
+                    + "partitionType='" + partitionType + '\''
+                    + ", partitionColumnRefs=" + partitionColumnRefs
+                    + ", distributionColumnRefs=" + distributionColumnRefs
+                    + ", partitions=" + partitions
+                    + '}';
         }
     }
 
@@ -452,13 +454,13 @@ public class EtlJobConfig implements Serializable {
 
         @Override
         public String toString() {
-            return "EtlPartition{" +
-                    "partitionId=" + partitionId +
-                    ", startKeys=" + startKeys +
-                    ", endKeys=" + endKeys +
-                    ", isMaxPartition=" + isMaxPartition +
-                    ", bucketNum=" + bucketNum +
-                    '}';
+            return "EtlPartition{"
+                    + "partitionId=" + partitionId
+                    + ", startKeys=" + startKeys
+                    + ", endKeys=" + endKeys
+                    + ", isMaxPartition=" + isMaxPartition
+                    + ", bucketNum=" + bucketNum
+                    + '}';
         }
     }
 
@@ -491,7 +493,8 @@ public class EtlJobConfig implements Serializable {
         public Map<String, String> hiveTableProperties;
 
         // hive db table used in dpp, not serialized
-        // set with hiveDbTableName (no bitmap column) or IntermediateHiveTable (created by global dict builder) in spark etl job
+        // set with hiveDbTableName (no bitmap column) or IntermediateHiveTable (created by global dict builder)
+        // in spark etl job
         public String dppHiveDbTableName;
 
         // for data infile path
@@ -527,21 +530,21 @@ public class EtlJobConfig implements Serializable {
 
         @Override
         public String toString() {
-            return "EtlFileGroup{" +
-                    "sourceType=" + sourceType +
-                    ", filePaths=" + filePaths +
-                    ", fileFieldNames=" + fileFieldNames +
-                    ", columnsFromPath=" + columnsFromPath +
-                    ", columnSeparator='" + columnSeparator + '\'' +
-                    ", lineDelimiter='" + lineDelimiter + '\'' +
-                    ", isNegative=" + isNegative +
-                    ", fileFormat='" + fileFormat + '\'' +
-                    ", columnMappings=" + columnMappings +
-                    ", where='" + where + '\'' +
-                    ", partitions=" + partitions +
-                    ", hiveDbTableName='" + hiveDbTableName + '\'' +
-                    ", hiveTableProperties=" + hiveTableProperties +
-                    '}';
+            return "EtlFileGroup{"
+                    + "sourceType=" + sourceType
+                    + ", filePaths=" + filePaths
+                    + ", fileFieldNames=" + fileFieldNames
+                    + ", columnsFromPath=" + columnsFromPath
+                    + ", columnSeparator='" + columnSeparator + '\''
+                    + ", lineDelimiter='" + lineDelimiter + '\''
+                    + ", isNegative=" + isNegative
+                    + ", fileFormat='" + fileFormat + '\''
+                    + ", columnMappings=" + columnMappings
+                    + ", where='" + where + '\''
+                    + ", partitions=" + partitions
+                    + ", hiveDbTableName='" + hiveDbTableName + '\''
+                    + ", hiveTableProperties=" + hiveTableProperties
+                    + '}';
         }
     }
 
@@ -596,11 +599,11 @@ public class EtlJobConfig implements Serializable {
 
         @Override
         public String toString() {
-            return "EtlColumnMapping{" +
-                    "functionName='" + functionName + '\'' +
-                    ", args=" + args +
-                    ", expr=" + expr +
-                    '}';
+            return "EtlColumnMapping{"
+                    + "functionName='" + functionName + '\''
+                    + ", args=" + args
+                    + ", expr=" + expr
+                    + '}';
         }
     }
 

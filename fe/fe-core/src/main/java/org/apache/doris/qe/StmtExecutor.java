@@ -57,7 +57,7 @@ import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.PrimitiveType;
 import org.apache.doris.catalog.ScalarType;
 import org.apache.doris.catalog.Table;
-import org.apache.doris.catalog.Table.TableType;
+import org.apache.doris.catalog.TableIf.TableType;
 import org.apache.doris.catalog.Type;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.AuditLog;
@@ -223,8 +223,8 @@ public class StmtExecutor implements ProfileWriter {
             summaryProfile.addInfoString(ProfileManager.TOTAL_TIME, DebugUtil.getPrettyStringMs(totalTimeMs));
             summaryProfile.addInfoString(ProfileManager.QUERY_TYPE, queryType);
             summaryProfile.addInfoString(ProfileManager.QUERY_STATE,
-                    !waiteBeReport && context.getState().getStateType().equals(MysqlStateType.OK) ?
-                            "RUNNING" : context.getState().toString());
+                    !waiteBeReport && context.getState().getStateType().equals(MysqlStateType.OK)
+                            ? "RUNNING" : context.getState().toString());
             summaryProfile.addInfoString(ProfileManager.DORIS_VERSION, Version.DORIS_BUILD_VERSION);
             summaryProfile.addInfoString(ProfileManager.USER, context.getQualifiedUser());
             summaryProfile.addInfoString(ProfileManager.DEFAULT_DB, context.getDatabase());
@@ -239,8 +239,8 @@ public class StmtExecutor implements ProfileWriter {
                     waiteBeReport ? TimeUtils.longToTimeString(currentTimestamp) : "N/A");
             summaryProfile.addInfoString(ProfileManager.TOTAL_TIME, DebugUtil.getPrettyStringMs(totalTimeMs));
             summaryProfile.addInfoString(ProfileManager.QUERY_STATE,
-                    !waiteBeReport && context.getState().getStateType().equals(MysqlStateType.OK) ?
-                            "RUNNING" : context.getState().toString());
+                    !waiteBeReport && context.getState().getStateType().equals(MysqlStateType.OK)
+                            ? "RUNNING" : context.getState().toString());
         }
         plannerProfile.initRuntimeProfile(plannerRuntimeProfile);
 
@@ -338,8 +338,8 @@ public class StmtExecutor implements ProfileWriter {
                         // If goes here, which means we can't find a valid Master FE(some error happens).
                         // To avoid endless forward, throw exception here.
                         throw new UserException("The statement has been forwarded to master FE("
-                                + Catalog.getCurrentCatalog().getSelfNode().first + ") and failed to execute" +
-                                " because Master FE is not ready. You may need to check FE's status");
+                                + Catalog.getCurrentCatalog().getSelfNode().first + ") and failed to execute"
+                                + " because Master FE is not ready. You may need to check FE's status");
                     }
                     forwardToMaster();
                     if (masterOpExecutor != null && masterOpExecutor.getQueryId() != null) {
@@ -359,7 +359,8 @@ public class StmtExecutor implements ProfileWriter {
                 if (!((QueryStmt) parsedStmt).isExplain()) {
                     // sql/sqlHash block
                     try {
-                        Catalog.getCurrentCatalog().getSqlBlockRuleMgr().matchSql(originStmt.originStmt, context.getSqlHash(), context.getQualifiedUser());
+                        Catalog.getCurrentCatalog().getSqlBlockRuleMgr().matchSql(
+                                originStmt.originStmt, context.getSqlHash(), context.getQualifiedUser());
                     } catch (AnalysisException e) {
                         LOG.warn(e.getMessage());
                         context.getState().setError(e.getMysqlErrorCode(), e.getMessage());
@@ -370,8 +371,11 @@ public class StmtExecutor implements ProfileWriter {
                     for (ScanNode scanNode : scanNodeList) {
                         if (scanNode instanceof OlapScanNode) {
                             OlapScanNode olapScanNode = (OlapScanNode) scanNode;
-                            Catalog.getCurrentCatalog().getSqlBlockRuleMgr().checkLimitaions(olapScanNode.getSelectedPartitionNum().longValue(),
-                                    olapScanNode.getSelectedTabletsNum(), olapScanNode.getCardinality(), analyzer.getQualifiedUser());
+                            Catalog.getCurrentCatalog().getSqlBlockRuleMgr().checkLimitations(
+                                    olapScanNode.getSelectedPartitionNum().longValue(),
+                                    olapScanNode.getSelectedTabletsNum(),
+                                    olapScanNode.getCardinality(),
+                                    context.getQualifiedUser());
                         }
                     }
                 }
@@ -383,8 +387,10 @@ public class StmtExecutor implements ProfileWriter {
                         //reset query id for each retry
                         if (i > 0) {
                             UUID uuid = UUID.randomUUID();
-                            TUniqueId newQueryId = new TUniqueId(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
-                            AuditLog.getQueryAudit().log("Query {} {} times with new query id: {}", DebugUtil.printId(queryId), i, DebugUtil.printId(newQueryId));
+                            TUniqueId newQueryId = new TUniqueId(uuid.getMostSignificantBits(),
+                                    uuid.getLeastSignificantBits());
+                            AuditLog.getQueryAudit().log("Query {} {} times with new query id: {}",
+                                    DebugUtil.printId(queryId), i, DebugUtil.printId(newQueryId));
                             context.setQueryId(newQueryId);
                         }
                         handleQueryStmt();
@@ -536,12 +542,14 @@ public class StmtExecutor implements ProfileWriter {
     // Analyze one statement to structure in memory.
     public void analyze(TQueryOptions tQueryOptions) throws UserException {
         if (LOG.isDebugEnabled()) {
-            LOG.debug("begin to analyze stmt: {}, forwarded stmt id: {}", context.getStmtId(), context.getForwardedStmtId());
+            LOG.debug("begin to analyze stmt: {}, forwarded stmt id: {}",
+                    context.getStmtId(), context.getForwardedStmtId());
         }
 
         parse();
 
-        // yiguolei: insert stmt's grammar analysis will write editlog, so that we check if the stmt should be forward to master here
+        // yiguolei: insert stmt's grammar analysis will write editlog,
+        // so that we check if the stmt should be forward to master here
         // if the stmt should be forward to master, then just return here and the master will do analysis again
         if (isForwardToMaster()) {
             return;
@@ -582,8 +590,9 @@ public class StmtExecutor implements ProfileWriter {
                     analyzeAndGenerateQueryPlan(tQueryOptions);
                     break;
                 } catch (MVSelectFailedException e) {
-                    /**
-                     * If there is MVSelectFailedException after the first planner, there will be error mv rewritten in query.
+                    /*
+                     * If there is MVSelectFailedException after the first planner,
+                     * there will be error mv rewritten in query.
                      * So, the query should be reanalyzed without mv rewritten and planner again.
                      * Attention: Only error rewritten tuple is forbidden to mv rewrite in the second time.
                      */
@@ -624,7 +633,8 @@ public class StmtExecutor implements ProfileWriter {
         // parsedStmt may already by set when constructing this StmtExecutor();
         if (parsedStmt == null) {
             // Parse statement with parser generated by CUP&FLEX
-            SqlScanner input = new SqlScanner(new StringReader(originStmt.originStmt), context.getSessionVariable().getSqlMode());
+            SqlScanner input = new SqlScanner(new StringReader(originStmt.originStmt),
+                    context.getSessionVariable().getSqlMode());
             SqlParser parser = new SqlParser(input);
             try {
                 parsedStmt = SqlParserUtils.getStmt(parser, originStmt.idx);
@@ -718,7 +728,9 @@ public class StmtExecutor implements ProfileWriter {
                 if (LOG.isTraceEnabled()) {
                     LOG.trace("rewrittenStmt: " + parsedStmt.toSql());
                 }
-                if (explainOptions != null) parsedStmt.setIsExplain(explainOptions);
+                if (explainOptions != null) {
+                    parsedStmt.setIsExplain(explainOptions);
+                }
             }
         }
         plannerProfile.setQueryAnalysisFinishTime();
@@ -740,7 +752,8 @@ public class StmtExecutor implements ProfileWriter {
         parsedStmt.reset();
 
         // DORIS-7361
-        // Need to reset selectList before second-round analyze, because exprs in selectList could be rewritten by mvExprRewriter
+        // Need to reset selectList before second-round analyze,
+        // because exprs in selectList could be rewritten by mvExprRewriter
         // in first-round analyze, which could cause analyze failure.
         if (parsedStmt instanceof QueryStmt) {
             ((QueryStmt) parsedStmt).resetSelectList();
@@ -830,7 +843,8 @@ public class StmtExecutor implements ProfileWriter {
 
         if (isEos) {
             if (batch != null) {
-                statisticsForAuditLog = batch.getQueryStatistics() == null ? null : batch.getQueryStatistics().toBuilder();
+                statisticsForAuditLog = batch.getQueryStatistics() == null
+                        ? null : batch.getQueryStatistics().toBuilder();
             }
             if (!isSend) {
                 sendFields(selectStmt.getColLabels(), exprToType(selectStmt.getResultExprs()));
@@ -844,7 +858,8 @@ public class StmtExecutor implements ProfileWriter {
     /**
      * Handle the SelectStmt via Cache.
      */
-    private void handleCacheStmt(CacheAnalyzer cacheAnalyzer, MysqlChannel channel, SelectStmt selectStmt) throws Exception {
+    private void handleCacheStmt(CacheAnalyzer cacheAnalyzer,
+            MysqlChannel channel, SelectStmt selectStmt) throws Exception {
         RowBatch batch = null;
         InternalService.PFetchCacheResult cacheResult = cacheAnalyzer.getCacheData();
         CacheMode mode = cacheAnalyzer.getCacheMode();
@@ -859,7 +874,8 @@ public class StmtExecutor implements ProfileWriter {
             // rewrite sql
             if (mode == CacheMode.Partition) {
                 if (cacheAnalyzer.getHitRange() == Cache.HitRange.Left) {
-                    isSendFields = sendCachedValues(channel, cacheResult.getValuesList(), newSelectStmt, isSendFields, false);
+                    isSendFields = sendCachedValues(channel, cacheResult.getValuesList(),
+                            newSelectStmt, isSendFields, false);
                 }
                 newSelectStmt = cacheAnalyzer.getRewriteStmt();
                 newSelectStmt.reset();
@@ -993,7 +1009,8 @@ public class StmtExecutor implements ProfileWriter {
             batch = coord.getNext();
             // for outfile query, there will be only one empty batch send back with eos flag
             if (batch.getBatch() != null) {
-                // For some language driver, getting error packet after fields packet will be recognized as a success result
+                // For some language driver, getting error packet after fields packet
+                // will be recognized as a success result
                 // so We need to send fields after first batch arrived
                 if (!isSendFields) {
                     if (!isOutfileQuery) {
@@ -1142,8 +1159,8 @@ public class StmtExecutor implements ProfileWriter {
         if (context.isTxnIniting()) { // first time, begin txn
             beginTxn(insertStmt.getDb(), insertStmt.getTbl());
         }
-        if (!context.getTxnEntry().getTxnConf().getDb().equals(insertStmt.getDb()) ||
-                !context.getTxnEntry().getTxnConf().getTbl().equals(insertStmt.getTbl())) {
+        if (!context.getTxnEntry().getTxnConf().getDb().equals(insertStmt.getDb())
+                || !context.getTxnEntry().getTxnConf().getTbl().equals(insertStmt.getTbl())) {
             throw new TException("Only one table can be inserted in one transaction.");
         }
 
@@ -1189,7 +1206,8 @@ public class StmtExecutor implements ProfileWriter {
         TTxnParams txnConf = txnEntry.getTxnConf();
         long timeoutSecond = ConnectContext.get().getSessionVariable().getQueryTimeoutS();
         TransactionState.LoadJobSourceType sourceType = TransactionState.LoadJobSourceType.INSERT_STREAMING;
-        Database dbObj = Catalog.getCurrentCatalog().getDbOrException(dbName, s -> new TException("database is invalid for dbName: " + s));
+        Database dbObj = Catalog.getCurrentCatalog().getDbOrException(
+                dbName, s -> new TException("database is invalid for dbName: " + s));
         Table tblObj = dbObj.getTableOrException(tblName, s -> new TException("table is invalid: " + s));
         txnConf.setDbId(dbObj.getId()).setTbl(tblName).setDb(dbName);
         txnEntry.setTable(tblObj);
@@ -1298,7 +1316,8 @@ public class StmtExecutor implements ProfileWriter {
                     coord.cancel();
                     if (notTimeout) {
                         errMsg = coord.getExecStatus().getErrorMsg();
-                        ErrorReport.reportDdlException("There exists unhealthy backend. " + errMsg, ErrorCode.ERR_FAILED_WHEN_INSERT);
+                        ErrorReport.reportDdlException("There exists unhealthy backend. "
+                                + errMsg, ErrorCode.ERR_FAILED_WHEN_INSERT);
                     } else {
                         ErrorReport.reportDdlException(ErrorCode.ERR_EXECUTE_TIMEOUT);
                     }
@@ -1313,18 +1332,17 @@ public class StmtExecutor implements ProfileWriter {
                 LOG.debug("delta files is {}", coord.getDeltaUrls());
 
                 if (coord.getLoadCounters().get(LoadEtlTask.DPP_NORMAL_ALL) != null) {
-                    loadedRows = Long.valueOf(coord.getLoadCounters().get(LoadEtlTask.DPP_NORMAL_ALL));
+                    loadedRows = Long.parseLong(coord.getLoadCounters().get(LoadEtlTask.DPP_NORMAL_ALL));
                 }
                 if (coord.getLoadCounters().get(LoadEtlTask.DPP_ABNORMAL_ALL) != null) {
-                    filteredRows = Integer.valueOf(coord.getLoadCounters().get(LoadEtlTask.DPP_ABNORMAL_ALL));
+                    filteredRows = Integer.parseInt(coord.getLoadCounters().get(LoadEtlTask.DPP_ABNORMAL_ALL));
                 }
 
                 // if in strict mode, insert will fail if there are filtered rows
                 if (context.getSessionVariable().getEnableInsertStrict()) {
                     if (filteredRows > 0) {
-                        context.getState().setError(ErrorCode.ERR_FAILED_WHEN_INSERT, "Insert has filtered data in strict mode, " +
-                                "tracking_url="
-                                + coord.getTrackingUrl());
+                        context.getState().setError(ErrorCode.ERR_FAILED_WHEN_INSERT,
+                                "Insert has filtered data in strict mode, tracking_url=" + coord.getTrackingUrl());
                         return;
                     }
                 }
@@ -1337,7 +1355,8 @@ public class StmtExecutor implements ProfileWriter {
                 }
 
                 if (Catalog.getCurrentGlobalTransactionMgr().commitAndPublishTransaction(
-                        insertStmt.getDbObj(), Lists.newArrayList(insertStmt.getTargetTable()), insertStmt.getTransactionId(),
+                        insertStmt.getDbObj(), Lists.newArrayList(insertStmt.getTargetTable()),
+                        insertStmt.getTransactionId(),
                         TabletCommitInfo.fromThrift(coord.getCommitInfos()),
                         context.getSessionVariable().getInsertVisibleTimeoutMs())) {
                     txnStatus = TransactionStatus.VISIBLE;

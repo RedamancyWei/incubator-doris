@@ -45,10 +45,10 @@ import java.util.Queue;
 import java.util.Set;
 
 /**
- * Schedule statistics job.
- * 1. divide job to multi task
- * 2. submit all task to StatisticsTaskScheduler
- * Switch job state from pending to scheduling.
+  * Schedule statistics job.
+  *     1. divide job to multi task
+  *     2. submit all task to StatisticsTaskScheduler
+  * Switch job state from pending to scheduling.
  */
 public class StatisticsJobScheduler extends MasterDaemon {
     private static final Logger LOG = LogManager.getLogger(StatisticsJobScheduler.class);
@@ -72,7 +72,8 @@ public class StatisticsJobScheduler extends MasterDaemon {
      * and normal query services may be affected. Therefore, we put the jobs into the queue
      * and schedule them one by one, and finally divide each job to several subtasks and execute them.
      */
-    public final Queue<StatisticsJob> pendingJobQueue = Queues.newLinkedBlockingQueue(Config.cbo_max_statistics_job_num);
+    public final Queue<StatisticsJob> pendingJobQueue
+            = Queues.newLinkedBlockingQueue(Config.cbo_max_statistics_job_num);
 
     public StatisticsJobScheduler() {
         super("Statistics job scheduler", 0);
@@ -131,6 +132,8 @@ public class StatisticsJobScheduler extends MasterDaemon {
      * we'll divide subtasks by partition. relevant values(3700000000L&600000000L) are derived from test.
      * <p>
      * Eventually, we will get several subtasks of the following types:
+     *
+     * @throws DdlException DdlException
      * @see MetaStatisticsTask
      * @see SampleSQLStatisticsTask
      * @see SQLStatisticsTask

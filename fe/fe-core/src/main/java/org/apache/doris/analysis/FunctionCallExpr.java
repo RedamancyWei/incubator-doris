@@ -248,21 +248,21 @@ public class FunctionCallExpr extends Expr {
         }
         int len = children.size();
         List<String> result = Lists.newArrayList();
-        if (fnName.getFunction().equalsIgnoreCase("json_array") ||
-                fnName.getFunction().equalsIgnoreCase("json_object")) {
+        if (fnName.getFunction().equalsIgnoreCase("json_array")
+                || fnName.getFunction().equalsIgnoreCase("json_object")) {
             len = len - 1;
         }
-        if (fnName.getFunction().equalsIgnoreCase("aes_decrypt") ||
-                fnName.getFunction().equalsIgnoreCase("aes_encrypt") ||
-                fnName.getFunction().equalsIgnoreCase("sm4_decrypt") ||
-                fnName.getFunction().equalsIgnoreCase("sm4_encrypt")) {
+        if (fnName.getFunction().equalsIgnoreCase("aes_decrypt")
+                || fnName.getFunction().equalsIgnoreCase("aes_encrypt")
+                || fnName.getFunction().equalsIgnoreCase("sm4_decrypt")
+                || fnName.getFunction().equalsIgnoreCase("sm4_encrypt")) {
             len = len - 1;
         }
         for (int i = 0; i < len; ++i) {
-            if (i == 1 && (fnName.getFunction().equalsIgnoreCase("aes_decrypt") ||
-                    fnName.getFunction().equalsIgnoreCase("aes_encrypt") ||
-                    fnName.getFunction().equalsIgnoreCase("sm4_decrypt") ||
-                    fnName.getFunction().equalsIgnoreCase("sm4_encrypt"))) {
+            if (i == 1 && (fnName.getFunction().equalsIgnoreCase("aes_decrypt")
+                    || fnName.getFunction().equalsIgnoreCase("aes_encrypt")
+                    || fnName.getFunction().equalsIgnoreCase("sm4_decrypt")
+                    || fnName.getFunction().equalsIgnoreCase("sm4_encrypt"))) {
                 result.add("\'***\'");
             } else {
                 result.add(children.get(i).toSql());
@@ -283,9 +283,9 @@ public class FunctionCallExpr extends Expr {
         StringBuilder sb = new StringBuilder();
         sb.append(((FunctionCallExpr) expr).fnName);
         sb.append(paramsToSql());
-        if (fnName.getFunction().equalsIgnoreCase("json_quote") ||
-            fnName.getFunction().equalsIgnoreCase("json_array") ||
-            fnName.getFunction().equalsIgnoreCase("json_object")) {
+        if (fnName.getFunction().equalsIgnoreCase("json_quote")
+                || fnName.getFunction().equalsIgnoreCase("json_array")
+                || fnName.getFunction().equalsIgnoreCase("json_object")) {
             return forJSON(sb.toString());
         }
         return sb.toString();
@@ -303,21 +303,21 @@ public class FunctionCallExpr extends Expr {
         }
         int len = children.size();
         List<String> result = Lists.newArrayList();
-        if (fnName.getFunction().equalsIgnoreCase("json_array") ||
-                fnName.getFunction().equalsIgnoreCase("json_object")) {
+        if (fnName.getFunction().equalsIgnoreCase("json_array")
+                || fnName.getFunction().equalsIgnoreCase("json_object")) {
             len = len - 1;
         }
-        if (fnName.getFunction().equalsIgnoreCase("aes_decrypt") ||
-                fnName.getFunction().equalsIgnoreCase("aes_encrypt") ||
-                fnName.getFunction().equalsIgnoreCase("sm4_decrypt") ||
-                fnName.getFunction().equalsIgnoreCase("sm4_encrypt")) {
+        if (fnName.getFunction().equalsIgnoreCase("aes_decrypt")
+                || fnName.getFunction().equalsIgnoreCase("aes_encrypt")
+                || fnName.getFunction().equalsIgnoreCase("sm4_decrypt")
+                || fnName.getFunction().equalsIgnoreCase("sm4_encrypt")) {
             len = len - 1;
         }
         for (int i = 0; i < len; ++i) {
-            if (i == 1 && (fnName.getFunction().equalsIgnoreCase("aes_decrypt") ||
-                    fnName.getFunction().equalsIgnoreCase("aes_encrypt") ||
-                    fnName.getFunction().equalsIgnoreCase("sm4_decrypt") ||
-                    fnName.getFunction().equalsIgnoreCase("sm4_encrypt"))) {
+            if (i == 1 && (fnName.getFunction().equalsIgnoreCase("aes_decrypt")
+                    || fnName.getFunction().equalsIgnoreCase("aes_encrypt")
+                    || fnName.getFunction().equalsIgnoreCase("sm4_decrypt")
+                    || fnName.getFunction().equalsIgnoreCase("sm4_encrypt"))) {
                 result.add("\'***\'");
             } else {
                 result.add(children.get(i).toDigest());
@@ -338,9 +338,9 @@ public class FunctionCallExpr extends Expr {
         StringBuilder sb = new StringBuilder();
         sb.append(((FunctionCallExpr) expr).fnName);
         sb.append(paramsToDigest());
-        if (fnName.getFunction().equalsIgnoreCase("json_quote") ||
-                fnName.getFunction().equalsIgnoreCase("json_array") ||
-                fnName.getFunction().equalsIgnoreCase("json_object")) {
+        if (fnName.getFunction().equalsIgnoreCase("json_quote")
+                || fnName.getFunction().equalsIgnoreCase("json_array")
+                || fnName.getFunction().equalsIgnoreCase("json_object")) {
             return forJSON(sb.toString());
         }
         return sb.toString();
@@ -466,7 +466,8 @@ public class FunctionCallExpr extends Expr {
 
         if (fnName.getFunction().equalsIgnoreCase("json_object")) {
             if ((children.size() & 1) == 1 && (originChildSize == children.size())) {
-                throw new AnalysisException("json_object can't be odd parameters, need even parameters: " + this.toSql());
+                throw new AnalysisException("json_object can't be odd parameters, need even parameters: "
+                        + this.toSql());
             }
             String res = parseJsonDataType(true);
             if (children.size() == originChildSize) {
@@ -479,10 +480,6 @@ public class FunctionCallExpr extends Expr {
             if (children.size() > 2 || children.isEmpty()) {
                 throw new AnalysisException(
                         "group_concat requires one or two parameters: " + this.toSql());
-            }
-
-            if (fnParams.isDistinct()) {
-                throw new AnalysisException("group_concat does not support DISTINCT");
             }
 
             Expr arg0 = getChild(0);
@@ -509,7 +506,8 @@ public class FunctionCallExpr extends Expr {
                 if (children.size() > 2) {
                     if (!getChild(1).isConstant() || !getChild(2).isConstant()) {
                         throw new AnalysisException(
-                                "The default parameter (parameter 2 or parameter 3) of LEAD/LAG must be a constant: " + this.toSql());
+                                "The default parameter (parameter 2 or parameter 3) of LEAD/LAG must be a constant: "
+                                        + this.toSql());
                     }
                     uncheckedCastChild(Type.BIGINT, 1);
                     if (!getChild(2).type.matchesType(getChild(0).type) && !getChild(2).type.matchesType(Type.NULL)) {
@@ -525,7 +523,8 @@ public class FunctionCallExpr extends Expr {
                 || fnName.getFunction().equalsIgnoreCase("row_number")
                 || fnName.getFunction().equalsIgnoreCase("first_value")
                 || fnName.getFunction().equalsIgnoreCase("last_value")
-                || fnName.getFunction().equalsIgnoreCase("first_value_rewrite")) {
+                || fnName.getFunction().equalsIgnoreCase("first_value_rewrite")
+                || fnName.getFunction().equalsIgnoreCase("ntile")) {
             if (!isAnalyticFnCall) {
                 throw new AnalysisException(fnName.getFunction() + " only used in analytic function");
             }
@@ -562,20 +561,23 @@ public class FunctionCallExpr extends Expr {
             throw new AnalysisException("BITMAP_UNION_INT params only support TINYINT or SMALLINT or INT");
         }
 
-        if (fnName.getFunction().equalsIgnoreCase(FunctionSet.INTERSECT_COUNT)) {
+        if (fnName.getFunction().equalsIgnoreCase(FunctionSet.INTERSECT_COUNT) || fnName.getFunction()
+                .equalsIgnoreCase(FunctionSet.ORTHOGONAL_BITMAP_INTERSECT) || fnName.getFunction()
+                .equalsIgnoreCase(FunctionSet.ORTHOGONAL_BITMAP_INTERSECT_COUNT)) {
             if (children.size() <= 2) {
-                throw new AnalysisException("intersect_count(bitmap_column, column_to_filter, filter_values) " +
-                        "function requires at least three parameters");
+                throw new AnalysisException(fnName + "(bitmap_column, column_to_filter, filter_values) "
+                        + "function requires at least three parameters");
             }
 
             Type inputType = getChild(0).getType();
             if (!inputType.isBitmapType()) {
-                throw new AnalysisException("intersect_count function first argument should be of BITMAP type, but was " + inputType);
+                throw new AnalysisException(
+                        fnName + "function first argument should be of BITMAP type, but was " + inputType);
             }
 
             for (int i = 2; i < children.size(); i++) {
                 if (!getChild(i).isConstant()) {
-                    throw new AnalysisException("intersect_count function filter_values arg must be constant");
+                    throw new AnalysisException(fnName + " function filter_values arg must be constant");
                 }
             }
             return;
@@ -590,7 +592,8 @@ public class FunctionCallExpr extends Expr {
             }
             Type inputType = getChild(0).getType();
             if (!inputType.isBitmapType()) {
-                throw new AnalysisException(fnName + " function's argument should be of BITMAP type, but was " + inputType);
+                throw new AnalysisException(fnName
+                        + " function's argument should be of BITMAP type, but was " + inputType);
             }
             return;
         }
@@ -601,7 +604,8 @@ public class FunctionCallExpr extends Expr {
             }
             Type inputType = getChild(0).getType();
             if (!inputType.isQuantileStateType()) {
-                throw new AnalysisException(fnName + " function's argument should be of QUANTILE_STATE type, but was" + inputType);
+                throw new AnalysisException(fnName
+                        + " function's argument should be of QUANTILE_STATE type, but was" + inputType);
             }
         }
 
@@ -782,6 +786,23 @@ public class FunctionCallExpr extends Expr {
                 fnName, fnParams.isStar() ? "*" : Joiner.on(", ").join(argTypesSql));
     }
 
+    /**
+     * This analyzeImp used for DefaultValueExprDef
+     * to generate a builtinFunction.
+     * @throws AnalysisException
+     */
+    public void analyzeImplForDefaultValue() throws AnalysisException {
+        fn = getBuiltinFunction(null, fnName.getFunction(), new Type[0],
+                Function.CompareMode.IS_NONSTRICT_SUPERTYPE_OF);
+        type = fn.getReturnType();
+        for (int i = 0; i < children.size(); ++i) {
+            if (getChild(i).getType().isNull()) {
+                uncheckedCastChild(Type.BOOLEAN, i);
+            }
+        }
+        return;
+    }
+
     @Override
     public void analyzeImpl(Analyzer analyzer) throws AnalysisException {
         if (isMergeAggFn) {
@@ -868,11 +889,18 @@ public class FunctionCallExpr extends Expr {
             }
             for (int i = 3; i < children.size(); i++) {
                 if (children.get(i).type != Type.BOOLEAN) {
-                    throw new AnalysisException("The 4th and subsequent params of " + fnName + " function must be boolean");
+                    throw new AnalysisException("The 4th and subsequent params of "
+                            + fnName + " function must be boolean");
                 }
                 childTypes[i] = children.get(i).type;
             }
-
+            fn = getBuiltinFunction(analyzer, fnName.getFunction(), childTypes,
+                    Function.CompareMode.IS_NONSTRICT_SUPERTYPE_OF);
+        } else if (fnName.getFunction().equalsIgnoreCase("if")) {
+            Type[] childTypes = collectChildReturnTypes();
+            Type assignmentCompatibleType = ScalarType.getAssignmentCompatibleType(childTypes[1], childTypes[2], true);
+            childTypes[1] = assignmentCompatibleType;
+            childTypes[2] = assignmentCompatibleType;
             fn = getBuiltinFunction(analyzer, fnName.getFunction(), childTypes,
                     Function.CompareMode.IS_NONSTRICT_SUPERTYPE_OF);
         } else {
@@ -896,7 +924,8 @@ public class FunctionCallExpr extends Expr {
                 if (fn == null) {
                     if (!analyzer.isUDFAllowed()) {
                         throw new AnalysisException(
-                                "Does not support non-builtin functions, or function does not exist: " + this.toSqlImpl());
+                                "Does not support non-builtin functions, or function does not exist: "
+                                        + this.toSqlImpl());
                     }
 
                     String dbName = fnName.analyzeDb(analyzer);
@@ -1058,7 +1087,8 @@ public class FunctionCallExpr extends Expr {
         List<Expr> inputParamsExprs = retExpr.fnParams.exprs();
         List<String> parameters = ((AliasFunction) retExpr.fn).getParameters();
         Preconditions.checkArgument(inputParamsExprs.size() == parameters.size(),
-                "Alias function [" + retExpr.fn.getFunctionName().getFunction() + "] args number is not equal to it's definition");
+                "Alias function [" + retExpr.fn.getFunctionName().getFunction()
+                        + "] args number is not equal to it's definition");
         List<Expr> oriParamsExprs = oriExpr.fnParams.exprs();
 
         // replace origin function params exprs' with input params expr depending on parameter name
@@ -1085,7 +1115,8 @@ public class FunctionCallExpr extends Expr {
      * @return
      * @throws AnalysisException
      */
-    private Expr replaceParams(List<String> parameters, List<Expr> inputParamsExprs, Expr oriExpr) throws AnalysisException {
+    private Expr replaceParams(List<String> parameters, List<Expr> inputParamsExprs, Expr oriExpr)
+            throws AnalysisException {
         for (int i = 0; i < oriExpr.getChildren().size(); i++) {
             Expr retExpr = replaceParams(parameters, inputParamsExprs, oriExpr.getChild(i));
             oriExpr.setChild(i, retExpr);
@@ -1162,7 +1193,9 @@ public class FunctionCallExpr extends Expr {
         // TODO: we can't correctly determine const-ness before analyzing 'fn_'. We should
         // rework logic so that we do not call this function on unanalyzed exprs.
         // Aggregate functions are never constant.
-        if (fn instanceof AggregateFunction || fn == null) return false;
+        if (fn instanceof AggregateFunction || fn == null) {
+            return false;
+        }
 
         final String fnName = this.fnName.getFunction();
         // Non-deterministic functions are never constant.
@@ -1170,7 +1203,9 @@ public class FunctionCallExpr extends Expr {
             return false;
         }
         // Sleep is a special function for testing.
-        if (fnName.equalsIgnoreCase("sleep")) return false;
+        if (fnName.equalsIgnoreCase("sleep")) {
+            return false;
+        }
         return super.isConstantImpl();
     }
 

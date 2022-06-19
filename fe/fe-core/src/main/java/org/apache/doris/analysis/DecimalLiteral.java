@@ -107,7 +107,8 @@ public class DecimalLiteral extends LiteralExpr {
     @Override
     public ByteBuffer getHashValue(PrimitiveType type) {
         ByteBuffer buffer;
-        // no need to consider the overflow when cast decimal to other type, because this func only be used when querying, not storing.
+        // no need to consider the overflow when cast decimal to other type,
+        // because this func only be used when querying, not storing.
         // e.g. For column A with type INT, the data stored certainly no overflow.
         switch (type) {
             case TINYINT:
@@ -193,7 +194,6 @@ public class DecimalLiteral extends LiteralExpr {
     protected void toThrift(TExprNode msg) {
         // TODO(hujie01) deal with loss information
         msg.node_type = TExprNodeType.DECIMAL_LITERAL;
-        BigDecimal v = new BigDecimal(value.toBigInteger());
         msg.decimal_literal = new TDecimalLiteral(value.toPlainString());
     }
 
@@ -249,6 +249,8 @@ public class DecimalLiteral extends LiteralExpr {
             return new IntLiteral(value.longValue(), targetType);
         } else if (targetType.isStringType()) {
             return new StringLiteral(value.toString());
+        } else if (targetType.isLargeIntType()) {
+            return new LargeIntLiteral(value.toBigInteger().toString());
         }
         return super.uncheckedCastTo(targetType);
     }

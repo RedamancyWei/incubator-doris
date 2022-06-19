@@ -20,7 +20,6 @@ package org.apache.doris.load;
 import org.apache.doris.alter.SchemaChangeHandler;
 import org.apache.doris.analysis.Analyzer;
 import org.apache.doris.analysis.BinaryPredicate;
-import org.apache.doris.analysis.CancelLoadStmt;
 import org.apache.doris.analysis.CastExpr;
 import org.apache.doris.analysis.DataDescription;
 import org.apache.doris.analysis.Expr;
@@ -58,7 +57,7 @@ import org.apache.doris.catalog.PrimitiveType;
 import org.apache.doris.catalog.Replica;
 import org.apache.doris.catalog.ScalarType;
 import org.apache.doris.catalog.Table;
-import org.apache.doris.catalog.Table.TableType;
+import org.apache.doris.catalog.TableIf.TableType;
 import org.apache.doris.catalog.Tablet;
 import org.apache.doris.catalog.TabletInvertedIndex;
 import org.apache.doris.catalog.TabletMeta;
@@ -95,6 +94,7 @@ import org.apache.doris.task.LoadTaskInfo;
 import org.apache.doris.task.PushTask;
 import org.apache.doris.thrift.TBrokerScanRangeParams;
 import org.apache.doris.thrift.TEtlState;
+import org.apache.doris.thrift.TFileFormatType;
 import org.apache.doris.thrift.TMiniLoadRequest;
 import org.apache.doris.thrift.TNetworkAddress;
 import org.apache.doris.thrift.TPriority;
@@ -123,7 +123,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.stream.Collectors;
 
 public class Load {
     private static final Logger LOG = LogManager.getLogger(Load.class);
@@ -609,7 +608,7 @@ public class Load {
      * This is only used for hadoop load
      */
     public static void checkAndCreateSource(Database db, DataDescription dataDescription,
-                                            Map<Long, Map<Long, List<Source>>> tableToPartitionSources, EtlJobType jobType) throws DdlException {
+            Map<Long, Map<Long, List<Source>>> tableToPartitionSources, EtlJobType jobType) throws DdlException {
         Source source = new Source(dataDescription.getFilePaths());
         long tableId = -1;
         Set<Long> sourcePartitionIds = Sets.newHashSet();
@@ -629,8 +628,8 @@ public class Load {
             }
 
             // check partition
-            if (dataDescription.getPartitionNames() != null &&
-                    table.getPartitionInfo().getType() == PartitionType.UNPARTITIONED) {
+            if (dataDescription.getPartitionNames() != null
+                    && table.getPartitionInfo().getType() == PartitionType.UNPARTITIONED) {
                 ErrorReport.reportDdlException(ErrorCode.ERR_PARTITION_CLAUSE_NO_ALLOWED);
             }
 
@@ -674,7 +673,8 @@ public class Load {
             source.setColumnNames(columnNames);
 
             // check default value
-            Map<String, Pair<String, List<String>>> columnToHadoopFunction = dataDescription.getColumnToHadoopFunction();
+            Map<String, Pair<String, List<String>>> columnToHadoopFunction
+                    = dataDescription.getColumnToHadoopFunction();
             List<ImportColumnDesc> parsedColumnExprList = dataDescription.getParsedColumnExprList();
             Map<String, Expr> parsedColumnExprMap = Maps.newTreeMap(String.CASE_INSENSITIVE_ORDER);
             for (ImportColumnDesc importColumnDesc : parsedColumnExprList) {
@@ -723,7 +723,8 @@ public class Load {
             // their names. These columns are invisible to user, but we need to generate data for these columns.
             // So we add column mappings for these column.
             // eg1:
-            // base schema is (A, B, C), and B is under schema change, so there will be a shadow column: '__doris_shadow_B'
+            // base schema is (A, B, C), and B is under schema change,
+            // so there will be a shadow column: '__doris_shadow_B'
             // So the final column mapping should looks like: (A, B, C, __doris_shadow_B = substitute(B));
             for (Column column : table.getFullSchema()) {
                 if (column.isNameWithPrefix(SchemaChangeHandler.SHADOW_NAME_PRFIX)) {
@@ -749,16 +750,21 @@ public class Load {
                              * ->
                              * (A, B, C) SET (__doris_shadow_B = substitute(B))
                              */
-                            columnToHadoopFunction.put(column.getName(), Pair.create("substitute", Lists.newArrayList(originCol)));
-                            ImportColumnDesc importColumnDesc = new ImportColumnDesc(column.getName(), new SlotRef(null, originCol));
+                            columnToHadoopFunction.put(column.getName(),
+                                    Pair.create("substitute", Lists.newArrayList(originCol)));
+                            ImportColumnDesc importColumnDesc
+                                    = new ImportColumnDesc(column.getName(), new SlotRef(null, originCol));
                             parsedColumnExprList.add(importColumnDesc);
                         }
                     } else {
                         /*
                          * There is a case that if user does not specify the related origin column, eg:
-                         * COLUMNS (A, C), and B is not specified, but B is being modified so there is a shadow column '__doris_shadow_B'.
-                         * We can not just add a mapping function "__doris_shadow_B = substitute(B)", because Doris can not find column B.
-                         * In this case, __doris_shadow_B can use its default value, so no need to add it to column mapping
+                         * COLUMNS (A, C), and B is not specified, but B is being modified
+                         * so there is a shadow column '__doris_shadow_B'.
+                         * We can not just add a mapping function "__doris_shadow_B = substitute(B)",
+                         * because Doris can not find column B.
+                         * In this case, __doris_shadow_B can use its default value,
+                         * so no need to add it to column mapping
                          */
                         // do nothing
                     }
@@ -771,7 +777,8 @@ public class Load {
                      * ->
                      * (A, B, C) SET (__DORIS_DELETE_SIGN__ = 0)
                      */
-                    columnToHadoopFunction.put(column.getName(), Pair.create("default_value", Lists.newArrayList(column.getDefaultValue())));
+                    columnToHadoopFunction.put(column.getName(), Pair.create("default_value",
+                            Lists.newArrayList(column.getDefaultValue())));
                     ImportColumnDesc importColumnDesc = null;
                     try {
                         importColumnDesc = new ImportColumnDesc(column.getName(),
@@ -914,8 +921,10 @@ public class Load {
             } else {
                 /*
                  * There is a case that if user does not specify the related origin column, eg:
-                 * COLUMNS (A, C), and B is not specified, but B is being modified so there is a shadow column '__doris_shadow_B'.
-                 * We can not just add a mapping function "__doris_shadow_B = substitute(B)", because Doris can not find column B.
+                 * COLUMNS (A, C), and B is not specified, but B is being modified
+                 * so there is a shadow column '__doris_shadow_B'.
+                 * We can not just add a mapping function "__doris_shadow_B = substitute(B)",
+                 * because Doris can not find column B.
                  * In this case, __doris_shadow_B can use its default value, so no need to add it to column mapping
                  */
                 // do nothing
@@ -929,8 +938,8 @@ public class Load {
      * not init slot desc and analyze exprs
      */
     public static void initColumns(Table tbl, List<ImportColumnDesc> columnExprs,
-                                   Map<String, Pair<String, List<String>>> columnToHadoopFunction) throws UserException {
-        initColumns(tbl, columnExprs, columnToHadoopFunction, null, null, null, null, null, false);
+            Map<String, Pair<String, List<String>>> columnToHadoopFunction) throws UserException {
+        initColumns(tbl, columnExprs, columnToHadoopFunction, null, null, null, null, null, null, false, false);
     }
 
     /*
@@ -940,10 +949,11 @@ public class Load {
     public static void initColumns(Table tbl, LoadTaskInfo.ImportColumnDescs columnDescs,
                                    Map<String, Pair<String, List<String>>> columnToHadoopFunction,
                                    Map<String, Expr> exprsByName, Analyzer analyzer, TupleDescriptor srcTupleDesc,
-                                   Map<String, SlotDescriptor> slotDescByName, TBrokerScanRangeParams params) throws UserException {
+                                   Map<String, SlotDescriptor> slotDescByName, TBrokerScanRangeParams params,
+                                   TFileFormatType formatType, boolean useVectorizedLoad) throws UserException {
         rewriteColumns(columnDescs);
         initColumns(tbl, columnDescs.descs, columnToHadoopFunction, exprsByName, analyzer,
-                srcTupleDesc, slotDescByName, params, true);
+                srcTupleDesc, slotDescByName, params, formatType, useVectorizedLoad, true);
     }
 
     /*
@@ -958,6 +968,7 @@ public class Load {
                                     Map<String, Pair<String, List<String>>> columnToHadoopFunction,
                                     Map<String, Expr> exprsByName, Analyzer analyzer, TupleDescriptor srcTupleDesc,
                                     Map<String, SlotDescriptor> slotDescByName, TBrokerScanRangeParams params,
+                                    TFileFormatType formatType, boolean useVectorizedLoad,
                                     boolean needInitSlotAndAnalyzeExprs) throws UserException {
         // We make a copy of the columnExprs so that our subsequent changes
         // to the columnExprs will not affect the original columnExprs.
@@ -1043,30 +1054,70 @@ public class Load {
         if (!needInitSlotAndAnalyzeExprs) {
             return;
         }
-
+        Set<String> exprSrcSlotName = Sets.newTreeSet(String.CASE_INSENSITIVE_ORDER);
+        for (ImportColumnDesc importColumnDesc : copiedColumnExprs) {
+            if (importColumnDesc.isColumn()) {
+                continue;
+            }
+            List<SlotRef> slots = Lists.newArrayList();
+            importColumnDesc.getExpr().collect(SlotRef.class, slots);
+            for (SlotRef slot : slots) {
+                String slotColumnName = slot.getColumnName();
+                exprSrcSlotName.add(slotColumnName);
+            }
+        }
+        // excludedColumns is columns that should be varchar type
+        Set<String> excludedColumns = Sets.newTreeSet(String.CASE_INSENSITIVE_ORDER);
         // init slot desc add expr map, also transform hadoop functions
         for (ImportColumnDesc importColumnDesc : copiedColumnExprs) {
             // make column name case match with real column name
             String columnName = importColumnDesc.getColumnName();
+            Column tblColumn = tbl.getColumn(columnName);
             String realColName;
-            if (tbl.getColumn(columnName) == null || importColumnDesc.getExpr() == null) {
+            if (tblColumn == null || tblColumn.getName() == null || importColumnDesc.getExpr() == null) {
                 realColName = columnName;
             } else {
-                realColName = tbl.getColumn(columnName).getName();
+                realColName = tblColumn.getName();
             }
             if (importColumnDesc.getExpr() != null) {
                 Expr expr = transformHadoopFunctionExpr(tbl, realColName, importColumnDesc.getExpr());
                 exprsByName.put(realColName, expr);
             } else {
                 SlotDescriptor slotDesc = analyzer.getDescTbl().addSlotDescriptor(srcTupleDesc);
-                slotDesc.setType(ScalarType.createType(PrimitiveType.VARCHAR));
+                // only support parquet format now
+                if (useVectorizedLoad  && formatType == TFileFormatType.FORMAT_PARQUET
+                        && tblColumn != null) {
+                    // in vectorized load
+                    // example: k1 is DATETIME in source file, and INT in schema, mapping exper is k1=year(k1)
+                    // we can not determine whether to use the type in the schema or the type inferred from expr
+                    // so use varchar type as before
+                    if (exprSrcSlotName.contains(columnName)) {
+                        // columns in expr args should be varchar type
+                        slotDesc.setType(ScalarType.createType(PrimitiveType.VARCHAR));
+                        slotDesc.setColumn(new Column(realColName, PrimitiveType.VARCHAR));
+                        excludedColumns.add(realColName);
+                        // example k1, k2 = k1 + 1, k1 is not nullable, k2 is nullable
+                        // so we can not determine columns in expr args whether not nullable or nullable
+                        // slot in expr args use nullable as before
+                        slotDesc.setIsNullable(true);
+                    } else {
+                        // columns from files like parquet files can be parsed as the type in table schema
+                        slotDesc.setType(tblColumn.getType());
+                        slotDesc.setColumn(new Column(realColName, tblColumn.getType()));
+                        // non-nullable column is allowed in vectorized load with parquet format
+                        slotDesc.setIsNullable(tblColumn.isAllowNull());
+                    }
+                } else {
+                    // columns default be varchar type
+                    slotDesc.setType(ScalarType.createType(PrimitiveType.VARCHAR));
+                    slotDesc.setColumn(new Column(realColName, PrimitiveType.VARCHAR));
+                    // ISSUE A: src slot should be nullable even if the column is not nullable.
+                    // because src slot is what we read from file, not represent to real column value.
+                    // If column is not nullable, error will be thrown when filling the dest slot,
+                    // which is not nullable.
+                    slotDesc.setIsNullable(true);
+                }
                 slotDesc.setIsMaterialized(true);
-                // ISSUE A: src slot should be nullable even if the column is not nullable.
-                // because src slot is what we read from file, not represent to real column value.
-                // If column is not nullable, error will be thrown when filling the dest slot,
-                // which is not nullable.
-                slotDesc.setIsNullable(true);
-                slotDesc.setColumn(new Column(realColName, PrimitiveType.VARCHAR));
                 params.addToSrcSlotIds(slotDesc.getId().asInt());
                 slotDescByName.put(realColName, slotDesc);
             }
@@ -1085,7 +1136,30 @@ public class Load {
         }
 
         LOG.debug("slotDescByName: {}, exprsByName: {}, mvDefineExpr: {}", slotDescByName, exprsByName, mvDefineExpr);
+        // we only support parquet format now
+        // use implicit deduction to convert columns
+        // that are not in the doris table from varchar to a more appropriate type
+        if (useVectorizedLoad && formatType == TFileFormatType.FORMAT_PARQUET) {
+            // analyze all exprs
+            Map<String, Expr> cloneExprsByName = Maps.newHashMap(exprsByName);
+            Map<String, Expr> cloneMvDefineExpr = Maps.newHashMap(mvDefineExpr);
+            analyzeAllExprs(tbl, analyzer, cloneExprsByName, cloneMvDefineExpr, slotDescByName, useVectorizedLoad);
+            // columns that only exist in mapping expr args, replace type with inferred from exprs,
+            // if there are more than one, choose the last except varchar type
+            // for example:
+            // k1 involves two mapping expr args: year(k1), t1=k1, k1's varchar type will be replaced by DATETIME
+            replaceVarcharWithCastType(cloneExprsByName, srcTupleDesc, excludedColumns);
+        }
 
+        // in vectorized load, reanalyze exprs with castExpr type
+        // otherwise analyze exprs with varchar type
+        analyzeAllExprs(tbl, analyzer, exprsByName, mvDefineExpr, slotDescByName, useVectorizedLoad);
+        LOG.debug("after init column, exprMap: {}", exprsByName);
+    }
+
+    private static void analyzeAllExprs(Table tbl, Analyzer analyzer, Map<String, Expr> exprsByName,
+                                            Map<String, Expr> mvDefineExpr, Map<String, SlotDescriptor> slotDescByName,
+                                            boolean useVectorizedLoad) throws UserException {
         // analyze all exprs
         for (Map.Entry<String, Expr> entry : exprsByName.entrySet()) {
             ExprSubstitutionMap smap = new ExprSubstitutionMap();
@@ -1094,14 +1168,17 @@ public class Load {
             for (SlotRef slot : slots) {
                 SlotDescriptor slotDesc = slotDescByName.get(slot.getColumnName());
                 if (slotDesc == null) {
-                    if (entry.getKey().equalsIgnoreCase(Column.DELETE_SIGN)) {
-                        throw new UserException("unknown reference column in DELETE ON clause:" + slot.getColumnName());
-                    } else if (entry.getKey().equalsIgnoreCase(Column.SEQUENCE_COL)) {
-                        throw new UserException("unknown reference column in ORDER BY clause:" + slot.getColumnName());
-                    } else {
-                        throw new UserException("unknown reference column, column=" + entry.getKey()
-                                + ", reference=" + slot.getColumnName());
+                    if (entry.getKey() != null) {
+                        if (entry.getKey().equalsIgnoreCase(Column.DELETE_SIGN)) {
+                            throw new UserException("unknown reference column in DELETE ON clause:"
+                                + slot.getColumnName());
+                        } else if (entry.getKey().equalsIgnoreCase(Column.SEQUENCE_COL)) {
+                            throw new UserException("unknown reference column in ORDER BY clause:"
+                                + slot.getColumnName());
+                        }
                     }
+                    throw new UserException("unknown reference column, column=" + entry.getKey()
+                            + ", reference=" + slot.getColumnName());
                 }
                 smap.getLhs().add(slot);
                 smap.getRhs().add(new SlotRef(slotDesc));
@@ -1149,7 +1226,50 @@ public class Load {
 
             exprsByName.put(entry.getKey(), expr);
         }
-        LOG.debug("after init column, exprMap: {}", exprsByName);
+    }
+
+    /**
+     * columns that only exist in mapping expr args, replace type with inferred from exprs.
+     *
+     * @param excludedColumns columns that the type should not be inferred from expr.
+     *                         1. column exists in both schema and expr args.
+     */
+    private static void replaceVarcharWithCastType(Map<String, Expr> exprsByName, TupleDescriptor srcTupleDesc,
+                                               Set<String> excludedColumns) throws UserException {
+        // if there are more than one, choose the last except varchar type.
+        // for example:
+        // k1 involves two mapping expr args: year(k1), t1=k1, k1's varchar type will be replaced by DATETIME.
+        for (Map.Entry<String, Expr> entry : exprsByName.entrySet()) {
+            List<CastExpr> casts = Lists.newArrayList();
+            // exclude explicit cast. for example: cast(k1 as date)
+            entry.getValue().collect(Expr.IS_VARCHAR_SLOT_REF_IMPLICIT_CAST, casts);
+            if (casts.isEmpty()) {
+                continue;
+            }
+
+            for (CastExpr cast : casts) {
+                Expr child = cast.getChild(0);
+                Type type = cast.getType();
+                if (type.isVarchar()) {
+                    continue;
+                }
+
+                SlotRef slotRef = (SlotRef) child;
+                String columnName = slotRef.getColumn().getName();
+                if (excludedColumns.contains(columnName)) {
+                    continue;
+                }
+
+                // replace src slot desc with cast return type
+                int slotId = slotRef.getSlotId().asInt();
+                SlotDescriptor srcSlotDesc = srcTupleDesc.getSlot(slotId);
+                if (srcSlotDesc == null) {
+                    throw new UserException("Unknown source slot descriptor. id: " + slotId);
+                }
+                srcSlotDesc.setType(type);
+                srcSlotDesc.setColumn(new Column(columnName, type));
+            }
+        }
     }
 
     public static void rewriteColumns(LoadTaskInfo.ImportColumnDescs columnDescs) {
@@ -1241,7 +1361,11 @@ public class Load {
                         exprs.add(funcExpr.getChild(1));
                     } else {
                         if (column.getDefaultValue() != null) {
-                            exprs.add(new StringLiteral(column.getDefaultValue()));
+                            if (column.getDefaultValueExprDef() != null) {
+                                exprs.add(column.getDefaultValueExpr());
+                            } else {
+                                exprs.add(new StringLiteral(column.getDefaultValue()));
+                            }
                         } else {
                             if (column.isAllowNull()) {
                                 exprs.add(NullLiteral.create(Type.VARCHAR));
@@ -1260,7 +1384,11 @@ public class Load {
                         innerIfExprs.add(funcExpr.getChild(1));
                     } else {
                         if (column.getDefaultValue() != null) {
-                            innerIfExprs.add(new StringLiteral(column.getDefaultValue()));
+                            if (column.getDefaultValueExprDef() != null) {
+                                innerIfExprs.add(column.getDefaultValueExpr());
+                            } else {
+                                innerIfExprs.add(new StringLiteral(column.getDefaultValue()));
+                            }
                         } else {
                             if (column.isAllowNull()) {
                                 innerIfExprs.add(NullLiteral.create(Type.VARCHAR));
@@ -1616,184 +1744,6 @@ public class Load {
         return false;
     }
 
-    public boolean isLabelExist(String dbName, String labelValue, boolean isAccurateMatch) throws DdlException, AnalysisException {
-        // get load job and check state
-        Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbName);
-        readLock();
-        try {
-            Map<String, List<LoadJob>> labelToLoadJobs = dbLabelToLoadJobs.get(db.getId());
-            if (labelToLoadJobs == null) {
-                return false;
-            }
-            List<LoadJob> loadJobs = Lists.newArrayList();
-            if (isAccurateMatch) {
-                if (labelToLoadJobs.containsKey(labelValue)) {
-                    loadJobs.addAll(labelToLoadJobs.get(labelValue));
-                }
-            } else {
-                PatternMatcher matcher = PatternMatcher.createMysqlPattern(labelValue, CaseSensibility.LABEL.getCaseSensibility());
-                for (Map.Entry<String, List<LoadJob>> entry : labelToLoadJobs.entrySet()) {
-                    if (matcher.match(entry.getKey())) {
-                        loadJobs.addAll(entry.getValue());
-                    }
-                }
-            }
-            if (loadJobs.isEmpty()) {
-                return false;
-            }
-            if (loadJobs.stream().filter(entity -> entity.getState() != JobState.CANCELLED).count() == 0) {
-                return false;
-            }
-            return true;
-        } finally {
-            readUnlock();
-        }
-    }
-
-    public boolean cancelLoadJob(CancelLoadStmt stmt, boolean isAccurateMatch) throws DdlException, AnalysisException {
-        // get params
-        String dbName = stmt.getDbName();
-        String label = stmt.getLabel();
-
-        // get load job and check state
-        Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbName);
-        // List of load jobs waiting to be cancelled
-        List<LoadJob> loadJobs = Lists.newArrayList();
-        readLock();
-        try {
-            Map<String, List<LoadJob>> labelToLoadJobs = dbLabelToLoadJobs.get(db.getId());
-            if (labelToLoadJobs == null) {
-                throw new DdlException("Load job does not exist");
-            }
-
-            // get jobs by label
-            List<LoadJob> matchLoadJobs = Lists.newArrayList();
-            if (isAccurateMatch) {
-                if (labelToLoadJobs.containsKey(label)) {
-                    matchLoadJobs.addAll(labelToLoadJobs.get(label));
-                }
-            } else {
-                PatternMatcher matcher = PatternMatcher.createMysqlPattern(label, CaseSensibility.LABEL.getCaseSensibility());
-                for (Map.Entry<String, List<LoadJob>> entry : labelToLoadJobs.entrySet()) {
-                    if (matcher.match(entry.getKey())) {
-                        loadJobs.addAll(entry.getValue());
-                    }
-                }
-            }
-
-            if (matchLoadJobs.isEmpty()) {
-                throw new DdlException("Load job does not exist");
-            }
-
-            // check state here
-            List<LoadJob> uncompletedLoadJob = matchLoadJobs.stream().filter(job -> {
-                JobState state = job.getState();
-                return state != JobState.CANCELLED && state != JobState.QUORUM_FINISHED && state != JobState.FINISHED;
-            }).collect(Collectors.toList());
-            if (uncompletedLoadJob.isEmpty()) {
-                throw new DdlException("There is no uncompleted job which label " +
-                        (isAccurateMatch ? "is " : "like ") + stmt.getLabel());
-            }
-            loadJobs.addAll(uncompletedLoadJob);
-        } finally {
-            readUnlock();
-        }
-
-        // check auth here, cause we need table info
-        Set<String> tableNames = Sets.newHashSet();
-        for (LoadJob loadJob : loadJobs) {
-            tableNames.addAll(loadJob.getTableNames());
-        }
-
-        if (tableNames.isEmpty()) {
-            if (Catalog.getCurrentCatalog().getAuth().checkDbPriv(ConnectContext.get(), dbName,
-                    PrivPredicate.LOAD)) {
-                ErrorReport.reportDdlException(ErrorCode.ERR_SPECIFIC_ACCESS_DENIED_ERROR, "CANCEL LOAD");
-            }
-        } else {
-            for (String tblName : tableNames) {
-                if (!Catalog.getCurrentCatalog().getAuth().checkTblPriv(ConnectContext.get(), dbName, tblName,
-                        PrivPredicate.LOAD)) {
-                    ErrorReport.reportDdlException(ErrorCode.ERR_TABLEACCESS_DENIED_ERROR, "CANCEL LOAD",
-                            ConnectContext.get().getQualifiedUser(),
-                            ConnectContext.get().getRemoteIP(), dbName + ": " + tblName);
-                }
-            }
-        }
-
-        // cancel job
-        for (LoadJob loadJob : loadJobs) {
-            List<String> failedMsg = Lists.newArrayList();
-            boolean ok = cancelLoadJob(loadJob, CancelType.USER_CANCEL, "user cancel", failedMsg);
-            if (!ok) {
-                throw new DdlException("Cancel load job [" + loadJob.getId() + "] fail, " +
-                        "label=[" + loadJob.getLabel() + "] failed msg=" +
-                        (failedMsg.isEmpty() ? "Unknown reason" : failedMsg.get(0)));
-            }
-        }
-
-        return true;
-    }
-
-    public boolean cancelLoadJob(CancelLoadStmt stmt) throws DdlException {
-        // get params
-        String dbName = stmt.getDbName();
-        String label = stmt.getLabel();
-
-        // get load job and check state
-        Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbName);
-        LoadJob job;
-        readLock();
-        try {
-            Map<String, List<LoadJob>> labelToLoadJobs = dbLabelToLoadJobs.get(db.getId());
-            if (labelToLoadJobs == null) {
-                throw new DdlException("Load job does not exist");
-            }
-
-            List<LoadJob> loadJobs = labelToLoadJobs.get(label);
-            if (loadJobs == null) {
-                throw new DdlException("Load job does not exist");
-            }
-            // only the last one should be running
-            job = loadJobs.get(loadJobs.size() - 1);
-            JobState state = job.getState();
-            if (state == JobState.CANCELLED) {
-                throw new DdlException("Load job has been cancelled");
-            } else if (state == JobState.QUORUM_FINISHED || state == JobState.FINISHED) {
-                throw new DdlException("Load job has been finished");
-            }
-        } finally {
-            readUnlock();
-        }
-
-        // check auth here, cause we need table info
-        Set<String> tableNames = job.getTableNames();
-        if (tableNames.isEmpty()) {
-            // forward compatibility
-            if (!Catalog.getCurrentCatalog().getAuth().checkDbPriv(ConnectContext.get(), dbName,
-                    PrivPredicate.LOAD)) {
-                ErrorReport.reportDdlException(ErrorCode.ERR_SPECIFIC_ACCESS_DENIED_ERROR, "CANCEL LOAD");
-            }
-        } else {
-            for (String tblName : tableNames) {
-                if (!Catalog.getCurrentCatalog().getAuth().checkTblPriv(ConnectContext.get(), dbName, tblName,
-                        PrivPredicate.LOAD)) {
-                    ErrorReport.reportDdlException(ErrorCode.ERR_TABLEACCESS_DENIED_ERROR, "CANCEL LOAD",
-                            ConnectContext.get().getQualifiedUser(),
-                            ConnectContext.get().getRemoteIP(), dbName + ": " + tblName);
-                }
-            }
-        }
-
-        // cancel job
-        List<String> failedMsg = Lists.newArrayList();
-        if (!cancelLoadJob(job, CancelType.USER_CANCEL, "user cancel", failedMsg)) {
-            throw new DdlException("Cancel load job fail: " + (failedMsg.isEmpty() ? "Unknown reason" : failedMsg.get(0)));
-        }
-
-        return true;
-    }
-
     public boolean cancelLoadJob(LoadJob job, CancelType cancelType, String msg) {
         return cancelLoadJob(job, cancelType, msg, null);
     }
@@ -1922,7 +1872,7 @@ public class Load {
     }
 
     public LinkedList<List<Comparable>> getLoadJobInfosByDb(long dbId, String dbName, String labelValue,
-                                                            boolean accurateMatch, Set<JobState> states) throws AnalysisException {
+            boolean accurateMatch, Set<JobState> states) throws AnalysisException {
         LinkedList<List<Comparable>> loadJobInfos = new LinkedList<List<Comparable>>();
         readLock();
         try {
@@ -2087,7 +2037,6 @@ public class Load {
     }
 
     public long getLatestJobIdByLabel(long dbId, String labelValue) {
-        LoadJob job = null;
         long jobId = 0;
         readLock();
         try {
@@ -2109,7 +2058,6 @@ public class Load {
 
                 if (currJobId > jobId) {
                     jobId = currJobId;
-                    job = loadJob;
                 }
             }
         } finally {
@@ -2392,7 +2340,8 @@ public class Load {
                         updatePartitionVersion(partition, partitionLoadInfo.getVersion(), jobId);
 
                         // update table row count
-                        for (MaterializedIndex materializedIndex : partition.getMaterializedIndices(IndexExtState.ALL)) {
+                        for (MaterializedIndex materializedIndex
+                                : partition.getMaterializedIndices(IndexExtState.ALL)) {
                             long indexRowCount = 0L;
                             for (Tablet tablet : materializedIndex.getTablets()) {
                                 long tabletRowCount = 0L;
@@ -2514,7 +2463,7 @@ public class Load {
 
     public void replayClearRollupInfo(ReplicaPersistInfo info, Catalog catalog) throws MetaNotFoundException {
         Database db = catalog.getDbOrMetaException(info.getDbId());
-        OlapTable olapTable = db.getTableOrMetaException(info.getTableId(), TableType.OLAP);
+        OlapTable olapTable = (OlapTable) db.getTableOrMetaException(info.getTableId(), TableType.OLAP);
         olapTable.writeLock();
         try {
             Partition partition = olapTable.getPartition(info.getPartitionId());
@@ -2930,8 +2879,8 @@ public class Load {
         long jobId = job.getId();
         JobState srcState = job.getState();
         CancelType tmpCancelType = CancelType.UNKNOWN;
-        // should abort in transaction manager first because it maybe abort job successfully and abort in transaction manager failed
-        // then there will be rubbish transactions in transaction manager
+        // should abort in transaction manager first because it maybe aborts job successfully
+        // and abort in transaction manager failed then there will be rubbish transactions in transaction manager
         try {
             Catalog.getCurrentGlobalTransactionMgr().abortTransaction(
                     job.getDbId(),

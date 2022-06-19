@@ -75,7 +75,9 @@ public class Planner {
         return fragments;
     }
 
-    public PlannerContext getPlannerContext() { return plannerContext;}
+    public PlannerContext getPlannerContext() {
+        return plannerContext;
+    }
 
     public List<ScanNode> getScanNodes() {
         if (singleNodePlanner == null) {
@@ -99,11 +101,11 @@ public class Planner {
                     expr.getIds(null, slotList);
                     if (PrimitiveType.DECIMALV2 != expr.getType().getPrimitiveType()) {
                         continue;
-                            }
+                    }
 
                     if (PrimitiveType.DECIMALV2 != slotDesc.getType().getPrimitiveType()) {
                         continue;
-                            }
+                    }
 
                     if (slotList.contains(slotDesc.getId()) && null != slotDesc.getColumn()) {
                         int outputScale = slotDesc.getColumn().getScale();
@@ -230,7 +232,8 @@ public class Planner {
 
         // Optimize the transfer of query statistic when query doesn't contain limit.
         PlanFragment rootFragment = fragments.get(fragments.size() - 1);
-        QueryStatisticsTransferOptimizer queryStatisticTransferOptimizer = new QueryStatisticsTransferOptimizer(rootFragment);
+        QueryStatisticsTransferOptimizer queryStatisticTransferOptimizer
+                = new QueryStatisticsTransferOptimizer(rootFragment);
         queryStatisticTransferOptimizer.optimizeQueryStatisticsTransfer();
 
         // Create runtime filters.

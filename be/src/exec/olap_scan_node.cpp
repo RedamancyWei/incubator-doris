@@ -29,15 +29,18 @@
 #include "exprs/expr_context.h"
 #include "exprs/runtime_filter.h"
 #include "gen_cpp/PlanNodes_types.h"
+#include "olap/storage_engine.h"
 #include "runtime/exec_env.h"
+#include "runtime/large_int_value.h"
 #include "runtime/row_batch.h"
 #include "runtime/runtime_filter_mgr.h"
 #include "runtime/runtime_state.h"
 #include "runtime/string_value.h"
 #include "runtime/tuple_row.h"
 #include "util/priority_thread_pool.hpp"
-#include "util/priority_work_stealing_thread_pool.hpp"
 #include "util/runtime_profile.h"
+#include "util/thread.h"
+#include "util/to_string.h"
 
 namespace doris {
 
@@ -180,6 +183,8 @@ Status OlapScanNode::prepare(RuntimeState* state) {
     // create scanner profile
     // create timer
     _tablet_counter = ADD_COUNTER(runtime_profile(), "TabletCount ", TUnit::UNIT);
+    _scanner_sched_counter = ADD_COUNTER(runtime_profile(), "ScannerSchedCount ", TUnit::UNIT);
+
     _rows_pushed_cond_filtered_counter =
             ADD_COUNTER(_scanner_profile, "RowsPushedCondFiltered", TUnit::UNIT);
     _init_counter(state);
@@ -192,6 +197,8 @@ Status OlapScanNode::prepare(RuntimeState* state) {
         // TODO: make sure we print all available diagnostic output to our error log
         return Status::InternalError("Failed to get tuple descriptor.");
     }
+
+    _runtime_profile->add_info_string("Table", _tuple_desc->table_desc()->name());
 
     const std::vector<SlotDescriptor*>& slots = _tuple_desc->slots();
 
@@ -544,16 +551,16 @@ void OlapScanNode::remove_pushed_conjuncts(RuntimeState* state) {
 
     // set vconjunct_ctx is empty, if all conjunct
     if (_direct_conjunct_size == 0) {
-        if (_vconjunct_ctx_ptr.get() != nullptr) {
-            (*_vconjunct_ctx_ptr.get())->close(state);
+        if (_vconjunct_ctx_ptr != nullptr) {
+            (*_vconjunct_ctx_ptr)->close(state);
             _vconjunct_ctx_ptr = nullptr;
         }
     }
 
     // filter idle conjunct in vexpr_contexts
     auto checker = [&](int index) { return _pushed_conjuncts_index.count(index); };
-    std::string vconjunct_information = _peel_pushed_vconjunct(checker);
-    _scanner_profile->add_info_string("VconjunctExprTree", vconjunct_information);
+    std::string vconjunct_information = _peel_pushed_vconjunct(state, checker);
+    _runtime_profile->add_info_string("NonPushdownPredicate", vconjunct_information);
 }
 
 void OlapScanNode::eval_const_conjuncts() {
@@ -651,6 +658,31 @@ Status OlapScanNode::normalize_conjuncts() {
     return Status::OK();
 }
 
+static std::string olap_filter_to_string(const doris::TCondition& condition) {
+    auto op_name = condition.condition_op;
+    if (condition.condition_op == "*=") {
+        op_name = "IN";
+    } else if (condition.condition_op == "!*=") {
+        op_name = "NOT IN";
+    }
+    return fmt::format("{{{} {} {}}}", condition.column_name, op_name,
+                       to_string(condition.condition_values));
+}
+
+static std::string olap_filters_to_string(const std::vector<doris::TCondition>& filters) {
+    // std::vector<std::string> filters_string;
+    std::string filters_string;
+    filters_string += "[";
+    for (auto it = filters.cbegin(); it != filters.cend(); it++) {
+        if (it != filters.cbegin()) {
+            filters_string += ",";
+        }
+        filters_string += olap_filter_to_string(*it);
+    }
+    filters_string += "]";
+    return filters_string;
+}
+
 Status OlapScanNode::build_olap_filters() {
     for (auto& iter : _column_value_ranges) {
         std::vector<TCondition> filters;
@@ -660,6 +692,8 @@ Status OlapScanNode::build_olap_filters() {
             _olap_filter.push_back(std::move(filter));
         }
     }
+
+    _runtime_profile->add_info_string("PushdownPredicate", olap_filters_to_string(_olap_filter));
 
     return Status::OK();
 }
@@ -689,11 +723,11 @@ Status OlapScanNode::build_scan_key() {
     return Status::OK();
 }
 
-static Status get_hints(TabletSharedPtr table, const TPaloScanRange& scan_range,
-                        int block_row_count, bool is_begin_include, bool is_end_include,
-                        const std::vector<std::unique_ptr<OlapScanRange>>& scan_key_range,
-                        std::vector<std::unique_ptr<OlapScanRange>>* sub_scan_range,
-                        RuntimeProfile* profile) {
+Status OlapScanNode::get_hints(TabletSharedPtr table, const TPaloScanRange& scan_range,
+                               int block_row_count, bool is_begin_include, bool is_end_include,
+                               const std::vector<std::unique_ptr<OlapScanRange>>& scan_key_range,
+                               std::vector<std::unique_ptr<OlapScanRange>>* sub_scan_range,
+                               RuntimeProfile* profile) {
     RuntimeProfile::Counter* show_hints_timer = profile->get_counter("ShowHintsTime_V1");
     std::vector<std::vector<OlapTuple>> ranges;
     bool have_valid_range = false;
@@ -1446,6 +1480,7 @@ void OlapScanNode::transfer_thread(RuntimeState* state) {
                         std::bind(&OlapScanNode::scanner_thread, this, *iter));
                 if (s.ok()) {
                     (*iter)->start_wait_worker_timer();
+                    COUNTER_UPDATE(_scanner_sched_counter, 1);
                     olap_scanners.erase(iter++);
                 } else {
                     LOG(FATAL) << "Failed to assign scanner task to thread pool! "
@@ -1460,6 +1495,7 @@ void OlapScanNode::transfer_thread(RuntimeState* state) {
                 task.priority = _nice;
                 task.queue_id = state->exec_env()->store_path_to_index((*iter)->scan_disk());
                 (*iter)->start_wait_worker_timer();
+                COUNTER_UPDATE(_scanner_sched_counter, 1);
                 if (thread_pool->offer(task)) {
                     olap_scanners.erase(iter++);
                 } else {
@@ -1570,7 +1606,7 @@ void OlapScanNode::scanner_thread(OlapScanner* scanner) {
             bool ready = runtime_filter->is_ready();
             if (ready) {
                 runtime_filter->get_prepared_context(&contexts, row_desc(), _expr_mem_tracker);
-                _runtime_filter_ctxs[i].apply_mark = true;
+                scanner_filter_apply_marks[i] = true;
             }
         }
     }

@@ -96,7 +96,7 @@ public class NodeAction extends RestBaseController {
             .build();
 
     private Object httpExecutorLock = new Object();
-    private volatile static ExecutorService httpExecutor = null;
+    private static volatile ExecutorService httpExecutor = null;
 
     // Returns all fe information, similar to 'show frontends'.
     @RequestMapping(path = "/frontends", method = RequestMethod.GET)
@@ -154,11 +154,11 @@ public class NodeAction extends RestBaseController {
     @Getter
     @Setter
     public static class NodeInfo {
-        public List<String> column_names;
+        public List<String> columnNames;
         public List<List<String>> rows;
 
-        public NodeInfo(List<String> column_names, List<List<String>> rows) {
-            this.column_names = column_names;
+        public NodeInfo(List<String> columnNames, List<List<String>> rows) {
+            this.columnNames = columnNames;
             this.rows = rows;
         }
     }
@@ -342,8 +342,8 @@ public class NodeAction extends RestBaseController {
             }
             return ResponseEntityBuilder.ok(new NodeInfo(BE_CONFIG_TITLE_NAMES, data));
         }
-        return ResponseEntityBuilder.badRequest("Unsupported type: " + type + ". Only types of fe or be are " +
-                "supported");
+        return ResponseEntityBuilder.badRequest("Unsupported type: " + type + ". Only types of fe or be are "
+                + "supported");
     }
 
     // Use thread pool to concurrently fetch configuration information from specified fe or be nodes.
@@ -523,8 +523,8 @@ public class NodeAction extends RestBaseController {
                                      List<Map<String, String>> failedTotal) {
         for (Map.Entry<String, String> entry : configs.entrySet()) {
             Map<String, String> failed = Maps.newHashMap();
-            addFailedConfig(entry.getKey(), entry.getValue(), hostPort.first + ":" +
-                    hostPort.second, err, failed);
+            addFailedConfig(entry.getKey(), entry.getValue(), hostPort.first + ":"
+                    + hostPort.second, err, failed);
             failedTotal.add(failed);
         }
     }
@@ -535,8 +535,8 @@ public class NodeAction extends RestBaseController {
         if (jsonObject.get("code").getAsInt() != HttpUtils.REQUEST_SUCCESS_CODE) {
             throw new Exception(jsonObject.get("msg").getAsString());
         }
-        SetConfigAction.SetConfigEntity setConfigEntity = GsonUtils.GSON.fromJson(jsonObject.get("data").getAsJsonObject(),
-                SetConfigAction.SetConfigEntity.class);
+        SetConfigAction.SetConfigEntity setConfigEntity = GsonUtils.GSON.fromJson(
+                jsonObject.get("data").getAsJsonObject(), SetConfigAction.SetConfigEntity.class);
         for (SetConfigAction.ErrConfig errConfig : setConfigEntity.getErrConfigs()) {
             Map<String, String> failed = Maps.newHashMap();
             addFailedConfig(errConfig.getConfigName(), errConfig.getConfigValue(),

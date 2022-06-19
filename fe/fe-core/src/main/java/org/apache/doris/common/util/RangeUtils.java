@@ -38,7 +38,7 @@ import java.util.Map;
 public class RangeUtils {
 
     public static final Comparator<Map.Entry<Long, PartitionItem>> RANGE_MAP_ENTRY_COMPARATOR =
-            Comparator.comparing(o -> (((RangePartitionItem)o.getValue()).getItems()).lowerEndpoint());
+            Comparator.comparing(o -> (((RangePartitionItem) o.getValue()).getItems()).lowerEndpoint());
 
     public static final Comparator<PartitionItem> RANGE_COMPARATOR =
             Comparator.comparing(o -> ((RangePartitionItem) o).getItems().lowerEndpoint());
@@ -57,7 +57,8 @@ public class RangeUtils {
         }
         return false;
     }
-    /*
+
+    /**
      * Pass only if the 2 range lists are exactly same
      * What is "exactly same"?
      *      1. {[0, 10), [10, 20)} exactly same as {[0, 20)}
@@ -82,7 +83,8 @@ public class RangeUtils {
      *      4.2 upper bounds (20 and 20) are equal.
      *  5. Not more next ranges, so 2 lists are equal.
      */
-    public static void checkPartitionItemListsMatch(List<PartitionItem> list1, List<PartitionItem> list2) throws DdlException {
+    public static void checkPartitionItemListsMatch(List<PartitionItem> list1, List<PartitionItem> list2)
+            throws DdlException {
         Collections.sort(list1, RangeUtils.RANGE_COMPARATOR);
         Collections.sort(list2, RangeUtils.RANGE_COMPARATOR);
 

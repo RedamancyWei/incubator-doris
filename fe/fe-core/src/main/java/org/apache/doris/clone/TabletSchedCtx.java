@@ -685,7 +685,8 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
             // So if this replica was previously set to DECOMMISSION, this state needs to be reset to NORMAL.
             // It may happen as follows:
             // 1. A tablet of colocation table is in COLOCATION_REDUNDANT state
-            // 2. The tablet is being scheduled and set one of replica as DECOMMISSION in TabletScheduler.deleteReplicaInternal()
+            // 2. The tablet is being scheduled and set one of replica as
+            //    DECOMMISSION in TabletScheduler.deleteReplicaInternal()
             // 3. The tablet will then be scheduled again
             // 4. But at that time, the BE node of the replica that was
             //    set to the DECOMMISSION state in step 2 is returned to the colocation group.
@@ -695,8 +696,9 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
             // forever, because the replica in the DECOMMISSION state will not receive the load task.
             chosenReplica.setWatermarkTxnId(-1);
             chosenReplica.setState(ReplicaState.NORMAL);
-            LOG.info("choose replica {} on backend {} of tablet {} as dest replica for version incomplete," +
-                    " and change state from DECOMMISSION to NORMAL", chosenReplica.getId(), chosenReplica.getBackendId(), tabletId);
+            LOG.info("choose replica {} on backend {} of tablet {} as dest replica for version incomplete,"
+                    + " and change state from DECOMMISSION to NORMAL",
+                    chosenReplica.getId(), chosenReplica.getBackendId(), tabletId);
         }
         setDest(chosenReplica.getBackendId(), chosenReplica.getPathHash());
     }
@@ -734,7 +736,8 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
         }
 
         if (storageMediaMigrationTask != null) {
-            AgentTaskQueue.removeTask(storageMediaMigrationTask.getBackendId(), TTaskType.STORAGE_MEDIUM_MIGRATE, storageMediaMigrationTask.getSignature());
+            AgentTaskQueue.removeTask(storageMediaMigrationTask.getBackendId(),
+                    TTaskType.STORAGE_MEDIUM_MIGRATE, storageMediaMigrationTask.getSignature());
         }
         if (cloneTask != null) {
             AgentTaskQueue.removeTask(cloneTask.getBackendId(), TTaskType.CLONE, cloneTask.getSignature());
@@ -812,7 +815,7 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
         Backend destBe = infoService.getBackend(destBackendId);
         if (destBe == null) {
             throw new SchedException(Status.SCHEDULE_FAILED,
-                "dest backend " + srcReplica.getBackendId() + " does not exist");
+                "dest backend " + destBackendId + " does not exist");
         }
 
         taskTimeoutMs = getApproximateTimeoutMs();
@@ -827,17 +830,14 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
         // another clone task.
         // That is, we may need to use 2 clone tasks to create a new replica. It is inefficient,
         // but there is no other way now.
-        TBackend tSrcBe = new TBackend(srcBe.getHost(), srcBe.getBePort(), srcBe.getHttpPort());
-        cloneTask = new CloneTask(destBackendId, dbId, tblId, partitionId, indexId,
-                tabletId, schemaHash, Lists.newArrayList(tSrcBe), storageMedium,
-                visibleVersion, (int) (taskTimeoutMs / 1000));
-        cloneTask.setPathHash(srcPathHash, destPathHash);
 
-        // if this is a balance task, or this is a repair task with REPLICA_MISSING/REPLICA_RELOCATING or REPLICA_MISSING_IN_CLUSTER,
+        // if this is a balance task, or this is a repair task with
+        // REPLICA_MISSING/REPLICA_RELOCATING or REPLICA_MISSING_IN_CLUSTER,
         // we create a new replica with state CLONE
         if (tabletStatus == TabletStatus.REPLICA_MISSING || tabletStatus == TabletStatus.REPLICA_MISSING_IN_CLUSTER
                 || tabletStatus == TabletStatus.REPLICA_RELOCATING || type == Type.BALANCE
-                || tabletStatus == TabletStatus.COLOCATE_MISMATCH || tabletStatus == TabletStatus.REPLICA_MISSING_FOR_TAG) {
+                || tabletStatus == TabletStatus.COLOCATE_MISMATCH
+                || tabletStatus == TabletStatus.REPLICA_MISSING_FOR_TAG) {
             Replica cloneReplica = new Replica(
                     Catalog.getCurrentCatalog().getNextId(), destBackendId,
                     -1 /* version */, schemaHash,
@@ -845,6 +845,12 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
                     ReplicaState.CLONE,
                     committedVersion, /* use committed version as last failed version */
                     -1 /* last success version */);
+
+            TBackend tSrcBe = new TBackend(srcBe.getHost(), srcBe.getBePort(), srcBe.getHttpPort());
+            cloneTask = new CloneTask(destBackendId, dbId, tblId, partitionId, indexId,
+                tabletId, cloneReplica.getId(), schemaHash, Lists.newArrayList(tSrcBe), storageMedium,
+                visibleVersion, (int) (taskTimeoutMs / 1000));
+            cloneTask.setPathHash(srcPathHash, destPathHash);
 
             // addReplica() method will add this replica to tablet inverted index too.
             tablet.addReplica(cloneReplica);
@@ -860,6 +866,12 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
                 throw new SchedException(Status.SCHEDULE_FAILED, "dest replica's path hash is changed. "
                         + "current: " + replica.getPathHash() + ", scheduled: " + destPathHash);
             }
+
+            TBackend tSrcBe = new TBackend(srcBe.getHost(), srcBe.getBePort(), srcBe.getHttpPort());
+            cloneTask = new CloneTask(destBackendId, dbId, tblId, partitionId, indexId,
+                tabletId, replica.getId(), schemaHash, Lists.newArrayList(tSrcBe), storageMedium,
+                visibleVersion, (int) (taskTimeoutMs / 1000));
+            cloneTask.setPathHash(srcPathHash, destPathHash);
         }
 
         this.state = State.RUNNING;
@@ -912,9 +924,12 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
         }
 
         // 1. check the tablet status first
-        Database db = Catalog.getCurrentCatalog().getDbOrException(dbId, s -> new SchedException(Status.UNRECOVERABLE, "db " + dbId + " does not exist"));
-        OlapTable olapTable = (OlapTable) db.getTableOrException(tblId, s -> new SchedException(Status.UNRECOVERABLE, "tbl " + tabletId + " does not exist"));
-        olapTable.writeLockOrException(new SchedException(Status.UNRECOVERABLE, "table " + olapTable.getName() + " does not exist"));
+        Database db = Catalog.getCurrentCatalog().getDbOrException(dbId,
+                s -> new SchedException(Status.UNRECOVERABLE, "db " + dbId + " does not exist"));
+        OlapTable olapTable = (OlapTable) db.getTableOrException(tblId,
+                s -> new SchedException(Status.UNRECOVERABLE, "tbl " + tabletId + " does not exist"));
+        olapTable.writeLockOrException(new SchedException(Status.UNRECOVERABLE, "table "
+                + olapTable.getName() + " does not exist"));
         try {
             Partition partition = olapTable.getPartition(partitionId);
             if (partition == null) {
@@ -1074,7 +1089,7 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
             failedSchedCounter = 0;
             if (originDynamicPriority != dynamicPriority) {
                 LOG.debug("downgrade dynamic priority from {} to {}, origin: {}, tablet: {}",
-                    originDynamicPriority.name(), dynamicPriority.name(), origPriority.name(), tabletId);
+                        originDynamicPriority.name(), dynamicPriority.name(), origPriority.name(), tabletId);
                 stat.counterTabletPrioDowngraded.incrementAndGet();
                 return true;
             }
@@ -1083,7 +1098,7 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
             // no need to set lastSchedTime, lastSchedTime is set each time we schedule this tablet
             if (originDynamicPriority != dynamicPriority) {
                 LOG.debug("upgrade dynamic priority from {} to {}, origin: {}, tablet: {}",
-                    originDynamicPriority.name(), dynamicPriority.name(), origPriority.name(), tabletId);
+                        originDynamicPriority.name(), dynamicPriority.name(), origPriority.name(), tabletId);
                 stat.counterTabletPrioUpgraded.incrementAndGet();
                 return true;
             }
@@ -1162,6 +1177,8 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
             sb.append(". to backend: ").append(destBackendId);
             sb.append(", dest path hash: ").append(destPathHash);
         }
+        sb.append(", visible version: ").append(visibleVersion);
+        sb.append(", committed version: ").append(committedVersion);
         if (errMsg != null) {
             sb.append(". err: ").append(errMsg);
         }
@@ -1183,4 +1200,26 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
             }
         }
     }
+
+    /**
+     * call this when releaseTabletCtx()
+     */
+    public void resetReplicaState() {
+        if (tablet != null) {
+            for (Replica replica : tablet.getReplicas()) {
+                // To address issue: https://github.com/apache/incubator-doris/issues/9422
+                // the DECOMMISSION state is set in TabletScheduler and not persist to meta.
+                // So it is reasonable to reset this state if we failed to scheduler this tablet.
+                // That is, if the TabletScheduler cannot process the tablet, then it should reset
+                // any intermediate state it set during the scheduling process.
+                if (replica.getState() == ReplicaState.DECOMMISSION) {
+                    replica.setState(ReplicaState.NORMAL);
+                    replica.setWatermarkTxnId(-1);
+                    LOG.debug("reset replica {} on backend {} of tablet {} state from DECOMMISSION to NORMAL",
+                            replica.getId(), replica.getBackendId(), tabletId);
+                }
+            }
+        }
+    }
+
 }

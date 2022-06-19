@@ -87,6 +87,7 @@ public class CreateTableStmt extends DdlStmt {
         engineNames.add("elasticsearch");
         engineNames.add("hive");
         engineNames.add("iceberg");
+        engineNames.add("hudi");
     }
 
     // for backup. set to -1 for normal use
@@ -166,7 +167,7 @@ public class CreateTableStmt extends DdlStmt {
         this.rollupAlterClauseList = rollupAlterClauseList == null ? new ArrayList<>() : rollupAlterClauseList;
     }
 
-    // This is for iceberg table, which has no column schema
+    // This is for iceberg/hudi table, which has no column schema
     public CreateTableStmt(boolean ifNotExists,
                            boolean isExternal,
                            TableName tableName,
@@ -182,9 +183,13 @@ public class CreateTableStmt extends DdlStmt {
         this.comment = Strings.nullToEmpty(comment);
     }
 
-    public void addColumnDef(ColumnDef columnDef) { columnDefs.add(columnDef); }
+    public void addColumnDef(ColumnDef columnDef) {
+        columnDefs.add(columnDef);
+    }
 
-    public void setIfNotExists(boolean ifNotExists) { this.ifNotExists = ifNotExists; }
+    public void setIfNotExists(boolean ifNotExists) {
+        this.ifNotExists = ifNotExists;
+    }
 
     public boolean isSetIfNotExists() {
         return ifNotExists;
@@ -358,7 +363,8 @@ public class CreateTableStmt extends DdlStmt {
         }
 
         // analyze column def
-        if (!engineName.equals("iceberg") && (columnDefs == null || columnDefs.isEmpty())) {
+        if (!(engineName.equals("iceberg") || engineName.equals("hudi"))
+                && (columnDefs == null || columnDefs.isEmpty())) {
             ErrorReport.reportAnalysisException(ErrorCode.ERR_TABLE_MUST_HAVE_COLUMNS);
         }
         // add a hidden column as delete flag for unique table
@@ -375,11 +381,12 @@ public class CreateTableStmt extends DdlStmt {
 
             if (columnDef.getType().isArrayType()) {
                 if (columnDef.getAggregateType() != null && columnDef.getAggregateType() != AggregateType.NONE) {
-                    throw new AnalysisException("Array column can't support aggregation " + columnDef.getAggregateType());
+                    throw new AnalysisException("Array column can't support aggregation "
+                            + columnDef.getAggregateType());
                 }
                 if (columnDef.isKey()) {
-                    throw new AnalysisException("Array can only be used in the non-key column of" +
-                            " the duplicate table at present.");
+                    throw new AnalysisException("Array can only be used in the non-key column of"
+                            + " the duplicate table at present.");
                 }
             }
 
@@ -403,7 +410,8 @@ public class CreateTableStmt extends DdlStmt {
                 if (partitionDesc instanceof ListPartitionDesc || partitionDesc instanceof RangePartitionDesc) {
                     partitionDesc.analyze(columnDefs, properties);
                 } else {
-                    throw new AnalysisException("Currently only support range and list partition with engine type olap");
+                    throw new AnalysisException("Currently only support range"
+                            + " and list partition with engine type olap");
                 }
 
             }
@@ -480,7 +488,8 @@ public class CreateTableStmt extends DdlStmt {
         }
 
         if (engineName.equals("mysql") || engineName.equals("odbc") || engineName.equals("broker")
-                || engineName.equals("elasticsearch") || engineName.equals("hive") || engineName.equals("iceberg")) {
+                || engineName.equals("elasticsearch") || engineName.equals("hive")
+                || engineName.equals("iceberg") || engineName.equals("hudi")) {
             if (!isExternal) {
                 // this is for compatibility
                 isExternal = true;

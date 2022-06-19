@@ -27,6 +27,7 @@ import org.slf4j.LoggerFactory;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.Objects;
 
 public class CreateTableInfo implements Writable {
     public static final Logger LOG = LoggerFactory.getLogger(CreateTableInfo.class);
@@ -55,6 +56,7 @@ public class CreateTableInfo implements Writable {
         Text.writeString(out, dbName);
         table.write(out);
     }
+
     public void readFields(DataInput in) throws IOException {
         dbName = Text.readString(in);
         table = Table.read(in);
@@ -64,6 +66,11 @@ public class CreateTableInfo implements Writable {
         CreateTableInfo createTableInfo = new CreateTableInfo();
         createTableInfo.readFields(in);
         return createTableInfo;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(dbName, table);
     }
 
     public boolean equals(Object obj) {

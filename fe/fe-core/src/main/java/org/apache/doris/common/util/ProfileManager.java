@@ -174,7 +174,7 @@ public class ProfileManager {
             while (reverse.hasNext()) {
                 String  queryId = (String) reverse.next();
                 ProfileElement profileElement = queryIdToProfileMap.get(queryId);
-                if (profileElement == null){
+                if (profileElement == null) {
                     continue;
                 }
                 Map<String, String> infoStrings = profileElement.infoStrings;
@@ -224,7 +224,8 @@ public class ProfileManager {
         return builder.getFragmentTreeRoot(executionId);
     }
 
-    public List<Triple<String, String, Long>> getFragmentInstanceList(String queryID, String executionId, String fragmentId)
+    public List<Triple<String, String, Long>> getFragmentInstanceList(String queryID,
+            String executionId, String fragmentId)
             throws AnalysisException {
         MultiProfileTreeBuilder builder;
         readLock.lock();
@@ -242,7 +243,8 @@ public class ProfileManager {
         return builder.getInstanceList(executionId, fragmentId);
     }
 
-    public ProfileTreeNode getInstanceProfileTree(String queryID, String executionId, String fragmentId, String instanceId)
+    public ProfileTreeNode getInstanceProfileTree(String queryID, String executionId,
+            String fragmentId, String instanceId)
             throws AnalysisException {
         MultiProfileTreeBuilder builder;
         readLock.lock();
@@ -267,11 +269,12 @@ public class ProfileManager {
         return builder.getSubTaskInfo();
     }
 
-    public List<ProfileTreeBuilder.FragmentInstances> getFragmentsAndInstances(String queryId) throws AnalysisException{
+    public List<ProfileTreeBuilder.FragmentInstances> getFragmentsAndInstances(String queryId)
+            throws AnalysisException {
         return getMultiProfileTreeBuilder(queryId).getFragmentInstances(queryId);
     }
 
-    private MultiProfileTreeBuilder getMultiProfileTreeBuilder(String jobId) throws AnalysisException{
+    private MultiProfileTreeBuilder getMultiProfileTreeBuilder(String jobId) throws AnalysisException {
         readLock.lock();
         try {
             ProfileElement element = queryIdToProfileMap.get(jobId);

@@ -37,13 +37,14 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * Use consistent hashing to find the BE corresponding to the key to avoid the change of BE leading to failure to hit the Cache
+ * Use consistent hashing to find the BE corresponding to the key to
+ * avoid the change of BE leading to failure to hit the Cache
  */
 public class CacheCoordinator {
     private static final Logger LOG = LogManager.getLogger(CacheCoordinator.class);
     private static final int VIRTUAL_NODES = 10;
     private static final int REFRESH_NODE_TIME = 300000;
-    public boolean DebugModel = false;
+    public boolean debugModel = false;
     private Hashtable<Long, Backend> realNodes = new Hashtable<>();
     private SortedMap<Long, Backend> virtualNodes = new TreeMap<>();
     private static Lock belock = new ReentrantLock();
@@ -109,7 +110,7 @@ public class CacheCoordinator {
             belock.lock();
             ImmutableMap<Long, Backend> idToBackend = Catalog.getCurrentSystemInfo().getIdToBackend();
             if (idToBackend != null) {
-                if (!DebugModel) {
+                if (!debugModel) {
                     clearBackend(idToBackend);
                 }
                 for (Backend backend : idToBackend.values().asList()) {

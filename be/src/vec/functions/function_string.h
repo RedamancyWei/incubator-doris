@@ -24,10 +24,8 @@
 #include <cstdint>
 #include <string_view>
 
-#include "exprs/anyval_util.h"
 #include "exprs/math_functions.h"
 #include "exprs/string_functions.h"
-#include "runtime/string_value.hpp"
 #include "udf/udf.h"
 #include "util/md5.h"
 #include "util/sm3.h"
@@ -38,6 +36,7 @@
 #include "vec/columns/columns_number.h"
 #include "vec/common/assert_cast.h"
 #include "vec/common/string_ref.h"
+#include "vec/data_types/data_type_decimal.h"
 #include "vec/data_types/data_type_nullable.h"
 #include "vec/data_types/data_type_number.h"
 #include "vec/data_types/data_type_string.h"
@@ -636,7 +635,7 @@ public:
         //
         fmt::memory_buffer buffer;
         res_offsets.resize(input_row_size);
-        for (size_t i = 0; i < input_row_size; ++i) {
+        for (ssize_t i = 0; i < input_row_size; ++i) {
             buffer.clear();
             const char* raw_str = reinterpret_cast<const char*>(&data[offsets[i - 1]]);
             int size = offsets[i] - offsets[i - 1] - 1;

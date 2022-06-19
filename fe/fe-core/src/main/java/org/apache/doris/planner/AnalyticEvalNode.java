@@ -27,6 +27,7 @@ import org.apache.doris.analysis.ExprSubstitutionMap;
 import org.apache.doris.analysis.OrderByElement;
 import org.apache.doris.analysis.TupleDescriptor;
 import org.apache.doris.common.UserException;
+import org.apache.doris.statistics.StatsRecursiveDerive;
 import org.apache.doris.thrift.TAnalyticNode;
 import org.apache.doris.thrift.TExplainLevel;
 import org.apache.doris.thrift.TPlanNode;
@@ -47,7 +48,7 @@ import java.util.List;
  * Computation of analytic exprs.
  */
 public class AnalyticEvalNode extends PlanNode {
-    private final static Logger LOG = LoggerFactory.getLogger(AnalyticEvalNode.class);
+    private static final Logger LOG = LoggerFactory.getLogger(AnalyticEvalNode.class);
 
     private List<Expr> analyticFnCalls;
 
@@ -75,12 +76,12 @@ public class AnalyticEvalNode extends PlanNode {
     private final TupleDescriptor bufferedTupleDesc;
 
     public AnalyticEvalNode(
-        PlanNodeId id, PlanNode input, List<Expr> analyticFnCalls,
-        List<Expr> partitionExprs, List<OrderByElement> orderByElements,
-        AnalyticWindow analyticWindow, TupleDescriptor intermediateTupleDesc,
-        TupleDescriptor outputTupleDesc, ExprSubstitutionMap logicalToPhysicalSmap,
-        Expr partitionByEq, Expr orderByEq, TupleDescriptor bufferedTupleDesc) {
-        super(id, input.getTupleIds(), "ANALYTIC");
+            PlanNodeId id, PlanNode input, List<Expr> analyticFnCalls,
+            List<Expr> partitionExprs, List<OrderByElement> orderByElements,
+            AnalyticWindow analyticWindow, TupleDescriptor intermediateTupleDesc,
+            TupleDescriptor outputTupleDesc, ExprSubstitutionMap logicalToPhysicalSmap,
+            Expr partitionByEq, Expr orderByEq, TupleDescriptor bufferedTupleDesc) {
+        super(id, input.getTupleIds(), "ANALYTIC", NodeType.ANALYTIC_EVAL_NODE);
         Preconditions.checkState(!tupleIds.contains(outputTupleDesc.getId()));
         // we're materializing the input row augmented with the analytic output tuple
         tupleIds.add(outputTupleDesc.getId());
@@ -101,6 +102,7 @@ public class AnalyticEvalNode extends PlanNode {
     public List<Expr> getPartitionExprs() {
         return partitionExprs;
     }
+
     public List<OrderByElement> getOrderByElements() {
         return orderByElements;
     }
@@ -135,17 +137,13 @@ public class AnalyticEvalNode extends PlanNode {
     }
 
     @Override
-    protected void computeStats(Analyzer analyzer) {
+    protected void computeStats(Analyzer analyzer) throws UserException {
         super.computeStats(analyzer);
         if (!analyzer.safeIsEnableJoinReorderBasedCost()) {
             return;
         }
-        cardinality = cardinality == -1 ? getChild(0).cardinality : cardinality;
-        applyConjunctsSelectivity();
-        capCardinalityAtLimit();
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("stats AnalyticEval: cardinality={}", cardinality);
-        }
+        StatsRecursiveDerive.getStatsRecursiveDerive().statsRecursiveDerive(this);
+        cardinality = statsDeriveResult.getRowCount();
     }
 
     @Override
@@ -185,8 +183,7 @@ public class AnalyticEvalNode extends PlanNode {
         msg.analytic_node.setIntermediateTupleId(intermediateTupleDesc.getId().asInt());
         msg.analytic_node.setOutputTupleId(outputTupleDesc.getId().asInt());
         msg.analytic_node.setPartitionExprs(Expr.treesToThrift(substitutedPartitionExprs));
-        msg.analytic_node.setOrderByExprs(
-            Expr.treesToThrift(OrderByElement.getOrderByExprs(orderByElements)));
+        msg.analytic_node.setOrderByExprs(Expr.treesToThrift(OrderByElement.getOrderByExprs(orderByElements)));
         msg.analytic_node.setAnalyticFunctions(Expr.treesToThrift(analyticFnCalls));
 
         if (analyticWindow == null) {
@@ -260,12 +257,12 @@ public class AnalyticEvalNode extends PlanNode {
         }
 
         if (!conjuncts.isEmpty()) {
-            output.append(
-                prefix + "predicates: " + getExplainString(conjuncts) + "\n");
+            output.append(prefix + "predicates: " + getExplainString(conjuncts) + "\n");
         }
 
         return output.toString();
     }
+
     public void computeCosts(TQueryOptions queryOptions) {
         Preconditions.checkNotNull(fragmentId,
                                    "PlanNode must be placed into a fragment before calling this method.");

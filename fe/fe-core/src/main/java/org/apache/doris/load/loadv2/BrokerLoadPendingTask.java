@@ -122,8 +122,8 @@ public class BrokerLoadPendingTask extends LoadTask {
                     LOG.info("get {} files in file group {} for table {}. size: {}. job: {}, broker: {} ",
                             filteredFileStatuses.size(), groupNum, entry.getKey(), groupFileSize,
                             callback.getCallbackId(),
-                            brokerDesc.getStorageType() == StorageBackend.StorageType.BROKER ?
-                                    BrokerUtil.getAddress(brokerDesc) : brokerDesc.getStorageType());
+                            brokerDesc.getStorageType() == StorageBackend.StorageType.BROKER
+                                    ? BrokerUtil.getAddress(brokerDesc) : brokerDesc.getStorageType());
                     groupNum++;
                 }
             }
@@ -132,7 +132,8 @@ public class BrokerLoadPendingTask extends LoadTask {
             totalFileNum += tableTotalFileNum;
             ((BrokerPendingTaskAttachment) attachment).addFileStatus(aggKey, fileStatusList);
             LOG.info("get {} files to be loaded. total size: {}. cost: {} ms, job: {}",
-                    tableTotalFileNum, tableTotalFileSize, (System.currentTimeMillis() - start), callback.getCallbackId());
+                    tableTotalFileNum, tableTotalFileSize, (System.currentTimeMillis() - start),
+                    callback.getCallbackId());
         }
 
         ((BrokerLoadJob) callback).setLoadFileInfo(totalFileNum, totalFileSize);

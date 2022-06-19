@@ -21,7 +21,6 @@ import org.apache.doris.catalog.Catalog;
 import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.KeysType;
 import org.apache.doris.catalog.OlapTable;
-import org.apache.doris.common.Config;
 import org.apache.doris.common.UserException;
 import org.apache.doris.load.sync.DataSyncJobType;
 import org.apache.doris.mysql.privilege.PaloAuth;
@@ -91,9 +90,8 @@ public class CreateDataSyncJobStmtTest {
                 result = catalog;
             }
         };
-
-        Config.enable_create_sync_job = true;
     }
+
     @Test
     public void testNoDb() {
         CreateDataSyncJobStmt stmt = new CreateDataSyncJobStmt(
@@ -176,6 +174,7 @@ public class CreateDataSyncJobStmtTest {
             Assert.assertEquals("testCluster:testDb", stmt.getDbName());
             Assert.assertEquals(DataSyncJobType.CANAL, stmt.getDataSyncJobType());
         } catch (UserException e) {
+            // CHECKSTYLE IGNORE THIS LINE
         }
     }
 }

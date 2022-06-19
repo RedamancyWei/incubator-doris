@@ -170,7 +170,8 @@ public class HeartbeatMgr extends MasterDaemon {
                         // invalid all connections cached in ClientPool
                         ClientPool.backendPool.clearPool(new TNetworkAddress(be.getHost(), be.getBePort()));
                         if (!isReplay) {
-                            Catalog.getCurrentCatalog().getGlobalTransactionMgr().abortTxnWhenCoordinateBeDown(be.getHost(), 100);
+                            Catalog.getCurrentCatalog().getGlobalTransactionMgr()
+                                    .abortTxnWhenCoordinateBeDown(be.getHost(), 100);
                         }
                     }
                     return isChanged;
@@ -248,16 +249,19 @@ public class HeartbeatMgr extends MasterDaemon {
                     if (tBackendInfo.isSetVersion()) {
                         version = tBackendInfo.getVersion();
                     }
-                    long beStartTime = tBackendInfo.isSetBeStartTime() ? tBackendInfo.getBeStartTime() : System.currentTimeMillis();
+                    long beStartTime = tBackendInfo.isSetBeStartTime()
+                            ? tBackendInfo.getBeStartTime() : System.currentTimeMillis();
                     // backend.updateOnce(bePort, httpPort, beRpcPort, brpcPort);
-                    return new BackendHbResponse(backendId, bePort, httpPort, brpcPort, System.currentTimeMillis(), beStartTime, version);
+                    return new BackendHbResponse(backendId, bePort, httpPort, brpcPort,
+                            System.currentTimeMillis(), beStartTime, version);
                 } else {
-                    return new BackendHbResponse(backendId, result.getStatus().getErrorMsgs().isEmpty() ? "Unknown error"
-                            : result.getStatus().getErrorMsgs().get(0));
+                    return new BackendHbResponse(backendId, backend.getHost(),
+                            result.getStatus().getErrorMsgs().isEmpty()
+                                    ? "Unknown error" : result.getStatus().getErrorMsgs().get(0));
                 }
             } catch (Exception e) {
                 LOG.warn("backend heartbeat got exception", e);
-                return new BackendHbResponse(backendId,
+                return new BackendHbResponse(backendId, backend.getHost(),
                         Strings.isNullOrEmpty(e.getMessage()) ? "got exception" : e.getMessage());
             } finally {
                 if (client != null) {

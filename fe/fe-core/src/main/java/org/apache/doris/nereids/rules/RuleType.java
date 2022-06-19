@@ -22,23 +22,46 @@ package org.apache.doris.nereids.rules;
  */
 public enum RuleType {
     // binding rules
-    BINDING_UNBOUND_RELATION_RULE,
+    BINDING_UNBOUND_RELATION_RULE(RuleTypeClass.REWRITE),
+    BINDING_SENTINEL(RuleTypeClass.REWRITE),
 
     // rewrite rules
-    COLUMN_PRUNE_PROJECTION,
+    COLUMN_PRUNE_PROJECTION(RuleTypeClass.REWRITE),
+    REWRITE_SENTINEL(RuleTypeClass.REWRITE),
 
     // exploration rules
-    LOGICAL_JOIN_COMMUTATIVE,
-    LOGICAL_JOIN_ASSOCIATIVE_LEFT_TO_RIGHT,
+    LOGICAL_JOIN_COMMUTATIVE(RuleTypeClass.EXPLORATION),
+    LOGICAL_LEFT_JOIN_ASSOCIATIVE(RuleTypeClass.EXPLORATION),
+    LOGICAL_JOIN_L_ASSCOM(RuleTypeClass.EXPLORATION),
+    LOGICAL_JOIN_EXCHANGE(RuleTypeClass.EXPLORATION),
 
     // implementation rules
-    LOGICAL_JOIN_TO_HASH_JOIN_RULE,
+    LOGICAL_JOIN_TO_HASH_JOIN_RULE(RuleTypeClass.IMPLEMENTATION),
+    IMPLEMENTATION_SENTINEL(RuleTypeClass.IMPLEMENTATION),
 
     // sentinel, use to count rules
-    SENTINEL,
+    SENTINEL(RuleTypeClass.SENTINEL),
     ;
+
+    private final RuleTypeClass ruleTypeClass;
+
+    RuleType(RuleTypeClass ruleTypeClass) {
+        this.ruleTypeClass = ruleTypeClass;
+    }
 
     public int type() {
         return ordinal();
+    }
+
+    public RuleTypeClass getRuleTypeClass() {
+        return ruleTypeClass;
+    }
+
+    enum RuleTypeClass {
+        REWRITE,
+        EXPLORATION,
+        IMPLEMENTATION,
+        SENTINEL,
+        ;
     }
 }

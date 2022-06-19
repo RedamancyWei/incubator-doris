@@ -27,12 +27,9 @@
 #include "exprs/bloomfilter_predicate.h"
 #include "exprs/in_predicate.h"
 #include "runtime/descriptors.h"
-#include "runtime/row_batch_interface.hpp"
-#include "runtime/vectorized_row_batch.h"
 #include "util/progress_updater.h"
 #include "util/spinlock.h"
 #include "vec/exec/volap_scanner.h"
-#include "vec/exprs/vexpr.h"
 
 namespace doris {
 class IRuntimeFilter;
@@ -58,6 +55,11 @@ public:
     Status close(RuntimeState* state) override;
     Status set_scan_ranges(const std::vector<TScanRangeParams>& scan_ranges) override;
     void set_no_agg_finalize() { _need_agg_finalize = false; }
+    Status get_hints(TabletSharedPtr table, const TPaloScanRange& scan_range, int block_row_count,
+                     bool is_begin_include, bool is_end_include,
+                     const std::vector<std::unique_ptr<OlapScanRange>>& scan_key_range,
+                     std::vector<std::unique_ptr<OlapScanRange>>* sub_scan_range,
+                     RuntimeProfile* profile);
 
 protected:
     struct HeapType {
@@ -107,7 +109,7 @@ protected:
     Status normalize_conjuncts();
     Status build_olap_filters();
     Status build_scan_key();
-    virtual Status start_scan_thread(RuntimeState* state);
+    Status start_scan_thread(RuntimeState* state);
 
     template <class T>
     Status normalize_predicate(ColumnValueRange<T>& range, SlotDescriptor* slot);
@@ -246,7 +248,7 @@ protected:
     RuntimeProfile::Counter* _tablet_counter;
     RuntimeProfile::Counter* _rows_pushed_cond_filtered_counter = nullptr;
     RuntimeProfile::Counter* _reader_init_timer = nullptr;
-
+    RuntimeProfile::Counter* _scanner_sched_counter = nullptr;
     TResourceInfo* _resource_info;
 
     int64_t _buffered_bytes;

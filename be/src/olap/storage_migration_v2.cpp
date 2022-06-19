@@ -169,6 +169,7 @@ Status StorageMigrationV2Handler::_do_process_storage_migration_v2(
         // for schema change, seek_columns is the same to return_columns
         reader_context.seek_columns = &return_columns;
         reader_context.sequence_id_idx = reader_context.tablet_schema->sequence_col_idx();
+        reader_context.is_unique = base_tablet->keys_type() == UNIQUE_KEYS;
 
         do {
             // get history data to be converted and it will check if there is hold in base tablet
@@ -372,7 +373,7 @@ Status StorageMigrationV2Handler::_convert_historical_rowsets(
             LOG(WARNING) << "failed to build rowset, exit alter process";
             goto PROCESS_ALTER_EXIT;
         }
-        res = sm_params.new_tablet->add_rowset(new_rowset, false);
+        res = sm_params.new_tablet->add_rowset(new_rowset);
         if (res.precise_code() == OLAP_ERR_PUSH_VERSION_ALREADY_EXIST) {
             LOG(WARNING) << "version already exist, version revert occurred. "
                          << "tablet=" << sm_params.new_tablet->full_name() << ", version='"

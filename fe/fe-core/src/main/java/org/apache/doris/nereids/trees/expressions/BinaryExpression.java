@@ -18,29 +18,23 @@
 package org.apache.doris.nereids.trees.expressions;
 
 import org.apache.doris.nereids.trees.BinaryNode;
-import org.apache.doris.nereids.trees.NodeType;
 
 /**
- * Abstract class for all expression that have two children.
+ * Interface for all expression that have two children.
  */
-public abstract class BinaryExpression<
-            EXPR_TYPE extends BinaryExpression<EXPR_TYPE, LEFT_CHILD_TYPE, RIGHT_CHILD_TYPE>,
+public interface BinaryExpression<
             LEFT_CHILD_TYPE extends Expression,
             RIGHT_CHILD_TYPE extends Expression>
-        extends AbstractExpression<EXPR_TYPE>
-        implements BinaryNode<EXPR_TYPE, LEFT_CHILD_TYPE, RIGHT_CHILD_TYPE> {
+        extends BinaryNode<Expression, LEFT_CHILD_TYPE, RIGHT_CHILD_TYPE> {
 
-    public BinaryExpression(NodeType type, LEFT_CHILD_TYPE left, RIGHT_CHILD_TYPE right) {
-        super(type, left, right);
+    @Override
+    default LEFT_CHILD_TYPE left() {
+        return (LEFT_CHILD_TYPE) child(0);
     }
 
     @Override
-    public LEFT_CHILD_TYPE left() {
-        return BinaryNode.super.left();
+    default RIGHT_CHILD_TYPE right() {
+        return (RIGHT_CHILD_TYPE) child(1);
     }
 
-    @Override
-    public RIGHT_CHILD_TYPE right() {
-        return BinaryNode.super.right();
-    }
 }

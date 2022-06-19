@@ -50,12 +50,12 @@ public class TupleDescriptor {
     private TableRef ref;
 
     // All legal aliases of this tuple.
-    private String[] aliases_;
+    private String[] aliases;
 
     // If true, requires that aliases_.length() == 1. However, aliases_.length() == 1
     // does not imply an explicit alias because nested collection refs have only a
     // single implicit alias.
-    private boolean hasExplicitAlias_;
+    private boolean hasExplicitAlias;
 
     // if false, this tuple doesn't need to be materialized
     private boolean isMaterialized = true;
@@ -97,12 +97,27 @@ public class TupleDescriptor {
         return ref;
     }
 
-    public void setRef(TableRef new_ref) {
-        ref = new_ref;
+    public void setRef(TableRef tableRef) {
+        ref = tableRef;
     }
 
     public ArrayList<SlotDescriptor> getSlots() {
         return slots;
+    }
+
+    /**
+     * get slot desc by slot id.
+     *
+     * @param slotId slot id
+     * @return this slot's desc
+     */
+    public SlotDescriptor getSlot(int slotId) {
+        for (SlotDescriptor slotDesc : slots) {
+            if (slotDesc.getId().asInt() == slotId) {
+                return slotDesc;
+            }
+        }
+        return null;
     }
 
     public void setCardinality(long cardinality) {
@@ -116,7 +131,9 @@ public class TupleDescriptor {
     public ArrayList<SlotDescriptor> getMaterializedSlots() {
         ArrayList<SlotDescriptor> result = Lists.newArrayList();
         for (SlotDescriptor slot : slots) {
-            if (slot.isMaterialized()) result.add(slot);
+            if (slot.isMaterialized()) {
+                result.add(slot);
+            }
         }
         return result;
     }
@@ -150,7 +167,10 @@ public class TupleDescriptor {
         return isMaterialized;
     }
 
-    public boolean isMaterialized() { return isMaterialized; }
+    public boolean isMaterialized() {
+        return isMaterialized;
+    }
+
     public void setIsMaterialized(boolean value) {
         isMaterialized = value;
     }
@@ -160,13 +180,20 @@ public class TupleDescriptor {
     }
 
     public void setAliases(String[] aliases, boolean hasExplicitAlias) {
-        aliases_ = aliases;
-        hasExplicitAlias_ = hasExplicitAlias;
+        this.aliases = aliases;
+        this.hasExplicitAlias = hasExplicitAlias;
     }
-    public boolean hasExplicitAlias() { return hasExplicitAlias_; }
-    public String getAlias() { return (aliases_ != null) ? aliases_[0] : null; }
+
+    public boolean hasExplicitAlias() {
+        return hasExplicitAlias;
+    }
+
+    public String getAlias() {
+        return (aliases != null) ? aliases[0] : null;
+    }
+
     public TableName getAliasAsName() {
-        return (aliases_ != null) ? new TableName(null, aliases_[0]) : null;
+        return (aliases != null) ? new TableName(null, aliases[0]) : null;
     }
 
     public TTupleDescriptor toThrift() {
@@ -203,7 +230,7 @@ public class TupleDescriptor {
      * In order to ensure that even if it is wrongly called a second time, no error will occur,
      * so it will be initialized again at the beginning of the function.
      *
-     * In the future this function will be changed to a private function.
+     * @deprecated In the future this function will be changed to a private function.
      */
     @Deprecated
     public void computeStat() {
@@ -213,7 +240,7 @@ public class TupleDescriptor {
         // compute stat
         for (SlotDescriptor d : slots) {
             if (!d.isMaterialized()) {
-               continue;
+                continue;
             }
             ColumnStats stats = d.getStats();
             if (stats.hasAvgSerializedSize()) {
@@ -226,7 +253,7 @@ public class TupleDescriptor {
     }
 
     /**
-     * In the future this function will be changed to a private function.
+     * @deprecated In the future this function will be changed to a private function.
      */
     @Deprecated
     public void computeMemLayout() {
@@ -239,7 +266,6 @@ public class TupleDescriptor {
         // populate slotsBySize; also compute avgSerializedSize
         numNullableSlots = 0;
         for (SlotDescriptor d : slots) {
-            ColumnStats stats = d.getStats();
             if (d.isMaterialized()) {
                 slotsBySize.get(d.getType().getSlotSize()).add(d);
                 if (d.getIsNullable()) {
@@ -313,7 +339,9 @@ public class TupleDescriptor {
      * Materialize all slots.
      */
     public void materializeSlots() {
-        for (SlotDescriptor slot: slots) slot.setIsMaterialized(true);
+        for (SlotDescriptor slot : slots) {
+            slot.setIsMaterialized(true);
+        }
     }
 
     public void getTableIdToColumnNames(Map<Long, Set<String>> tableIdToColumnNames) {

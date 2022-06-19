@@ -48,6 +48,7 @@ import org.apache.doris.qe.OriginStatement;
 import org.apache.doris.resource.Tag;
 import org.apache.doris.system.Backend;
 import org.apache.doris.system.SystemInfoService;
+import org.apache.doris.thrift.TCompressionType;
 import org.apache.doris.thrift.TOlapTable;
 import org.apache.doris.thrift.TSortType;
 import org.apache.doris.thrift.TStorageFormat;
@@ -339,8 +340,8 @@ public class OlapTable extends Table {
         this.indexIdToMeta.remove(indexId);
         // Some column of deleted index should be removed during `deleteIndexInfo` such as `mv_bitmap_union_c1`
         // If deleted index id == base index id, the schema will not be rebuilt.
-        // The reason is that the base index has been removed from indexIdToMeta while the new base index hasn't changed.
-        // The schema could not be rebuild in here with error base index id.
+        // The reason is that the base index has been removed from indexIdToMeta while the new base index
+        // hasn't changed. The schema could not be rebuild in here with error base index id.
         if (indexId != baseIndexId) {
             rebuildFullSchema();
         }
@@ -629,7 +630,7 @@ public class OlapTable extends Table {
     public KeysType getKeysTypeByIndexId(long indexId) {
         MaterializedIndexMeta indexMeta = indexIdToMeta.get(indexId);
         Preconditions.checkNotNull(indexMeta, "index id:" + indexId + " meta is null");
-         return indexMeta.getKeysType();
+        return indexMeta.getKeysType();
     }
 
     public PartitionInfo getPartitionInfo() {
@@ -642,10 +643,12 @@ public class OlapTable extends Table {
             return partitionColumnNames;
         } else if (partitionInfo instanceof RangePartitionInfo) {
             RangePartitionInfo rangePartitionInfo = (RangePartitionInfo) partitionInfo;
-            return rangePartitionInfo.getPartitionColumns().stream().map(c -> c.getName().toLowerCase()).collect(Collectors.toSet());
+            return rangePartitionInfo.getPartitionColumns().stream()
+                    .map(c -> c.getName().toLowerCase()).collect(Collectors.toSet());
         } else if (partitionInfo instanceof ListPartitionInfo) {
             ListPartitionInfo listPartitionInfo = (ListPartitionInfo) partitionInfo;
-            return listPartitionInfo.getPartitionColumns().stream().map(c -> c.getName().toLowerCase()).collect(Collectors.toSet());
+            return listPartitionInfo.getPartitionColumns().stream()
+                    .map(c -> c.getName().toLowerCase()).collect(Collectors.toSet());
         } else {
             throw new DdlException("Unknown partition info type: " + partitionInfo.getType().name());
         }
@@ -704,8 +707,8 @@ public class OlapTable extends Table {
             idToPartition.remove(partition.getId());
             nameToPartition.remove(partitionName);
 
-            Preconditions.checkState(partitionInfo.getType() == PartitionType.RANGE ||
-                    partitionInfo.getType() == PartitionType.LIST);
+            Preconditions.checkState(partitionInfo.getType() == PartitionType.RANGE
+                    || partitionInfo.getType() == PartitionType.LIST);
 
             if (!isForceDrop) {
                 // recycle partition
@@ -1177,7 +1180,7 @@ public class OlapTable extends Table {
             partitionInfo = RangePartitionInfo.read(in);
         } else if (partType == PartitionType.LIST) {
             partitionInfo = ListPartitionInfo.read(in);
-        }else {
+        } else {
             throw new IOException("invalid partition type: " + partType);
         }
 
@@ -1254,7 +1257,8 @@ public class OlapTable extends Table {
         }
 
         // remove shadow index from copied table
-        List<MaterializedIndex> shadowIndex = copied.getPartitions().stream().findFirst().get().getMaterializedIndices(IndexExtState.SHADOW);
+        List<MaterializedIndex> shadowIndex = copied.getPartitions().stream().findFirst()
+                .get().getMaterializedIndices(IndexExtState.SHADOW);
         for (MaterializedIndex deleteIndex : shadowIndex) {
             LOG.debug("copied table delete shadow index : {}", deleteIndex.getId());
             copied.deleteIndexInfo(copied.getIndexNameById(deleteIndex.getId()));
@@ -1291,7 +1295,8 @@ public class OlapTable extends Table {
         partNames.addAll(copied.getPartitionNames());
 
         // partition name is case insensitive:
-        Set<String> lowerReservedPartitionNames = reservedPartitions.stream().map(String::toLowerCase).collect(Collectors.toSet());
+        Set<String> lowerReservedPartitionNames = reservedPartitions.stream()
+                .map(String::toLowerCase).collect(Collectors.toSet());
         for (String partName : partNames) {
             if (!lowerReservedPartitionNames.contains(partName.toLowerCase())) {
                 copied.dropPartitionAndReserveTablet(partName);
@@ -1475,7 +1480,7 @@ public class OlapTable extends Table {
 
     public Column getBaseColumn(String columnName) {
         for (Column column : getBaseSchema()) {
-            if (column.getName().equalsIgnoreCase(columnName)){
+            if (column.getName().equalsIgnoreCase(columnName)) {
                 return column;
             }
         }
@@ -1529,7 +1534,8 @@ public class OlapTable extends Table {
         if (tableProperty == null) {
             tableProperty = new TableProperty(new HashMap<>());
         }
-        tableProperty.modifyTableProperties(PropertyAnalyzer.PROPERTIES_INMEMORY, Boolean.valueOf(isInMemory).toString());
+        tableProperty.modifyTableProperties(PropertyAnalyzer.PROPERTIES_INMEMORY,
+                Boolean.valueOf(isInMemory).toString());
         tableProperty.buildInMemory();
     }
 
@@ -1679,6 +1685,14 @@ public class OlapTable extends Table {
         return !tempPartitions.isEmpty();
     }
 
+    public void setCompressionType(TCompressionType compressionType) {
+        if (tableProperty == null) {
+            tableProperty = new TableProperty(new HashMap<>());
+        }
+        tableProperty.modifyTableProperties(PropertyAnalyzer.PROPERTIES_COMPRESSION, compressionType.name());
+        tableProperty.buildCompressionType();
+    }
+
     public void setStorageFormat(TStorageFormat storageFormat) {
         if (tableProperty == null) {
             tableProperty = new TableProperty(new HashMap<>());
@@ -1692,6 +1706,13 @@ public class OlapTable extends Table {
             return TStorageFormat.DEFAULT;
         }
         return tableProperty.getStorageFormat();
+    }
+
+    public TCompressionType getCompressionType() {
+        if (tableProperty == null) {
+            return TCompressionType.LZ4F;
+        }
+        return tableProperty.getCompressionType();
     }
 
     public DataSortInfo getDataSortInfo() {
@@ -1719,15 +1740,15 @@ public class OlapTable extends Table {
         if (groupingExps == null || groupingExps.isEmpty()) {
             return false;
         }
-        List<Expr> partitionExps = aggregateInfo.getPartitionExprs() != null ?
-                aggregateInfo.getPartitionExprs() : groupingExps;
+        List<Expr> partitionExps = aggregateInfo.getPartitionExprs() != null
+                ? aggregateInfo.getPartitionExprs() : groupingExps;
         DistributionInfo distribution = getDefaultDistributionInfo();
-        if(distribution instanceof HashDistributionInfo) {
+        if (distribution instanceof HashDistributionInfo) {
             List<Column> distributeColumns =
-                    ((HashDistributionInfo)distribution).getDistributionColumns();
+                    ((HashDistributionInfo) distribution).getDistributionColumns();
             PartitionInfo partitionInfo = getPartitionInfo();
             if (partitionInfo instanceof RangePartitionInfo) {
-                List<Column> rangeColumns = ((RangePartitionInfo)partitionInfo).getPartitionColumns();
+                List<Column> rangeColumns = partitionInfo.getPartitionColumns();
                 if (!distributeColumns.containsAll(rangeColumns)) {
                     return false;
                 }

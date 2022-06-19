@@ -39,7 +39,6 @@ set(UTIL_FILES
   errno.cpp
   hash_util.hpp
   histogram.cpp
-  json_util.cpp
   doris_metrics.cpp
   mem_info.cpp
   metrics.cpp
@@ -104,6 +103,8 @@ set(UTIL_FILES
   s3_uri.cpp
   s3_storage_backend.cpp
   s3_util.cpp
+  hdfs_storage_backend.cpp
+  hdfs_util.cpp
   topn_counter.cpp
   tuple_row_zorder_compare.cpp
   quantile_state.cpp

@@ -83,11 +83,13 @@ public class LoadSubmitter {
             // choose a backend to submit the stream load
             Backend be = selectOneBackend();
 
-            String loadUrlStr = String.format(STREAM_LOAD_URL_PATTERN, be.getHost(), be.getHttpPort(), loadContext.db, loadContext.tbl);
+            String loadUrlStr = String.format(STREAM_LOAD_URL_PATTERN, be.getHost(),
+                    be.getHttpPort(), loadContext.db, loadContext.tbl);
             URL loadUrl = new URL(loadUrlStr);
             HttpURLConnection conn = (HttpURLConnection) loadUrl.openConnection();
             conn.setRequestMethod("PUT");
-            String auth = String.format("%s:%s", ClusterNamespace.getNameFromFullName(loadContext.user), loadContext.passwd);
+            String auth = String.format("%s:%s", ClusterNamespace.getNameFromFullName(loadContext.user),
+                    loadContext.passwd);
             String authEncoding = Base64.getEncoder().encodeToString(auth.getBytes(StandardCharsets.UTF_8));
             conn.setRequestProperty("Authorization", "Basic " + authEncoding);
             conn.addRequestProperty("Expect", "100-continue");
@@ -106,7 +108,7 @@ public class LoadSubmitter {
 
             File loadFile = checkAndGetFile(loadContext.file);
             try (BufferedOutputStream bos = new BufferedOutputStream(conn.getOutputStream());
-                 BufferedInputStream bis = new BufferedInputStream(new FileInputStream(loadFile));) {
+                    BufferedInputStream bis = new BufferedInputStream(new FileInputStream(loadFile));) {
                 int i;
                 while ((i = bis.read()) > 0) {
                     bos.write(i);
@@ -150,6 +152,7 @@ public class LoadSubmitter {
         }
     }
 
+    // CHECKSTYLE OFF: These name must match the name in json, case-sensitive.
     public static class SubmitResult {
         public String TxnId;
         public String Label;
@@ -169,4 +172,5 @@ public class LoadSubmitter {
         public String CommitAndPublishTimeMs;
         public String ErrorURL;
     }
+    // CHECKSTYLE ON
 }

@@ -275,7 +275,7 @@ public class DeployManager extends MasterDaemon {
         // 2. get electable fe host from remote
         boolean ok = true;
         List<Pair<String, Integer>> feHostPorts = null;
-        while(true) {
+        while (true) {
             try {
                 feHostPorts = getElectableGroupHostPorts();
                 if (feHostPorts == null) {
@@ -366,7 +366,8 @@ public class DeployManager extends MasterDaemon {
                 break BE_BLOCK;
             }
             LOG.debug("get remote backend hosts: {}", remoteBackendHosts);
-            List<Backend> localBackends = Catalog.getCurrentSystemInfo().getClusterBackends(SystemInfoService.DEFAULT_CLUSTER);
+            List<Backend> localBackends = Catalog.getCurrentSystemInfo()
+                    .getClusterBackends(SystemInfoService.DEFAULT_CLUSTER);
             List<Pair<String, Integer>> localBackendHosts = Lists.newArrayList();
             for (Backend backend : localBackends) {
                 localBackendHosts.add(Pair.create(backend.getHost(), backend.getHeartbeatPort()));

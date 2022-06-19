@@ -94,8 +94,8 @@ public final class QeProcessorImpl implements QeProcessor {
             throw new UserException("query not exists in coordinatorMap:" + DebugUtil.printId(queryId));
         }
         QueryInfo queryInfo = coordinatorMap.get(queryId);
-        if (queryInfo.getConnectContext() != null &&
-                !Strings.isNullOrEmpty(queryInfo.getConnectContext().getQualifiedUser())
+        if (queryInfo.getConnectContext() != null
+                && !Strings.isNullOrEmpty(queryInfo.getConnectContext().getQualifiedUser())
         ) {
             String user = queryInfo.getConnectContext().getQualifiedUser();
             long maxQueryInstances = queryInfo.getConnectContext().getCatalog().getAuth().getMaxQueryInstances(user);
@@ -103,19 +103,20 @@ public final class QeProcessorImpl implements QeProcessor {
                 maxQueryInstances = Config.default_max_query_instances;
             }
             if (maxQueryInstances > 0) {
-                AtomicInteger currentCount = userToInstancesCount.computeIfAbsent(user, __ -> new AtomicInteger(0));
+                AtomicInteger currentCount = userToInstancesCount
+                        .computeIfAbsent(user, ignored -> new AtomicInteger(0));
                 // Many query can reach here.
                 if (instancesNum + currentCount.get() > maxQueryInstances) {
                     throw new UserException("reach max_query_instances " + maxQueryInstances);
                 }
             }
             queryToInstancesNum.put(queryId, instancesNum);
-            userToInstancesCount.computeIfAbsent(user, __ -> new AtomicInteger(0)).addAndGet(instancesNum);
+            userToInstancesCount.computeIfAbsent(user, ignored -> new AtomicInteger(0)).addAndGet(instancesNum);
         }
     }
 
     public Map<String, Integer> getInstancesNumPerUser() {
-        return Maps.transformEntries(userToInstancesCount, (__, value) -> value != null ? value.get() : 0);
+        return Maps.transformEntries(userToInstancesCount, (ignored, value) -> value != null ? value.get() : 0);
     }
 
     @Override
@@ -125,8 +126,8 @@ public final class QeProcessorImpl implements QeProcessor {
             if (LOG.isDebugEnabled()) {
                 LOG.debug("deregister query id {}", DebugUtil.printId(queryId));
             }
-            if (queryInfo.getConnectContext() != null &&
-                    !Strings.isNullOrEmpty(queryInfo.getConnectContext().getQualifiedUser())
+            if (queryInfo.getConnectContext() != null
+                    && !Strings.isNullOrEmpty(queryInfo.getConnectContext().getQualifiedUser())
             ) {
                 Integer num = queryToInstancesNum.remove(queryId);
                 if (num != null) {

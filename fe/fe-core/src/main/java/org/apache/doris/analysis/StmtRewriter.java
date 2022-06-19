@@ -27,7 +27,7 @@ import org.apache.doris.catalog.Type;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.TableAliasGenerator;
 import org.apache.doris.common.UserException;
-import org.apache.doris.policy.Policy;
+import org.apache.doris.policy.RowPolicy;
 import org.apache.doris.qe.ConnectContext;
 
 import com.google.common.base.Preconditions;
@@ -92,7 +92,7 @@ public class StmtRewriter {
             throws AnalysisException {
         SelectStmt result = stmt;
         // Rewrite all the subqueries in the FROM clause.
-        for (TableRef tblRef : result.fromClause_) {
+        for (TableRef tblRef : result.fromClause) {
             if (!(tblRef instanceof InlineViewRef)) {
                 continue;
             }
@@ -118,7 +118,7 @@ public class StmtRewriter {
                 && result.getHavingClauseAfterAnaylzed().getSubquery() != null) {
             result = rewriteHavingClauseSubqueries(result, analyzer);
         }
-        result.sqlString_ = null;
+        result.sqlString = null;
         if (LOG.isDebugEnabled()) {
             LOG.debug("rewritten stmt: " + result.toSql());
         }
@@ -182,7 +182,8 @@ public class StmtRewriter {
          * For example:
          * Query: select cs_item_sk, sum(cs_sales_price) from catalog_sales a group by cs_item_sk having ...;
          * Inline view:
-         *     from (select cs_item_sk $ColumnA, sum(cs_sales_price) $ColumnB from catalog_sales a group by cs_item_sk) $TableA
+         *     from (select cs_item_sk $ColumnA, sum(cs_sales_price) $ColumnB
+         *     from catalog_sales a group by cs_item_sk) $TableA
          *
          * Add missing aggregation columns in select list
          * For example:
@@ -321,10 +322,16 @@ public class StmtRewriter {
     private static void rewriteUnionStatement(SetOperationStmt stmt, Analyzer analyzer)
             throws AnalysisException {
         for (SetOperationStmt.SetOperand operand : stmt.getOperands()) {
-            Preconditions.checkState(operand.getQueryStmt() instanceof SelectStmt);
-            QueryStmt rewrittenQueryStmt = StmtRewriter.rewriteSelectStatement(
-                    (SelectStmt) operand.getQueryStmt(), operand.getAnalyzer());
-            operand.setQueryStmt(rewrittenQueryStmt);
+            QueryStmt queryStmt = operand.getQueryStmt();
+            if (queryStmt instanceof SelectStmt) {
+                QueryStmt rewrittenQueryStmt = rewriteSelectStatement((SelectStmt) queryStmt, operand.getAnalyzer());
+                operand.setQueryStmt(rewrittenQueryStmt);
+            } else if (queryStmt instanceof SetOperationStmt) {
+                rewriteUnionStatement((SetOperationStmt) queryStmt, operand.getAnalyzer());
+            } else {
+                throw new IllegalStateException("Rewrite union statement failed. "
+                    + "Because QueryStmt is neither SelectStmt nor SetOperationStmt");
+            }
         }
     }
 
@@ -403,7 +410,7 @@ public class StmtRewriter {
     private static void rewriteWhereClauseSubqueries(
             SelectStmt stmt, Analyzer analyzer)
             throws AnalysisException {
-        int numTableRefs = stmt.fromClause_.size();
+        int numTableRefs = stmt.fromClause.size();
         ArrayList<Expr> exprsWithSubqueries = Lists.newArrayList();
         ExprSubstitutionMap smap = new ExprSubstitutionMap();
         // Check if all the conjuncts in the WHERE clause that contain subqueries
@@ -589,7 +596,7 @@ public class StmtRewriter {
                     lhsExprs, rhsExprs, updateGroupBy);
         }
 
-        /**
+        /*
          * Situation: The expr is a uncorrelated subquery for outer stmt.
          * Rewrite: Add a limit 1 for subquery.
          * origin stmt: select * from t1 where exists (select * from table2);
@@ -613,9 +620,9 @@ public class StmtRewriter {
         } catch (UserException e) {
             throw new AnalysisException(e.getMessage());
         }
-        inlineView.setLeftTblRef(stmt.fromClause_.get(stmt.fromClause_.size() - 1));
+        inlineView.setLeftTblRef(stmt.fromClause.get(stmt.fromClause.size() - 1));
 
-        stmt.fromClause_.add(inlineView);
+        stmt.fromClause.add(inlineView);
         JoinOperator joinOp = JoinOperator.LEFT_SEMI_JOIN;
 
         // Create a join conjunct from the expr that contains a subquery.
@@ -718,8 +725,6 @@ public class StmtRewriter {
         if (!hasEqJoinPred && !inlineView.isCorrelated()) {
             // TODO: Remove this when independent subquery evaluation is implemented.
             // TODO: Requires support for non-equi joins.
-            boolean hasGroupBy = ((SelectStmt) inlineView.getViewStmt()).hasGroupByClause();
-            // boolean hasGroupBy = false;
             if (!expr.getSubquery().returnsScalarColumn()) {
                 throw new AnalysisException("Unsupported predicate with subquery: "
                         + expr.toSql());
@@ -728,8 +733,8 @@ public class StmtRewriter {
             // TODO: Requires support for null-aware anti-join mode in nested-loop joins
             if (expr.getSubquery().isScalarSubquery() && expr instanceof InPredicate
                     && ((InPredicate) expr).isNotIn()) {
-                throw new AnalysisException("Unsupported NOT IN predicate with subquery: " +
-                        expr.toSql());
+                throw new AnalysisException("Unsupported NOT IN predicate with subquery: "
+                        + expr.toSql());
             }
 
             // We can equal the aggregate subquery using a cross join. All conjuncts
@@ -786,7 +791,7 @@ public class StmtRewriter {
      * replacing an unqualified star item.
      */
     private static void replaceUnqualifiedStarItems(SelectStmt stmt, int tableIdx) {
-        Preconditions.checkState(tableIdx < stmt.fromClause_.size());
+        Preconditions.checkState(tableIdx < stmt.fromClause.size());
         ArrayList<SelectListItem> newItems = Lists.newArrayList();
         for (int i = 0; i < stmt.selectList.getItems().size(); ++i) {
             SelectListItem item = stmt.selectList.getItems().get(i);
@@ -797,9 +802,9 @@ public class StmtRewriter {
             // '*' needs to be replaced by tbl1.*,...,tbln.*, where
             // tbl1,...,tbln are the visible tableRefs in stmt.
             for (int j = 0; j < tableIdx; ++j) {
-                TableRef tableRef = stmt.fromClause_.get(j);
-                if (tableRef.getJoinOp() == JoinOperator.LEFT_SEMI_JOIN ||
-                        tableRef.getJoinOp() == JoinOperator.LEFT_ANTI_JOIN) {
+                TableRef tableRef = stmt.fromClause.get(j);
+                if (tableRef.getJoinOp() == JoinOperator.LEFT_SEMI_JOIN
+                        || tableRef.getJoinOp() == JoinOperator.LEFT_ANTI_JOIN) {
                     continue;
                 }
                 newItems.add(SelectListItem.createStarItem(tableRef.getAliasAsName()));
@@ -978,8 +983,8 @@ public class StmtRewriter {
                 && (!stmt.hasAggInfo()
                 || !Iterables.all(correlatedPredicates,
                 Predicates.or(Expr.IS_EQ_BINARY_PREDICATE, isSingleSlotRef)))) {
-            throw new AnalysisException("Unsupported correlated EXISTS subquery with a " +
-                    "HAVING clause: " + stmt.toSql());
+            throw new AnalysisException(
+                    "Unsupported correlated EXISTS subquery with a " + "HAVING clause: " + stmt.toSql());
         }
 
         // The following correlated subqueries with a limit clause are supported:
@@ -1171,8 +1176,8 @@ public class StmtRewriter {
         }
         SelectStmt selectStmt = (SelectStmt) statementBase;
         boolean reAnalyze = false;
-        for (int i = 0; i < selectStmt.fromClause_.size(); i++) {
-            TableRef tableRef = selectStmt.fromClause_.get(i);
+        for (int i = 0; i < selectStmt.fromClause.size(); i++) {
+            TableRef tableRef = selectStmt.fromClause.get(i);
             // Recursively rewrite subquery
             if (tableRef instanceof InlineViewRef) {
                 InlineViewRef viewRef = (InlineViewRef) tableRef;
@@ -1189,7 +1194,7 @@ public class StmtRewriter {
             Database db = currentCatalog.getDbOrAnalysisException(dbName);
             long dbId = db.getId();
             long tableId = table.getId();
-            Policy matchPolicy = currentCatalog.getPolicyMgr().getMatchRowPolicy(dbId, tableId, user);
+            RowPolicy matchPolicy = currentCatalog.getPolicyMgr().getMatchTablePolicy(dbId, tableId, user);
             if (matchPolicy == null) {
                 continue;
             }
@@ -1203,7 +1208,7 @@ public class StmtRewriter {
                     null,
                     null,
                     LimitElement.NO_LIMIT);
-            selectStmt.fromClause_.set(i, new InlineViewRef(tableRef.getAliasAsName().getTbl(), stmt));
+            selectStmt.fromClause.set(i, new InlineViewRef(tableRef.getAliasAsName().getTbl(), stmt));
             selectStmt.analyze(analyzer);
             reAnalyze = true;
         }

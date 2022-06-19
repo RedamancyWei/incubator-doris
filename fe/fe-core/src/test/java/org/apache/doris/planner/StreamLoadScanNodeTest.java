@@ -167,8 +167,7 @@ public class StreamLoadScanNodeTest {
     private StreamLoadScanNode getStreamLoadScanNode(TupleDescriptor dstDesc, TStreamLoadPutRequest request)
             throws UserException {
         StreamLoadTask streamLoadTask = StreamLoadTask.fromTStreamLoadPutRequest(request);
-        StreamLoadScanNode scanNode = new StreamLoadScanNode(streamLoadTask.getId(), new PlanNodeId(1), dstDesc, dstTable, streamLoadTask);
-        return scanNode;
+        return new StreamLoadScanNode(streamLoadTask.getId(), new PlanNodeId(1), dstDesc, dstTable, streamLoadTask);
     }
 
     @Test
@@ -182,24 +181,29 @@ public class StreamLoadScanNodeTest {
             SlotDescriptor slot = descTbl.addSlotDescriptor(dstDesc);
             slot.setColumn(column);
             slot.setIsMaterialized(true);
-            if (column.isAllowNull()) {
-                slot.setIsNullable(true);
-            } else {
-                slot.setIsNullable(false);
-            }
+            slot.setIsNullable(column.isAllowNull());
         }
 
         TStreamLoadPutRequest request = getBaseRequest();
         StreamLoadScanNode scanNode = getStreamLoadScanNode(dstDesc, request);
-        new Expectations() {{
-            dstTable.getBaseSchema(); result = columns;
-            dstTable.getBaseSchema(anyBoolean); result = columns;
-            dstTable.getFullSchema(); result = columns;
-            dstTable.getColumn("k1"); result = columns.get(0);
-            dstTable.getColumn("k2"); result = columns.get(1);
-            dstTable.getColumn("v1"); result = columns.get(2);
-            dstTable.getColumn("v2"); result = columns.get(3);
-        }};
+        new Expectations() {
+            {
+                dstTable.getBaseSchema();
+                result = columns;
+                dstTable.getBaseSchema(anyBoolean);
+                result = columns;
+                dstTable.getFullSchema();
+                result = columns;
+                dstTable.getColumn("k1");
+                result = columns.get(0);
+                dstTable.getColumn("k2");
+                result = columns.get(1);
+                dstTable.getColumn("v1");
+                result = columns.get(2);
+                dstTable.getColumn("v2");
+                result = columns.get(3);
+            }
+        };
         scanNode.init(analyzer);
         scanNode.finalize(analyzer);
         scanNode.getNodeExplainString("", TExplainLevel.NORMAL);
@@ -221,11 +225,7 @@ public class StreamLoadScanNodeTest {
             SlotDescriptor slot = descTbl.addSlotDescriptor(dstDesc);
             slot.setColumn(column);
             slot.setIsMaterialized(true);
-            if (column.isAllowNull()) {
-                slot.setIsNullable(true);
-            } else {
-                slot.setIsNullable(false);
-            }
+            slot.setIsNullable(column.isAllowNull());
         }
 
         TStreamLoadPutRequest request = getBaseRequest();
@@ -250,11 +250,7 @@ public class StreamLoadScanNodeTest {
             SlotDescriptor slot = descTbl.addSlotDescriptor(dstDesc);
             slot.setColumn(column);
             slot.setIsMaterialized(true);
-            if (column.isAllowNull()) {
-                slot.setIsNullable(true);
-            } else {
-                slot.setIsNullable(false);
-            }
+            slot.setIsNullable(column.isAllowNull());
         }
 
         TStreamLoadPutRequest request = getBaseRequest();
@@ -279,11 +275,7 @@ public class StreamLoadScanNodeTest {
             SlotDescriptor slot = descTbl.addSlotDescriptor(dstDesc);
             slot.setColumn(column);
             slot.setIsMaterialized(true);
-            if (column.isAllowNull()) {
-                slot.setIsNullable(true);
-            } else {
-                slot.setIsNullable(false);
-            }
+            slot.setIsNullable(column.isAllowNull());
         }
 
         new Expectations() {
@@ -323,17 +315,14 @@ public class StreamLoadScanNodeTest {
             SlotDescriptor slot = descTbl.addSlotDescriptor(dstDesc);
             slot.setColumn(column);
             slot.setIsMaterialized(true);
-            if (column.isAllowNull()) {
-                slot.setIsNullable(true);
-            } else {
-                slot.setIsNullable(false);
-            }
+            slot.setIsNullable(column.isAllowNull());
         }
 
         new Expectations() {
             {
                 catalog.getFunction((Function) any, (Function.CompareMode) any);
-                result = new ScalarFunction(new FunctionName(FunctionSet.HLL_HASH), Lists.newArrayList(), Type.BIGINT, false, true);
+                result = new ScalarFunction(new FunctionName(FunctionSet.HLL_HASH),
+                        Lists.newArrayList(), Type.BIGINT, false, true);
 
                 dstTable.getColumn("k1");
                 result = columns.stream().filter(c -> c.getName().equals("k1")).findFirst().get();
@@ -370,17 +359,14 @@ public class StreamLoadScanNodeTest {
             SlotDescriptor slot = descTbl.addSlotDescriptor(dstDesc);
             slot.setColumn(column);
             slot.setIsMaterialized(true);
-            if (column.isAllowNull()) {
-                slot.setIsNullable(true);
-            } else {
-                slot.setIsNullable(false);
-            }
+            slot.setIsNullable(column.isAllowNull());
         }
 
         new Expectations() {
             {
                 catalog.getFunction((Function) any, (Function.CompareMode) any);
-                result = new ScalarFunction(new FunctionName("hll_hash1"), Lists.newArrayList(), Type.BIGINT, false, true);
+                result = new ScalarFunction(new FunctionName("hll_hash1"), Lists.newArrayList(),
+                        Type.BIGINT, false, true);
                 minTimes = 0;
             }
         };
@@ -404,7 +390,7 @@ public class StreamLoadScanNodeTest {
         TStreamLoadPutRequest request = getBaseRequest();
         request.setFileType(TFileType.FILE_LOCAL);
         request.setColumns("k1,k2, v1=hll_hash1(k2)");
-        StreamLoadTask streamLoadTask = StreamLoadTask.fromTStreamLoadPutRequest(request);
+        StreamLoadTask.fromTStreamLoadPutRequest(request);
         StreamLoadScanNode scanNode = getStreamLoadScanNode(dstDesc, request);
 
         scanNode.init(analyzer);
@@ -425,11 +411,7 @@ public class StreamLoadScanNodeTest {
             SlotDescriptor slot = descTbl.addSlotDescriptor(dstDesc);
             slot.setColumn(column);
             slot.setIsMaterialized(true);
-            if (column.isAllowNull()) {
-                slot.setIsNullable(true);
-            } else {
-                slot.setIsNullable(false);
-            }
+            slot.setIsNullable(column.isAllowNull());
         }
 
         TStreamLoadPutRequest request = getBaseRequest();
@@ -455,11 +437,7 @@ public class StreamLoadScanNodeTest {
             SlotDescriptor slot = descTbl.addSlotDescriptor(dstDesc);
             slot.setColumn(column);
             slot.setIsMaterialized(true);
-            if (column.isAllowNull()) {
-                slot.setIsNullable(true);
-            } else {
-                slot.setIsNullable(false);
-            }
+            slot.setIsNullable(column.isAllowNull());
         }
 
         TStreamLoadPutRequest request = getBaseRequest();
@@ -485,36 +463,34 @@ public class StreamLoadScanNodeTest {
             SlotDescriptor slot = descTbl.addSlotDescriptor(dstDesc);
             slot.setColumn(column);
             slot.setIsMaterialized(true);
-            if (column.isAllowNull()) {
-                slot.setIsNullable(true);
-            } else {
-                slot.setIsNullable(false);
-            }
+            slot.setIsNullable(column.isAllowNull());
         }
 
-        new Expectations() {{
-            dstTable.getBaseSchema();
-            minTimes = 0;
-            result = columns;
-            dstTable.getBaseSchema(anyBoolean);
-            minTimes = 0;
-            result = columns;
-            dstTable.getFullSchema();
-            minTimes = 0;
-            result = columns;
-            dstTable.getColumn("k1");
-            minTimes = 0;
-            result = columns.get(0);
-            dstTable.getColumn("k2");
-            minTimes = 0;
-            result = columns.get(1);
-            dstTable.getColumn("v1");
-            minTimes = 0;
-            result = columns.get(2);
-            dstTable.getColumn("v2");
-            minTimes = 0;
-            result = columns.get(3);
-        }};
+        new Expectations() {
+            {
+                dstTable.getBaseSchema();
+                minTimes = 0;
+                result = columns;
+                dstTable.getBaseSchema(anyBoolean);
+                minTimes = 0;
+                result = columns;
+                dstTable.getFullSchema();
+                minTimes = 0;
+                result = columns;
+                dstTable.getColumn("k1");
+                minTimes = 0;
+                result = columns.get(0);
+                dstTable.getColumn("k2");
+                minTimes = 0;
+                result = columns.get(1);
+                dstTable.getColumn("v1");
+                minTimes = 0;
+                result = columns.get(2);
+                dstTable.getColumn("v2");
+                minTimes = 0;
+                result = columns.get(3);
+            }
+        };
 
         TStreamLoadPutRequest request = getBaseRequest();
         request.setColumns("k1,k2,v1, v2=k3");
@@ -537,11 +513,7 @@ public class StreamLoadScanNodeTest {
             SlotDescriptor slot = descTbl.addSlotDescriptor(dstDesc);
             slot.setColumn(column);
             slot.setIsMaterialized(true);
-            if (column.isAllowNull()) {
-                slot.setIsNullable(true);
-            } else {
-                slot.setIsNullable(false);
-            }
+            slot.setIsNullable(column.isAllowNull());
         }
 
         new Expectations() {
@@ -583,11 +555,7 @@ public class StreamLoadScanNodeTest {
             SlotDescriptor slot = descTbl.addSlotDescriptor(dstDesc);
             slot.setColumn(column);
             slot.setIsMaterialized(true);
-            if (column.isAllowNull()) {
-                slot.setIsNullable(true);
-            } else {
-                slot.setIsNullable(false);
-            }
+            slot.setIsNullable(column.isAllowNull());
         }
 
         new Expectations() {
@@ -614,8 +582,8 @@ public class StreamLoadScanNodeTest {
         request.setColumns("k1,k2,v1, v2=k2");
         request.setWhere("k1   1");
         StreamLoadTask streamLoadTask = StreamLoadTask.fromTStreamLoadPutRequest(request);
-        StreamLoadScanNode scanNode = new StreamLoadScanNode(streamLoadTask.getId(), new PlanNodeId(1), dstDesc, dstTable,
-                                                             streamLoadTask);
+        StreamLoadScanNode scanNode = new StreamLoadScanNode(streamLoadTask.getId(), new PlanNodeId(1),
+                dstDesc, dstTable, streamLoadTask);
 
         scanNode.init(analyzer);
         scanNode.finalize(analyzer);
@@ -635,36 +603,34 @@ public class StreamLoadScanNodeTest {
             SlotDescriptor slot = descTbl.addSlotDescriptor(dstDesc);
             slot.setColumn(column);
             slot.setIsMaterialized(true);
-            if (column.isAllowNull()) {
-                slot.setIsNullable(true);
-            } else {
-                slot.setIsNullable(false);
-            }
+            slot.setIsNullable(column.isAllowNull());
         }
 
-        new Expectations() {{
-            dstTable.getBaseSchema();
-            minTimes = 0;
-            result = columns;
-            dstTable.getBaseSchema(anyBoolean);
-            minTimes = 0;
-            result = columns;
-            dstTable.getFullSchema();
-            minTimes = 0;
-            result = columns;
-            dstTable.getColumn("k1");
-            minTimes = 0;
-            result = columns.get(0);
-            dstTable.getColumn("k2");
-            minTimes = 0;
-            result = columns.get(1);
-            dstTable.getColumn("v1");
-            minTimes = 0;
-            result = columns.get(2);
-            dstTable.getColumn("v2");
-            minTimes = 0;
-            result = columns.get(3);
-        }};
+        new Expectations() {
+            {
+                dstTable.getBaseSchema();
+                minTimes = 0;
+                result = columns;
+                dstTable.getBaseSchema(anyBoolean);
+                minTimes = 0;
+                result = columns;
+                dstTable.getFullSchema();
+                minTimes = 0;
+                result = columns;
+                dstTable.getColumn("k1");
+                minTimes = 0;
+                result = columns.get(0);
+                dstTable.getColumn("k2");
+                minTimes = 0;
+                result = columns.get(1);
+                dstTable.getColumn("v1");
+                minTimes = 0;
+                result = columns.get(2);
+                dstTable.getColumn("v2");
+                minTimes = 0;
+                result = columns.get(3);
+            }
+        };
 
         TStreamLoadPutRequest request = getBaseRequest();
         request.setColumns("k1,k2,v1, v2=k1");
@@ -688,36 +654,34 @@ public class StreamLoadScanNodeTest {
             SlotDescriptor slot = descTbl.addSlotDescriptor(dstDesc);
             slot.setColumn(column);
             slot.setIsMaterialized(true);
-            if (column.isAllowNull()) {
-                slot.setIsNullable(true);
-            } else {
-                slot.setIsNullable(false);
-            }
+            slot.setIsNullable(column.isAllowNull());
         }
 
-        new Expectations() {{
-            dstTable.getBaseSchema();
-            minTimes = 0;
-            result = columns;
-            dstTable.getBaseSchema(anyBoolean);
-            minTimes = 0;
-            result = columns;
-            dstTable.getFullSchema();
-            minTimes = 0;
-            result = columns;
-            dstTable.getColumn("k1");
-            minTimes = 0;
-            result = columns.get(0);
-            dstTable.getColumn("k2");
-            minTimes = 0;
-            result = columns.get(1);
-            dstTable.getColumn("v1");
-            minTimes = 0;
-            result = columns.get(2);
-            dstTable.getColumn("v2");
-            minTimes = 0;
-            result = columns.get(3);
-        }};
+        new Expectations() {
+            {
+                dstTable.getBaseSchema();
+                minTimes = 0;
+                result = columns;
+                dstTable.getBaseSchema(anyBoolean);
+                minTimes = 0;
+                result = columns;
+                dstTable.getFullSchema();
+                minTimes = 0;
+                result = columns;
+                dstTable.getColumn("k1");
+                minTimes = 0;
+                result = columns.get(0);
+                dstTable.getColumn("k2");
+                minTimes = 0;
+                result = columns.get(1);
+                dstTable.getColumn("v1");
+                minTimes = 0;
+                result = columns.get(2);
+                dstTable.getColumn("v2");
+                minTimes = 0;
+                result = columns.get(3);
+            }
+        };
 
         TStreamLoadPutRequest request = getBaseRequest();
         request.setColumns("k1,k2,v1, v2=k1");
@@ -742,11 +706,7 @@ public class StreamLoadScanNodeTest {
             System.out.println(column);
             slot.setColumn(column);
             slot.setIsMaterialized(true);
-            if (column.isAllowNull()) {
-                slot.setIsNullable(true);
-            } else {
-                slot.setIsNullable(false);
-            }
+            slot.setIsNullable(column.isAllowNull());
         }
 
         new Expectations() {
@@ -808,11 +768,7 @@ public class StreamLoadScanNodeTest {
             slot.setColumn(column);
 
             slot.setIsMaterialized(true);
-            if (column.isAllowNull()) {
-                slot.setIsNullable(true);
-            } else {
-                slot.setIsNullable(false);
-            }
+            slot.setIsNullable(column.isAllowNull());
         }
 
         new Expectations() {
@@ -823,8 +779,10 @@ public class StreamLoadScanNodeTest {
                 dstTable.hasSequenceCol();
                 result = true;
 
-                dstTable.getBaseSchema(anyBoolean); result = columns;
-                dstTable.getFullSchema(); result = columns;
+                dstTable.getBaseSchema(anyBoolean);
+                result = columns;
+                dstTable.getFullSchema();
+                result = columns;
 
                 dstTable.getColumn("k1");
                 result = columns.stream().filter(c -> c.getName().equals("k1")).findFirst().get();

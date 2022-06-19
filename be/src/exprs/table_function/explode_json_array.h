@@ -21,7 +21,6 @@
 #include <rapidjson/stringbuffer.h>
 
 #include "exprs/table_function/table_function.h"
-#include "gutil/strings/stringpiece.h"
 #include "runtime/string_value.h"
 
 namespace doris {
@@ -87,10 +86,9 @@ struct ParsedData {
             *output = _data[offset];
             break;
         case ExplodeJsonArrayType::STRING:
-            *output = _string_nulls[offset]
-                              ? nullptr
-                              : real ? reinterpret_cast<void*>(_backup_string[offset].data())
-                                     : &_data_string[offset];
+            *output = _string_nulls[offset] ? nullptr
+                      : real                ? reinterpret_cast<void*>(_backup_string[offset].data())
+                                            : &_data_string[offset];
             break;
         default:
             CHECK(false) << type;

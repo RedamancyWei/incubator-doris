@@ -17,6 +17,9 @@
 
 package org.apache.doris.nereids.pattern;
 
+import org.apache.doris.nereids.memo.GroupExpression;
+import org.apache.doris.nereids.operators.Operator;
+import org.apache.doris.nereids.operators.OperatorType;
 import org.apache.doris.nereids.trees.AbstractTreeNode;
 import org.apache.doris.nereids.trees.NodeType;
 import org.apache.doris.nereids.trees.TreeNode;
@@ -25,41 +28,44 @@ import com.google.common.collect.ImmutableList;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Predicate;
-
 
 /**
  * Pattern node used in pattern matching.
  */
-public class Pattern<T extends TreeNode> extends AbstractTreeNode<Pattern<T>> {
-    public static final Pattern ANY = new Pattern(NodeType.ANY);
-    public static final Pattern MULTI = new Pattern(NodeType.MULTI);
+public class Pattern<TYPE extends NODE_TYPE, NODE_TYPE extends TreeNode<NODE_TYPE>>
+        extends AbstractTreeNode<Pattern<? extends NODE_TYPE, NODE_TYPE>> {
+    public static final Pattern ANY = new Pattern(OperatorType.ANY);
+    public static final Pattern MULTI = new Pattern(OperatorType.MULTI);
+    public static final Pattern FIXED = new Pattern(OperatorType.FIXED);
+    public static final Pattern MULTI_FIXED = new Pattern(OperatorType.MULTI_FIXED);
 
-    public final List<Predicate<T>> predicates;
-    private final NodeType nodeType;
+    protected final List<Predicate<TYPE>> predicates;
+    protected final OperatorType operatorType;
 
     /**
      * Constructor for Pattern.
      *
-     * @param nodeType node type to matching
+     * @param operatorType operator type to matching
      * @param children sub pattern
      */
-    public Pattern(NodeType nodeType, Pattern... children) {
+    public Pattern(OperatorType operatorType, Pattern... children) {
         super(NodeType.PATTERN, children);
-        this.nodeType = nodeType;
+        this.operatorType = operatorType;
         this.predicates = ImmutableList.of();
     }
 
     /**
      * Constructor for Pattern.
      *
-     * @param nodeType node type to matching
+     * @param operatorType operator type to matching
      * @param predicates custom matching predicate
      * @param children sub pattern
      */
-    public Pattern(NodeType nodeType, List<Predicate<T>> predicates, Pattern... children) {
+    public Pattern(OperatorType operatorType, List<Predicate<TYPE>> predicates, Pattern... children) {
         super(NodeType.PATTERN, children);
-        this.nodeType = nodeType;
+        this.operatorType = operatorType;
         this.predicates = ImmutableList.copyOf(predicates);
     }
 
@@ -68,8 +74,37 @@ public class Pattern<T extends TreeNode> extends AbstractTreeNode<Pattern<T>> {
      *
      * @return node type in pattern
      */
-    public NodeType getNodeType() {
-        return nodeType;
+    public OperatorType getOperatorType() {
+        return operatorType;
+    }
+
+    public boolean isFixed() {
+        return operatorType == OperatorType.FIXED;
+    }
+
+    public boolean isAny() {
+        return operatorType == OperatorType.ANY;
+    }
+
+    public boolean isMulti() {
+        return operatorType == OperatorType.MULTI;
+    }
+
+    /**
+     * Return ture if current Pattern match Operator in params.
+     *
+     * @param operator wait to match
+     * @return ture if current Pattern match Operator in params
+     */
+    public boolean matchOperator(Operator operator) {
+        if (operator == null) {
+            return false;
+        }
+        if (operatorType == OperatorType.MULTI || operatorType == OperatorType.ANY
+                || operatorType == OperatorType.MULTI_FIXED || operatorType == OperatorType.FIXED) {
+            return true;
+        }
+        return getOperatorType().equals(operator.getType());
     }
 
     /**
@@ -78,20 +113,24 @@ public class Pattern<T extends TreeNode> extends AbstractTreeNode<Pattern<T>> {
      * @param root wait to match
      * @return ture if current Pattern match Plan in params
      */
-    public boolean matchRoot(T root) {
+    public boolean matchRoot(TYPE root) {
         if (root == null) {
             return false;
         }
 
-        if (root.children().size() < this.children().size() && !children.contains(MULTI)) {
+        if (root.arity() > this.arity() && !children.contains(MULTI)) {
             return false;
         }
 
-        if (nodeType == NodeType.MULTI || nodeType == NodeType.ANY) {
+        if (operatorType == OperatorType.MULTI || operatorType == OperatorType.ANY) {
             return true;
         }
 
-        return getNodeType().equals(root.getType())
+        return doMatchRoot(root);
+    }
+
+    protected boolean doMatchRoot(TYPE root) {
+        return getOperatorType().equals(root.getOperator().getType())
                 && predicates.stream().allMatch(predicate -> predicate.test(root));
     }
 
@@ -101,9 +140,10 @@ public class Pattern<T extends TreeNode> extends AbstractTreeNode<Pattern<T>> {
      * @param root wait to match
      * @return ture if children Patterns match root's children in params
      */
-    public boolean matchChildren(T root) {
+    public boolean matchChildren(TYPE root) {
         for (int i = 0; i < arity(); i++) {
-            if (!child(i).match(root.child(i))) {
+            Pattern child = child(i);
+            if (!child.match(root.child(i))) {
                 return false;
             }
         }
@@ -116,8 +156,23 @@ public class Pattern<T extends TreeNode> extends AbstractTreeNode<Pattern<T>> {
      * @param root wait to match
      * @return ture if current pattern and children patterns match root in params
      */
-    public boolean match(T root) {
+    public boolean match(TYPE root) {
         return matchRoot(root) && matchChildren(root);
+    }
+
+    @Override
+    public Pattern<? extends NODE_TYPE, NODE_TYPE> withChildren(
+            List<Pattern<? extends NODE_TYPE, NODE_TYPE>> children) {
+        throw new RuntimeException();
+    }
+
+    public Pattern<TYPE, NODE_TYPE> withPredicates(List<Predicate<TYPE>> predicates) {
+        return new Pattern(operatorType, predicates, children.toArray(new Pattern[0]));
+    }
+
+    @Override
+    public Optional<GroupExpression> getGroupExpression() {
+        return Optional.empty();
     }
 
     @Override
@@ -129,21 +184,11 @@ public class Pattern<T extends TreeNode> extends AbstractTreeNode<Pattern<T>> {
             return false;
         }
         Pattern pattern = (Pattern) o;
-        return nodeType == pattern.nodeType;
+        return operatorType == pattern.operatorType;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(nodeType);
-    }
-
-    @Override
-    public List<Pattern> children() {
-        return (List) children;
-    }
-
-    @Override
-    public Pattern child(int index) {
-        return (Pattern) children.get(index);
+        return Objects.hash(operatorType);
     }
 }

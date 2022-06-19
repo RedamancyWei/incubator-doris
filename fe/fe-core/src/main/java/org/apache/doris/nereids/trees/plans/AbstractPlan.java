@@ -17,42 +17,44 @@
 
 package org.apache.doris.nereids.trees.plans;
 
-import org.apache.doris.nereids.exceptions.UnboundException;
+import org.apache.doris.nereids.memo.GroupExpression;
+import org.apache.doris.nereids.operators.plans.PlanOperator;
+import org.apache.doris.nereids.properties.LogicalProperties;
 import org.apache.doris.nereids.trees.AbstractTreeNode;
 import org.apache.doris.nereids.trees.NodeType;
-import org.apache.doris.nereids.trees.expressions.Slot;
 
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Abstract class for all concrete plan node.
- *
- * @param <PLAN_TYPE> either {@link org.apache.doris.nereids.trees.plans.logical.LogicalPlan}
- *                  or {@link org.apache.doris.nereids.trees.plans.physical.PhysicalPlan}
  */
-public abstract class AbstractPlan<PLAN_TYPE extends AbstractPlan<PLAN_TYPE>>
-        extends AbstractTreeNode<PLAN_TYPE> implements Plan<PLAN_TYPE> {
+public abstract class AbstractPlan<OP_TYPE extends PlanOperator>
+        extends AbstractTreeNode<Plan> implements Plan {
 
-    protected List<Slot> output;
+    public final OP_TYPE operator;
 
-    public AbstractPlan(NodeType type, Plan...children) {
-        super(type, children);
+    protected final LogicalProperties logicalProperties;
+
+    public AbstractPlan(NodeType type, OP_TYPE operator, LogicalProperties logicalProperties, Plan... children) {
+        this(type, operator, Optional.empty(), logicalProperties, children);
+    }
+
+    /** all parameter constructor. */
+    public AbstractPlan(NodeType type, OP_TYPE operator, Optional<GroupExpression> groupExpression,
+                        LogicalProperties logicalProperties, Plan... children) {
+        super(type, groupExpression, children);
+        this.operator = Objects.requireNonNull(operator, "operator can not be null");
+        this.logicalProperties = Objects.requireNonNull(logicalProperties, "logicalProperties can not be null");
     }
 
     @Override
-    public abstract List<Slot> getOutput() throws UnboundException;
-
-    @Override
-    public List<Plan> children() {
-        return (List) children;
-    }
-
-    @Override
-    public Plan child(int index) {
-        return (Plan) children.get(index);
+    public OP_TYPE getOperator() {
+        return operator;
     }
 
     /**
@@ -67,7 +69,7 @@ public abstract class AbstractPlan<PLAN_TYPE extends AbstractPlan<PLAN_TYPE>>
         return StringUtils.join(lines, "\n");
     }
 
-    private void treeString(List<String> lines, int depth, List<Boolean> lastChildren, Plan<PLAN_TYPE> plan) {
+    private void treeString(List<String> lines, int depth, List<Boolean> lastChildren, Plan plan) {
         StringBuilder sb = new StringBuilder();
         if (depth > 0) {
             if (lastChildren.size() > 1) {

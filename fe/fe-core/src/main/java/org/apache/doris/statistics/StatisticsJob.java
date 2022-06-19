@@ -197,9 +197,7 @@ public class StatisticsJob {
                 default:
                     throw new DdlException("Invalid job state transition from " + jobState + " to " + newState);
             }
-        }
-        // SCHEDULING -> RUNNING/FAILED/CANCELLED
-        else if (jobState == JobState.SCHEDULING) {
+        } else if (jobState == JobState.SCHEDULING) { // SCHEDULING -> RUNNING/FAILED/CANCELLED
             switch (newState) {
                 case RUNNING:
                     startTime = System.currentTimeMillis();
@@ -211,9 +209,7 @@ public class StatisticsJob {
                 default:
                     throw new DdlException("Invalid job state transition from " + jobState + " to " + newState);
             }
-        }
-        // RUNNING -> FINISHED/FAILED/CANCELLED
-        else if (jobState == JobState.RUNNING) {
+        } else if (jobState == JobState.RUNNING) { // RUNNING -> FINISHED/FAILED/CANCELLED
             switch (newState) {
                 case FINISHED:
                 case FAILED:

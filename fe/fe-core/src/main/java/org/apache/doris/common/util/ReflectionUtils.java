@@ -58,7 +58,7 @@ public class ReflectionUtils {
         return result;
     }
 
-    static private ThreadMXBean threadBean =
+    private static ThreadMXBean threadBean =
             ManagementFactory.getThreadMXBean();
 
     public static void setContentionTracing(boolean val) {
@@ -79,20 +79,20 @@ public class ReflectionUtils {
      * @param title a string title for the stack trace
      */
     public static void printThreadInfo(PrintWriter stream, String title) {
-        final int STACK_DEPTH = 20;
+        final int stackDepth = 20;
         boolean contention = threadBean.isThreadContentionMonitoringEnabled();
         long[] threadIds = threadBean.getAllThreadIds();
         stream.println("Process Thread Dump: " + title);
         stream.println(threadIds.length + " active threads");
 
-        for (long tid: threadIds) {
-            ThreadInfo info = threadBean.getThreadInfo(tid, STACK_DEPTH);
+        for (long tid : threadIds) {
+            ThreadInfo info = threadBean.getThreadInfo(tid, stackDepth);
             if (info == null) {
                 stream.println("  Inactive");
                 continue;
             }
-            stream.println("Thread " +
-                    getTaskName(info.getThreadId(), info.getThreadName()) + ":");
+            stream.println("Thread "
+                    + getTaskName(info.getThreadId(), info.getThreadName()) + ":");
             Thread.State state = info.getThreadState();
             stream.println("  State: " + state);
             stream.println("  Blocked count: " + info.getBlockedCount());
@@ -105,11 +105,11 @@ public class ReflectionUtils {
                 stream.println("  Waiting on " + info.getLockName());
             } else  if (state == Thread.State.BLOCKED) {
                 stream.println("  Blocked on " + info.getLockName());
-                stream.println("  Blocked by " +
-                        getTaskName(info.getLockOwnerId(), info.getLockOwnerName()));
+                stream.println("  Blocked by "
+                        + getTaskName(info.getLockOwnerId(), info.getLockOwnerName()));
             }
             stream.println("  Stack:");
-            for (StackTraceElement frame: info.getStackTrace()) {
+            for (StackTraceElement frame : info.getStackTrace()) {
                 stream.println("    " + frame.toString());
             }
         }
@@ -151,7 +151,7 @@ public class ReflectionUtils {
      * @return the correctly typed <code>Class</code> of the given object.
      */
     public static <T> Class<T> getClass(T o) {
-        return (Class<T>)o.getClass();
+        return (Class<T>) o.getClass();
     }
 
     // methods to support testing

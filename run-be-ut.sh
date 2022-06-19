@@ -119,6 +119,10 @@ if [[ -z ${GLIBC_COMPATIBILITY} ]]; then
     GLIBC_COMPATIBILITY=ON
 fi
 
+if [[ -z ${USE_DWARF} ]]; then
+    USE_DWARF=OFF
+fi
+
 
 MAKE_PROGRAM="$(which "${BUILD_SYSTEM}")"
 echo "-- Make program: ${MAKE_PROGRAM}"
@@ -132,7 +136,9 @@ ${CMAKE_CMD} -G "${GENERATOR}" \
     -DGLIBC_COMPATIBILITY="${GLIBC_COMPATIBILITY}" \
     -DBUILD_META_TOOL=OFF \
     -DWITH_MYSQL=OFF \
-    ${CMAKE_USE_CCACHE} ../
+    -DUSE_DWARF=${USE_DWARF} \
+    -DUSE_MEM_TRACKER=ON \
+    ${CMAKE_USE_CCACHE} ${DORIS_HOME}/be/
 ${BUILD_SYSTEM} -j ${PARALLEL}
 
 if [ ${RUN} -ne 1 ]; then
@@ -221,7 +227,6 @@ if [ -d ${DORIS_TEST_BINARY_DIR}/util/test_data ]; then
     rm -rf ${DORIS_TEST_BINARY_DIR}/util/test_data
 fi
 cp -r ${DORIS_HOME}/be/test/util/test_data ${DORIS_TEST_BINARY_DIR}/util/
-cp -r ${DORIS_HOME}/be/test/plugin/plugin_test ${DORIS_TEST_BINARY_DIR}/plugin/
 
 # prepare ut temp dir
 UT_TMP_DIR=${DORIS_HOME}/ut_dir

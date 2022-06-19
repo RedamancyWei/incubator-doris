@@ -62,7 +62,7 @@ public class SelectListItem {
     }
 
     // select list item corresponding to "[[db.]tbl.]*"
-    static public SelectListItem createStarItem(TableName tblName) {
+    public static SelectListItem createStarItem(TableName tblName) {
         return new SelectListItem(tblName);
     }
 
@@ -77,7 +77,11 @@ public class SelectListItem {
     public Expr getExpr() {
         return expr;
     }
-    public void setExpr(Expr expr) { this.expr = expr; }
+
+    public void setExpr(Expr expr) {
+        this.expr = expr;
+    }
+
     public String getAlias() {
         return alias;
     }
@@ -111,6 +115,7 @@ public class SelectListItem {
             return "*";
         }
     }
+
     /**
      * Return a column label for the select list item.
      */

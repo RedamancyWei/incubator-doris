@@ -41,18 +41,25 @@ import java.util.List;
  * its own Analyzer context.
  */
 public class Subquery extends Expr {
-    private final static Logger LOG = LoggerFactory.getLogger(Subquery.class);
+    private static final Logger LOG = LoggerFactory.getLogger(Subquery.class);
 
     // The QueryStmt of the subquery.
     protected QueryStmt stmt;
     // A subquery has its own analysis context
     protected Analyzer analyzer;
 
-    public Analyzer getAnalyzer() { return analyzer; }
-    public QueryStmt getStatement() { return stmt; }
+    public Analyzer getAnalyzer() {
+        return analyzer;
+    }
+
+    public QueryStmt getStatement() {
+        return stmt;
+    }
 
     @Override
-    public String toSqlImpl() { return "(" + stmt.toSql() + ")"; }
+    public String toSqlImpl() {
+        return "(" + stmt.toSql() + ")";
+    }
 
     @Override
     public String toDigestImpl() {
@@ -84,8 +91,7 @@ public class Subquery extends Expr {
     @Override
     public void analyzeImpl(Analyzer parentAnalyzer) throws AnalysisException {
         if (!(stmt instanceof SelectStmt)) {
-            throw new AnalysisException("A subquery must contain a single select block: " +
-                    toSql());
+            throw new AnalysisException("A subquery must contain a single select block: " + toSql());
         }
         // The subquery is analyzed with its own analyzer.
         analyzer = new Analyzer(parentAnalyzer);
@@ -109,14 +115,18 @@ public class Subquery extends Expr {
         }
 
         // If the subquery returns many rows, set its type to MultiRowType.
-        if (!((SelectStmt)stmt).returnsSingleRow()) type = new MultiRowType(type);
+        if (!((SelectStmt) stmt).returnsSingleRow()) {
+            type = new MultiRowType(type);
+        }
 
         // Preconditions.checkNotNull(type);
         // type.analyze();
     }
 
     @Override
-    protected boolean isConstantImpl() { return false; }
+    protected boolean isConstantImpl() {
+        return false;
+    }
 
     /**
      * Check if the subquery's SelectStmt returns a single column of scalar type.
@@ -138,7 +148,9 @@ public class Subquery extends Expr {
         // Check if we have unique labels
         List<String> labels = stmt.getColLabels();
         boolean hasUniqueLabels = true;
-        if (Sets.newHashSet(labels).size() != labels.size()) hasUniqueLabels = false;
+        if (Sets.newHashSet(labels).size() != labels.size()) {
+            hasUniqueLabels = false;
+        }
 
         // Construct a StructField from each expr in the select list
         for (int i = 0; i < stmtResultExprs.size(); ++i) {
@@ -182,8 +194,10 @@ public class Subquery extends Expr {
      */
     @Override
     public boolean equals(Object o) {
-        if (!super.equals(o)) return false;
-        return stmt.toSql().equals(((Subquery)o).stmt.toSql());
+        if (!super.equals(o)) {
+            return false;
+        }
+        return stmt.toSql().equals(((Subquery) o).stmt.toSql());
     }
 
     @Override

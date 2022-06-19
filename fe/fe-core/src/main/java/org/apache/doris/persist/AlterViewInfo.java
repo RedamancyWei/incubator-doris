@@ -83,14 +83,16 @@ public class AlterViewInfo implements Writable {
 
     @Override
     public boolean equals(Object other) {
-        if (other == this) return true;
+        if (other == this) {
+            return true;
+        }
         if (!(other instanceof AlterViewInfo)) {
             return false;
         }
         AlterViewInfo otherInfo = (AlterViewInfo) other;
-        return dbId == otherInfo.getDbId() && tableId == otherInfo.getTableId() &&
-                inlineViewDef.equalsIgnoreCase(otherInfo.getInlineViewDef()) && sqlMode == otherInfo.getSqlMode() &&
-                newFullSchema.equals(otherInfo.getNewFullSchema());
+        return dbId == otherInfo.getDbId() && tableId == otherInfo.getTableId()
+                && inlineViewDef.equalsIgnoreCase(otherInfo.getInlineViewDef()) && sqlMode == otherInfo.getSqlMode()
+                && newFullSchema.equals(otherInfo.getNewFullSchema());
     }
 
     @Override

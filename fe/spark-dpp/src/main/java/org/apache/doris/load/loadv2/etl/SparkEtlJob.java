@@ -121,9 +121,9 @@ public class SparkEtlJob {
                     if (funcName.equalsIgnoreCase(BITMAP_HASH)) {
                         throw new SparkDppException("spark load not support bitmap_hash now");
                     }
-                    if(funcName.equalsIgnoreCase(BINARY_BITMAP)){
+                    if (funcName.equalsIgnoreCase(BINARY_BITMAP)) {
                         binaryBitmapColumns.add(columnName.toLowerCase());
-                    }else if (funcName.equalsIgnoreCase(BITMAP_DICT_FUNC)) {
+                    } else if (funcName.equalsIgnoreCase(BITMAP_DICT_FUNC)) {
                         bitmapDictColumns.add(columnName.toLowerCase());
                     } else if (!funcName.equalsIgnoreCase(TO_BITMAP_FUNC)) {
                         newColumnMappings.put(mappingEntry.getKey(), mappingEntry.getValue());
@@ -138,14 +138,17 @@ public class SparkEtlJob {
             if (!bitmapDictColumns.isEmpty()) {
                 tableToBitmapDictColumns.put(entry.getKey(), bitmapDictColumns);
             }
-            if(!binaryBitmapColumns.isEmpty()){
+            if (!binaryBitmapColumns.isEmpty()) {
                 tableToBinaryBitmapColumns.put(entry.getKey(), binaryBitmapColumns);
             }
         }
-        LOG.info("init hiveSourceTables: " + hiveSourceTables + ", tableToBitmapDictColumns: " + tableToBitmapDictColumns);
+        LOG.info("init hiveSourceTables: " + hiveSourceTables
+                + ",tableToBitmapDictColumns: " + tableToBitmapDictColumns);
 
         // spark etl must have only one table with bitmap type column to process.
-        if (hiveSourceTables.size() > 1 || tableToBitmapDictColumns.size() > 1 || tableToBinaryBitmapColumns.size() > 1) {
+        if (hiveSourceTables.size() > 1
+                || tableToBitmapDictColumns.size() > 1
+                || tableToBinaryBitmapColumns.size() > 1) {
             throw new Exception("spark etl job must have only one hive table with bitmap type column to process");
         }
     }
@@ -180,7 +183,8 @@ public class SparkEtlJob {
         String taskId = etlJobConfig.outputPath.substring(etlJobConfig.outputPath.lastIndexOf("/") + 1);
         String globalDictTableName = String.format(EtlJobConfig.GLOBAL_DICT_TABLE_NAME, tableId);
         String distinctKeyTableName = String.format(EtlJobConfig.DISTINCT_KEY_TABLE_NAME, tableId, taskId);
-        String dorisIntermediateHiveTable = String.format(EtlJobConfig.DORIS_INTERMEDIATE_HIVE_TABLE_NAME, tableId, taskId);
+        String dorisIntermediateHiveTable = String.format(
+                EtlJobConfig.DORIS_INTERMEDIATE_HIVE_TABLE_NAME, tableId, taskId);
         String sourceHiveFilter = fileGroup.where;
 
         // others
@@ -192,15 +196,15 @@ public class SparkEtlJob {
         LOG.info("global dict builder args, dictColumnMap: " + dictColumnMap
                          + ", dorisOlapTableColumnList: " + dorisOlapTableColumnList
                          + ", sourceHiveDBTableName: " + sourceHiveDBTableName
-                         + ", sourceHiveFilter: "+ sourceHiveFilter
+                         + ", sourceHiveFilter: " + sourceHiveFilter
                          + ", distinctKeyTableName: " + distinctKeyTableName
                          + ", globalDictTableName: " + globalDictTableName
                          + ", dorisIntermediateHiveTable: " + dorisIntermediateHiveTable);
         try {
-            GlobalDictBuilder globalDictBuilder = new GlobalDictBuilder(
-                    dictColumnMap, dorisOlapTableColumnList, mapSideJoinColumns, sourceHiveDBTableName,
-                    sourceHiveFilter, dorisHiveDB, distinctKeyTableName, globalDictTableName, dorisIntermediateHiveTable,
-                    buildConcurrency, veryHighCardinalityColumn, veryHighCardinalityColumnSplitNum, spark);
+            GlobalDictBuilder globalDictBuilder = new GlobalDictBuilder(dictColumnMap, dorisOlapTableColumnList,
+                    mapSideJoinColumns, sourceHiveDBTableName, sourceHiveFilter, dorisHiveDB, distinctKeyTableName,
+                    globalDictTableName, dorisIntermediateHiveTable, buildConcurrency, veryHighCardinalityColumn,
+                    veryHighCardinalityColumnSplitNum, spark);
             globalDictBuilder.createHiveIntermediateTable();
             globalDictBuilder.extractDistinctColumn();
             globalDictBuilder.buildGlobalDict();

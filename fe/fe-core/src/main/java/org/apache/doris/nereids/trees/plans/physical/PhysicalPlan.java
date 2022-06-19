@@ -17,20 +17,13 @@
 
 package org.apache.doris.nereids.trees.plans.physical;
 
-import org.apache.doris.nereids.properties.LogicalProperties;
+import org.apache.doris.nereids.operators.plans.physical.PhysicalOperator;
 import org.apache.doris.nereids.trees.plans.Plan;
-
-import java.util.List;
 
 /**
  * interface for all physical plan.
  */
-public interface PhysicalPlan<PLAN_TYPE extends PhysicalPlan<PLAN_TYPE>> extends Plan<PLAN_TYPE> {
+public interface PhysicalPlan extends Plan {
     @Override
-    List<Plan> children();
-
-    @Override
-    Plan child(int index);
-
-    void setLogicalProperties(LogicalProperties logicalProperties);
+    PhysicalOperator getOperator();
 }

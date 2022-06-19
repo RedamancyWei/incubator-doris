@@ -17,9 +17,7 @@
 
 #pragma once
 
-#include "runtime/runtime_state.h"
-#include "vec/core/block.h"
-
+#include "vec/columns/column.h"
 namespace doris {
 
 class MemPool;
@@ -47,6 +45,10 @@ public:
     // Returns true if the value was written successfully.
     bool write_slot(const SlotDescriptor* slot_desc, Tuple* tuple, const char* data, int len,
                     bool copy_string, bool need_escape, MemPool* pool);
+
+    void write_string_column(const SlotDescriptor* slot_desc,
+                             vectorized::MutableColumnPtr* column_ptr, const char* data,
+                             size_t len);
 
     bool write_column(const SlotDescriptor* slot_desc, vectorized::MutableColumnPtr* column_ptr,
                       const char* data, size_t len, bool copy_string, bool need_escape);

@@ -61,7 +61,7 @@ public class ConfigBase {
 
     static class DefaultConfHandler implements ConfHandler {
         @Override
-        public void handle(Field field, String confVal) throws Exception{
+        public void handle(Field field, String confVal) throws Exception {
             setConfigField(field, confVal);
         }
     }
@@ -289,7 +289,7 @@ public class ConfigBase {
         throw new IllegalArgumentException("type mismatch");
     }
 
-    public synchronized static void setMutableConfig(String key, String value) throws DdlException {
+    public static synchronized void setMutableConfig(String key, String value) throws DdlException {
         Field field = confFields.get(key);
         if (field == null) {
             throw new DdlException("Config '" + key + "' does not exist");
@@ -299,7 +299,7 @@ public class ConfigBase {
         if (!anno.mutable()) {
             throw new DdlException("Config '" + key + "' is not mutable");
         }
-        if (anno.masterOnly() && !Catalog.getCurrentCatalog().isMaster()){
+        if (anno.masterOnly() && !Catalog.getCurrentCatalog().isMaster()) {
             throw new DdlException("Config '" + key + "' is master only");
         }
 
@@ -312,7 +312,7 @@ public class ConfigBase {
         LOG.info("set config {} to {}", key, value);
     }
 
-    public synchronized static List<List<String>> getConfigInfo(PatternMatcher matcher) {
+    public static synchronized List<List<String>> getConfigInfo(PatternMatcher matcher) {
         return confFields.entrySet().stream().sorted(Map.Entry.comparingByKey()).flatMap(e -> {
             String confKey = e.getKey();
             Field f = e.getValue();
@@ -332,7 +332,7 @@ public class ConfigBase {
         }).collect(Collectors.toList());
     }
 
-    public synchronized static boolean checkIsMasterOnly(String key) {
+    public static synchronized boolean checkIsMasterOnly(String key) {
         Field f = confFields.get(key);
         if (f == null) {
             return false;
@@ -343,11 +343,12 @@ public class ConfigBase {
     }
 
     // use synchronized to make sure only one thread modify this file
-    public synchronized static void persistConfig(Map<String, String> customConf, boolean resetPersist) throws IOException {
+    public static synchronized void persistConfig(Map<String, String> customConf, boolean resetPersist)
+            throws IOException {
         File file = new File(customConfFile);
         if (!file.exists()) {
             file.createNewFile();
-        } else if (resetPersist){
+        } else if (resetPersist) {
             // clear the customConfFile content
             try (PrintWriter writer = new PrintWriter(file)) {
                 writer.print("");

@@ -55,7 +55,7 @@ import java.util.Set;
  * 4. Construct additional numerical connections and isNullPredicate.
  */
 public class InferFiltersRule implements ExprRewriteRule {
-    private final static Logger LOG = LogManager.getLogger(InferFiltersRule.class);
+    private static final Logger LOG = LogManager.getLogger(InferFiltersRule.class);
     public static InferFiltersRule INSTANCE = new InferFiltersRule();
 
     @Override
@@ -72,15 +72,15 @@ public class InferFiltersRule implements ExprRewriteRule {
         List<Expr> slotEqSlotExpr = analyzer.getOnSlotEqSlotExpr();
 
         // slotEqSlotDeDuplication: De-Duplication for slotEqSlotExpr
-        Set<Pair<Expr, Expr>> slotEqSlotDeDuplication =
-                (clauseType == ExprRewriter.ClauseType.ON_CLAUSE) ? analyzer.getOnSlotEqSlotDeDuplication() : Sets.newHashSet();
+        Set<Pair<Expr, Expr>> slotEqSlotDeDuplication = (clauseType == ExprRewriter.ClauseType.ON_CLAUSE)
+                ? analyzer.getOnSlotEqSlotDeDuplication() : Sets.newHashSet();
 
         // slotToLiteralExpr: Record existing and infer expr which slot and literal are equal
         List<Expr> slotToLiteralExpr = analyzer.getOnSlotToLiteralExpr();
 
         // slotToLiteralDeDuplication: De-Duplication for slotToLiteralExpr
-        Set<Pair<Expr, Expr>> slotToLiteralDeDuplication =
-                (clauseType == ExprRewriter.ClauseType.ON_CLAUSE) ? analyzer.getOnSlotToLiteralDeDuplication() : Sets.newHashSet();
+        Set<Pair<Expr, Expr>> slotToLiteralDeDuplication = (clauseType == ExprRewriter.ClauseType.ON_CLAUSE)
+                ? analyzer.getOnSlotToLiteralDeDuplication() : Sets.newHashSet();
 
         // newExprWithState: just record infer expr which slot and literal are equal and which is not null predicate
         // false : Unexecutable intermediate results will be produced during the derivation process.
@@ -91,8 +91,8 @@ public class InferFiltersRule implements ExprRewriteRule {
         List<Expr> isNullExpr = analyzer.getOnIsNullExpr();
 
         // isNullDeDuplication: De-Duplication for isNullExpr
-        Set<Expr> isNullDeDuplication =
-                (clauseType == ExprRewriter.ClauseType.ON_CLAUSE) ? analyzer.getOnIsNullDeDuplication() : Sets.newHashSet();
+        Set<Expr> isNullDeDuplication = (clauseType == ExprRewriter.ClauseType.ON_CLAUSE)
+                ? analyzer.getOnIsNullDeDuplication() : Sets.newHashSet();
 
         // inExpr: Record existing and infer in predicate
         List<Expr> inExpr = analyzer.getInExpr();
@@ -101,7 +101,8 @@ public class InferFiltersRule implements ExprRewriteRule {
         Set<Expr> inDeDuplication =
                 (clauseType == ExprRewriter.ClauseType.ON_CLAUSE) ? analyzer.getInDeDuplication() : Sets.newHashSet();
 
-        // exprToWarshallArraySubscript/warshallArraySubscriptToExpr: function is easy to build warshall and newExprWithState
+        // exprToWarshallArraySubscript/warshallArraySubscriptToExpr:
+        // function is easy to build warshall and newExprWithState
         Map<Expr, Integer> exprToWarshallArraySubscript = new HashMap<>();
         Map<Integer, Expr> warshallArraySubscriptToExpr = new HashMap<>();
 
@@ -157,7 +158,7 @@ public class InferFiltersRule implements ExprRewriteRule {
                                   Analyzer analyzer,
                                   ExprRewriter.ClauseType clauseType) {
         if (conjunct instanceof CompoundPredicate
-            && ((CompoundPredicate) conjunct).getOp() == CompoundPredicate.Operator.AND) {
+                && ((CompoundPredicate) conjunct).getOp() == CompoundPredicate.Operator.AND) {
             for (int index = 0; index < conjunct.getChildren().size(); ++index) {
                 initAllStructure(conjunct.getChild(index), slotEqSlotExpr,
                         slotEqSlotDeDuplication, slotToLiteralExpr,
@@ -168,8 +169,8 @@ public class InferFiltersRule implements ExprRewriteRule {
         }
 
         if (conjunct instanceof BinaryPredicate
-            && conjunct.getChild(0) != null
-            && conjunct.getChild(1) != null) {
+                && conjunct.getChild(0) != null
+                && conjunct.getChild(1) != null) {
             if (conjunct.getChild(0).unwrapSlotRef() instanceof SlotRef
                     && conjunct.getChild(1) instanceof LiteralExpr) {
                 Pair<Expr, Expr> pair = new Pair<>(conjunct.getChild(0).unwrapSlotRef(), conjunct.getChild(1));
@@ -180,6 +181,7 @@ public class InferFiltersRule implements ExprRewriteRule {
                         analyzer.registerOnSlotToLiteralDeDuplication(pair);
                         analyzer.registerOnSlotToLiteralExpr(conjunct);
                     }
+                    analyzer.registerGlobalSlotToLiteralDeDuplication(pair);
                 }
             } else if (conjunct.getChild(0).unwrapSlotRef() instanceof SlotRef
                     && conjunct.getChild(1).unwrapSlotRef() instanceof SlotRef) {
@@ -188,7 +190,7 @@ public class InferFiltersRule implements ExprRewriteRule {
                 Pair<Expr, Expr> eqPair = new Pair<>(conjunct.getChild(1).unwrapSlotRef(),
                                                      conjunct.getChild(0).unwrapSlotRef());
                 if (!slotEqSlotDeDuplication.contains(pair)
-                    && !slotEqSlotDeDuplication.contains(eqPair)) {
+                        && !slotEqSlotDeDuplication.contains(eqPair)) {
                     slotEqSlotDeDuplication.add(pair);
                     slotEqSlotExpr.add(conjunct);
                     if (clauseType == ExprRewriter.ClauseType.ON_CLAUSE) {
@@ -201,7 +203,7 @@ public class InferFiltersRule implements ExprRewriteRule {
                     && conjunct.getChild(0) != null
                     && conjunct.getChild(0).unwrapSlotRef() instanceof SlotRef) {
             if (!isNullDeDuplication.contains(conjunct.getChild(0).unwrapSlotRef())
-                && ((IsNullPredicate) conjunct).isNotNull()) {
+                    && ((IsNullPredicate) conjunct).isNotNull()) {
                 isNullDeDuplication.add(conjunct.getChild(0).unwrapSlotRef());
                 isNullExpr.add(conjunct);
                 if (clauseType == ExprRewriter.ClauseType.ON_CLAUSE) {
@@ -219,6 +221,7 @@ public class InferFiltersRule implements ExprRewriteRule {
                     analyzer.registerInExpr(conjunct);
                     analyzer.registerInDeDuplication(conjunct.getChild(0).unwrapSlotRef());
                 }
+                analyzer.registerGlobalInDeDuplication(conjunct.getChild(0).unwrapSlotRef());
             }
         }
     }
@@ -242,7 +245,7 @@ public class InferFiltersRule implements ExprRewriteRule {
                                            Analyzer analyzer,
                                            ExprRewriter.ClauseType clauseType) {
         int arrayMaxSize = slotEqSlotExpr.size() * 2;
-        int warshall[][] = new int[arrayMaxSize][arrayMaxSize];
+        int[][] warshall = new int[arrayMaxSize][arrayMaxSize];
         for (int index = 0; index < arrayMaxSize; index++) {
             warshall[index] = new int[arrayMaxSize];
             Arrays.fill(warshall[index], 0);
@@ -259,7 +262,8 @@ public class InferFiltersRule implements ExprRewriteRule {
 
     /**
      * Initialize warshall array.
-     * Specify a corresponding array_id for each slot, and add the two slots in slotEqSlotExpr to the array in rows and columns
+     * Specify a corresponding array_id for each slot, and add the two slots in slotEqSlotExpr
+     * to the array in rows and columns
      *
      * @param warshall: Two-dimensional array
      * @param arrayMaxSize: slotEqSlotExpr.size() * 2
@@ -268,7 +272,7 @@ public class InferFiltersRule implements ExprRewriteRule {
      * @param warshallArraySubscriptToExpr
      * @return needGenWarshallArray. True:needGen; False:don't needGen
      */
-    private boolean initWarshallArray(int warshall[][],
+    private boolean initWarshallArray(int[][] warshall,
                                       int arrayMaxSize,
                                       List<Expr> slotEqSlotExpr,
                                       Map<Expr, Integer> exprToWarshallArraySubscript,
@@ -310,7 +314,7 @@ public class InferFiltersRule implements ExprRewriteRule {
         return needGenWarshallArray;
     }
 
-    private void genWarshallArray(int warshall[][], int arrayMaxSize, List<Pair<Integer, Integer>> newSlotsArray) {
+    private void genWarshallArray(int[][] warshall, int arrayMaxSize, List<Pair<Integer, Integer>> newSlotsArray) {
         for (int k = 0; k < arrayMaxSize; k++) {
             for (int i = 0; i < arrayMaxSize; i++) {
                 if (warshall[i][k] == 0) {
@@ -342,26 +346,22 @@ public class InferFiltersRule implements ExprRewriteRule {
                                              Analyzer analyzer,
                                              ExprRewriter.ClauseType clauseType) {
         for (Pair<Integer, Integer> slotPair : newSlots) {
-           Pair<Expr, Expr> pair = new Pair<>(
-                   warshallArraySubscriptToExpr.get(slotPair.first), warshallArraySubscriptToExpr.get(slotPair.second));
-           Pair<Expr, Expr> eqPair = new Pair<>(
-                   warshallArraySubscriptToExpr.get(slotPair.second), warshallArraySubscriptToExpr.get(slotPair.first));
-           if (!slotEqSlotDeDuplication.contains(pair)
-                && !slotEqSlotDeDuplication.contains(eqPair)) {
-               slotEqSlotDeDuplication.add(pair);
-               slotEqSlotExpr.add(
-                       new BinaryPredicate(BinaryPredicate.Operator.EQ,
-                               warshallArraySubscriptToExpr.get(slotPair.first),
-                               warshallArraySubscriptToExpr.get(slotPair.second)));
-               if (clauseType == ExprRewriter.ClauseType.ON_CLAUSE) {
-                   analyzer.registerOnSlotEqSlotDeDuplication(pair);
-                   analyzer.registerOnSlotEqSlotExpr(
-                           new BinaryPredicate(BinaryPredicate.Operator.EQ,
-                                   warshallArraySubscriptToExpr.get(slotPair.first),
-                                   warshallArraySubscriptToExpr.get(slotPair.second))
-                   );
-               }
-           }
+            Pair<Expr, Expr> pair = new Pair<>(warshallArraySubscriptToExpr.get(slotPair.first),
+                    warshallArraySubscriptToExpr.get(slotPair.second));
+            Pair<Expr, Expr> eqPair = new Pair<>(warshallArraySubscriptToExpr.get(slotPair.second),
+                    warshallArraySubscriptToExpr.get(slotPair.first));
+            if (!slotEqSlotDeDuplication.contains(pair) && !slotEqSlotDeDuplication.contains(eqPair)) {
+                slotEqSlotDeDuplication.add(pair);
+                slotEqSlotExpr.add(new BinaryPredicate(BinaryPredicate.Operator.EQ,
+                        warshallArraySubscriptToExpr.get(slotPair.first),
+                        warshallArraySubscriptToExpr.get(slotPair.second)));
+                if (clauseType == ExprRewriter.ClauseType.ON_CLAUSE) {
+                    analyzer.registerOnSlotEqSlotDeDuplication(pair);
+                    analyzer.registerOnSlotEqSlotExpr(new BinaryPredicate(BinaryPredicate.Operator.EQ,
+                            warshallArraySubscriptToExpr.get(slotPair.first),
+                            warshallArraySubscriptToExpr.get(slotPair.second)));
+                }
+            }
         }
     }
 
@@ -395,8 +395,7 @@ public class InferFiltersRule implements ExprRewriteRule {
                 SlotRef leftSlot = conjunct.getChild(0).unwrapSlotRef();
                 SlotRef rightSlot = conjunct.getChild(1).unwrapSlotRef();
 
-                if (leftSlot instanceof SlotRef
-                    && rightSlot instanceof SlotRef) {
+                if (leftSlot instanceof SlotRef && rightSlot instanceof SlotRef) {
                     if (checkSlot.notCheckDescIdEquals(leftSlot)) {
                         addNewBinaryPredicate(genNewBinaryPredicate(slotToLiteral, rightSlot),
                                 slotToLiteralDeDuplication, newExprWithState,
@@ -421,7 +420,8 @@ public class InferFiltersRule implements ExprRewriteRule {
      * @param checkSlot: t2.id
      * @return needInfer.    True: needInfer. False: not needInfer
      */
-    private boolean isNeedInfer(SlotRef newSlot, SlotRef checkSlot, Analyzer analyzer, ExprRewriter.ClauseType clauseType) {
+    private boolean isNeedInfer(SlotRef newSlot, SlotRef checkSlot, Analyzer analyzer,
+            ExprRewriter.ClauseType clauseType) {
         boolean ret = false;
         TupleId newTid = newSlot.getDesc().getParent().getRef().getId();
         TupleId checkTid = checkSlot.getDesc().getParent().getRef().getId();
@@ -448,16 +448,18 @@ public class InferFiltersRule implements ExprRewriteRule {
         boolean ret = false;
         if (clauseType == ExprRewriter.ClauseType.ON_CLAUSE) {
             if (joinOperator.isInnerJoin()
-                || (joinOperator == JoinOperator.LEFT_SEMI_JOIN)
-                || (!needChange && joinOperator == JoinOperator.RIGHT_OUTER_JOIN)
-                || (needChange && (joinOperator == JoinOperator.LEFT_OUTER_JOIN || joinOperator == JoinOperator.LEFT_ANTI_JOIN))) {
+                    || (joinOperator == JoinOperator.LEFT_SEMI_JOIN)
+                    || (!needChange && joinOperator == JoinOperator.RIGHT_OUTER_JOIN)
+                    || (needChange && (joinOperator == JoinOperator.LEFT_OUTER_JOIN
+                    || joinOperator == JoinOperator.LEFT_ANTI_JOIN))) {
                 ret = true;
             }
         } else if (clauseType == ExprRewriter.ClauseType.WHERE_CLAUSE) {
             if (joinOperator.isInnerJoin()
-                || (joinOperator == JoinOperator.LEFT_SEMI_JOIN
-                || (needChange && joinOperator == JoinOperator.RIGHT_OUTER_JOIN))
-                || (!needChange && (joinOperator == JoinOperator.LEFT_OUTER_JOIN || joinOperator == JoinOperator.LEFT_ANTI_JOIN))) {
+                    || (joinOperator == JoinOperator.LEFT_SEMI_JOIN
+                    || (needChange && joinOperator == JoinOperator.RIGHT_OUTER_JOIN))
+                    || (!needChange && (joinOperator == JoinOperator.LEFT_OUTER_JOIN
+                    || joinOperator == JoinOperator.LEFT_ANTI_JOIN))) {
                 ret = true;
             }
         }
@@ -482,7 +484,7 @@ public class InferFiltersRule implements ExprRewriteRule {
      */
     private void addNewBinaryPredicate(Expr expr,
                                        Set<Pair<Expr, Expr>> slotToLiteralDeDuplication,
-                                       List<Pair<Expr, Boolean> > newExprWithState,
+                                       List<Pair<Expr, Boolean>> newExprWithState,
                                        boolean needAddnewExprWithState,
                                        Analyzer analyzer,
                                        ExprRewriter.ClauseType clauseType) {
@@ -496,6 +498,9 @@ public class InferFiltersRule implements ExprRewriteRule {
                 if (clauseType == ExprRewriter.ClauseType.ON_CLAUSE) {
                     analyzer.registerOnSlotToLiteralDeDuplication(pair);
                     analyzer.registerOnSlotToLiteralExpr(newBP);
+                }
+                if (needAddnewExprWithState) {
+                    analyzer.registerGlobalSlotToLiteralDeDuplication(pair);
                 }
             }
         }
@@ -526,15 +531,14 @@ public class InferFiltersRule implements ExprRewriteRule {
                                             Analyzer analyzer,
                                             ExprRewriter.ClauseType clauseType) {
         if (expr instanceof IsNullPredicate) {
-            IsNullPredicate isNullPredicate = (IsNullPredicate)expr;
+            IsNullPredicate isNullPredicate = (IsNullPredicate) expr;
             SlotRef checkSlot = isNullPredicate.getChild(0).unwrapSlotRef();
             if (checkSlot instanceof SlotRef) {
                 for (Expr conjunct : slotEqSlotExpr) {
                     SlotRef leftSlot = conjunct.getChild(0).unwrapSlotRef();
                     SlotRef rightSlot = conjunct.getChild(1).unwrapSlotRef();
 
-                    if (leftSlot instanceof SlotRef
-                        && rightSlot instanceof SlotRef) {
+                    if (leftSlot instanceof SlotRef && rightSlot instanceof SlotRef) {
                         if (checkSlot.notCheckDescIdEquals(leftSlot) && isNullPredicate.isNotNull()) {
                             addNewIsNotNullPredicate(genNewIsNotNullPredicate(isNullPredicate, rightSlot),
                                     isNullDeDuplication, newExprWithState, analyzer, clauseType);
@@ -614,8 +618,7 @@ public class InferFiltersRule implements ExprRewriteRule {
                     SlotRef leftSlot = conjunct.getChild(0).unwrapSlotRef();
                     SlotRef rightSlot = conjunct.getChild(1).unwrapSlotRef();
 
-                    if (leftSlot instanceof SlotRef
-                        && rightSlot instanceof SlotRef) {
+                    if (leftSlot instanceof SlotRef && rightSlot instanceof SlotRef) {
                         if (checkSlot.notCheckDescIdEquals(leftSlot)) {
                             addNewInPredicate(genNewInPredicate(inpredicate, rightSlot),
                                     inDeDuplication, newExprWithState,
@@ -651,7 +654,7 @@ public class InferFiltersRule implements ExprRewriteRule {
      */
     private void addNewInPredicate(Expr expr,
                                    Set<Expr> inDeDuplication,
-                                   List<Pair<Expr, Boolean> > newExprWithState,
+                                   List<Pair<Expr, Boolean>> newExprWithState,
                                    boolean needAddnewExprWithState,
                                    Analyzer analyzer,
                                    ExprRewriter.ClauseType clauseType) {
@@ -664,6 +667,9 @@ public class InferFiltersRule implements ExprRewriteRule {
                 if (clauseType == ExprRewriter.ClauseType.ON_CLAUSE) {
                     analyzer.registerInDeDuplication(newIP);
                     analyzer.registerInExpr(newIP);
+                }
+                if (needAddnewExprWithState) {
+                    analyzer.registerGlobalInDeDuplication(newIP);
                 }
             }
         }

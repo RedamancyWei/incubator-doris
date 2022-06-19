@@ -78,7 +78,7 @@ import java.util.stream.Collectors;
  *   fix that
  */
 public class PlanFragment extends TreeNode<PlanFragment> {
-    private final static Logger LOG = LogManager.getLogger(PlanFragment.class);
+    private static final Logger LOG = LogManager.getLogger(PlanFragment.class);
 
     // id for this plan fragment
     private PlanFragmentId fragmentId;
@@ -164,10 +164,16 @@ public class PlanFragment extends TreeNode<PlanFragment> {
      * different fragment.
      */
     public void setFragmentInPlanTree(PlanNode node) {
-        if (node == null) return;
+        if (node == null) {
+            return;
+        }
         node.setFragment(this);
-        if (node instanceof ExchangeNode) return;
-        for (PlanNode child : node.getChildren()) setFragmentInPlanTree(child);
+        if (node instanceof ExchangeNode) {
+            return;
+        }
+        for (PlanNode child : node.getChildren()) {
+            setFragmentInPlanTree(child);
+        }
     }
 
     /**
@@ -287,10 +293,9 @@ public class PlanFragment extends TreeNode<PlanFragment> {
     public String getExplainString(TExplainLevel explainLevel) {
         StringBuilder str = new StringBuilder();
         Preconditions.checkState(dataPartition != null);
-        str.append(" OUTPUT EXPRS:");
         if (CollectionUtils.isNotEmpty(outputExprs)) {
-            str.append(outputExprs.stream().map(Expr::toSql)
-                    .collect(Collectors.joining(" | ")));
+            str.append("  OUTPUT EXPRS:");
+            str.append(outputExprs.stream().map(Expr::toSql).collect(Collectors.joining(" | ")));
         }
         str.append("\n");
         str.append("  PARTITION: " + dataPartition.getExplainString(explainLevel) + "\n");
@@ -317,10 +322,14 @@ public class PlanFragment extends TreeNode<PlanFragment> {
         this.dataPartition = dataPartition;
     }
 
-    public PlanFragmentId getId() { return fragmentId; }
+    public PlanFragmentId getId() {
+        return fragmentId;
+    }
 
     public PlanFragment getDestFragment() {
-        if (destNode == null) return null;
+        if (destNode == null) {
+            return null;
+        }
         return destNode.getFragment();
     }
 

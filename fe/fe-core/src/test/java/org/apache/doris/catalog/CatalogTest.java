@@ -18,11 +18,11 @@
 package org.apache.doris.catalog;
 
 import org.apache.doris.common.FeConstants;
-import org.apache.doris.common.MetaHeader;
 import org.apache.doris.common.io.CountingDataOutputStream;
 import org.apache.doris.load.Load;
 import org.apache.doris.load.LoadJob;
 import org.apache.doris.meta.MetaContext;
+import org.apache.doris.persist.meta.MetaHeader;
 
 import mockit.Expectations;
 import org.junit.Assert;
@@ -140,7 +140,7 @@ public class CatalogTest {
 
         DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream(file)));
         catalog = Catalog.getCurrentCatalog();
-        long checksum2 = catalog.loadHeader(dis, MetaHeader.EMPTY_HEADER ,0);
+        long checksum2 = catalog.loadHeader(dis, MetaHeader.EMPTY_HEADER, 0);
         Assert.assertEquals(checksum1, checksum2);
         dis.close();
 

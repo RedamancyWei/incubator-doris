@@ -24,7 +24,6 @@ import org.apache.doris.catalog.KeysType;
 import org.apache.doris.catalog.PrimitiveType;
 import org.apache.doris.catalog.Type;
 import org.apache.doris.common.AnalysisException;
-import org.apache.doris.common.Config;
 import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.ErrorReport;
 import org.apache.doris.common.FeConstants;
@@ -88,7 +87,8 @@ public class CreateMaterializedViewStmt extends DdlStmt {
     private String baseIndexName;
     private String dbName;
     private KeysType mvKeysType = KeysType.DUP_KEYS;
-    //if process is replaying log, isReplay is true, otherwise is false, avoid replay process error report, only in Rollup or MaterializedIndexMeta is true
+    //if process is replaying log, isReplay is true, otherwise is false, avoid replay process error report,
+    // only in Rollup or MaterializedIndexMeta is true
     private boolean isReplay = false;
 
     public CreateMaterializedViewStmt(String mvName, SelectStmt selectStmt, Map<String, String> properties) {
@@ -131,9 +131,6 @@ public class CreateMaterializedViewStmt extends DdlStmt {
 
     @Override
     public void analyze(Analyzer analyzer) throws UserException {
-        if (!Config.enable_materialized_view) {
-            throw new AnalysisException("The materialized view is disabled");
-        }
         super.analyze(analyzer);
         FeNameFormat.checkTableName(mvName);
         // TODO(ml): The mv name in from clause should pass the analyze without error.
@@ -321,7 +318,8 @@ public class CreateMaterializedViewStmt extends DdlStmt {
             for (; theBeginIndexOfValue < mvColumnItemList.size(); theBeginIndexOfValue++) {
                 MVColumnItem column = mvColumnItemList.get(theBeginIndexOfValue);
                 keySizeByte += column.getType().getIndexSize();
-                if (theBeginIndexOfValue + 1 > FeConstants.shortkey_max_column_count || keySizeByte > FeConstants.shortkey_maxsize_bytes) {
+                if (theBeginIndexOfValue + 1 > FeConstants.shortkey_max_column_count
+                        || keySizeByte > FeConstants.shortkey_maxsize_bytes) {
                     if (theBeginIndexOfValue == 0 && column.getType().getPrimitiveType().isCharFamily()) {
                         column.setIsKey(true);
                         theBeginIndexOfValue++;
@@ -417,8 +415,7 @@ public class CreateMaterializedViewStmt extends DdlStmt {
             default:
                 throw new AnalysisException("Unsupported function:" + functionName);
         }
-        MVColumnItem mvColumnItem = new MVColumnItem(mvColumnName, type, mvAggregateType, false, defineExpr, baseColumnName);
-        return mvColumnItem;
+        return new MVColumnItem(mvColumnName, type, mvAggregateType, false, defineExpr, baseColumnName);
     }
 
     public Map<String, Expr> parseDefineExprWithoutAnalyze() throws AnalysisException {

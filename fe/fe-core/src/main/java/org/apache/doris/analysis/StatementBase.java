@@ -72,7 +72,9 @@ public abstract class StatementBase implements ParseNode {
      * tables/views get collected in the Analyzer before failing analyze().
      */
     public void analyze(Analyzer analyzer) throws AnalysisException, UserException {
-        if (isAnalyzed()) return;
+        if (isAnalyzed()) {
+            return;
+        }
         this.analyzer = analyzer;
         if (Strings.isNullOrEmpty(analyzer.getClusterName())) {
             ErrorReport.reportAnalysisException(ErrorCode.ERR_CLUSTER_NO_SELECT_CLUSTER);
@@ -121,7 +123,9 @@ public abstract class StatementBase implements ParseNode {
      * if not applicable (not all statements produce an output result set).
      * Subclasses must override this as necessary.
      */
-    public List<String> getColLabels() { return Collections.<String>emptyList();  }
+    public List<String> getColLabels() {
+        return Collections.<String>emptyList();
+    }
 
     /**
      * Sets the column labels of this statement, if applicable. No-op of the statement does
@@ -129,7 +133,9 @@ public abstract class StatementBase implements ParseNode {
      */
     public void setColLabels(List<String> colLabels) {
         List<String> oldLabels = getColLabels();
-        if (oldLabels == colLabels) return;
+        if (oldLabels == colLabels) {
+            return;
+        }
         oldLabels.clear();
         oldLabels.addAll(colLabels);
     }
@@ -139,7 +145,9 @@ public abstract class StatementBase implements ParseNode {
      * empty list if not applicable (not all statements produce an output result set).
      * Subclasses must override this as necessary.
      */
-    public List<Expr> getResultExprs() { return Collections.<Expr>emptyList(); }
+    public List<Expr> getResultExprs() {
+        return Collections.<Expr>emptyList();
+    }
 
     /**
      * Casts the result expressions and derived members (e.g., destination column types for

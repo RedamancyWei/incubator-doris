@@ -76,7 +76,8 @@ public class CanalSyncChannel extends SyncChannel {
     private Data<InternalService.PDataRow> batchBuffer;
     private InsertStreamTxnExecutor txnExecutor;
 
-    public CanalSyncChannel(long id, SyncJob syncJob, Database db, OlapTable table, List<String> columns, String srcDataBase, String srcTable) {
+    public CanalSyncChannel(long id, SyncJob syncJob, Database db, OlapTable table, List<String> columns,
+            String srcDataBase, String srcTable) {
         super(id, syncJob, db, table, columns, srcDataBase, srcTable);
         this.index = SyncTaskPool.getNextIndex();
         this.batchBuffer = new Data<>();
@@ -84,11 +85,12 @@ public class CanalSyncChannel extends SyncChannel {
         this.timeoutSecond = -1L;
     }
 
-    private final static class SendTask extends SyncTask {
+    private static final class SendTask extends SyncTask {
         private final InsertStreamTxnExecutor executor;
         private final Data<InternalService.PDataRow> rows;
 
-        public SendTask(long signature, int index, SyncChannelCallback callback, Data<InternalService.PDataRow> rows, InsertStreamTxnExecutor executor) {
+        public SendTask(long signature, int index, SyncChannelCallback callback, Data<InternalService.PDataRow> rows,
+                InsertStreamTxnExecutor executor) {
             super(signature, index, callback);
             this.executor = executor;
             this.rows = rows;
@@ -101,7 +103,7 @@ public class CanalSyncChannel extends SyncChannel {
         }
     }
 
-    private final static class EOFTask extends SyncTask {
+    private static final class EOFTask extends SyncTask {
 
         public EOFTask(long signature, int index, SyncChannelCallback callback) {
             super(signature, index, callback);
@@ -129,11 +131,11 @@ public class CanalSyncChannel extends SyncChannel {
                 TStreamLoadPutRequest request = null;
                 try {
                     long txnId = globalTransactionMgr.beginTransaction(db.getId(),
-                        Lists.newArrayList(tbl.getId()), label,
+                            Lists.newArrayList(tbl.getId()), label,
                         new TransactionState.TxnCoordinator(TransactionState.TxnSourceType.FE,
                             FrontendOptions.getLocalHostAddress()), sourceType, timeoutSecond);
                     String authCodeUuid = Catalog.getCurrentGlobalTransactionMgr().getTransactionState(
-                        db.getId(), txnId).getAuthCode();
+                            db.getId(), txnId).getAuthCode();
                     request = new TStreamLoadPutRequest()
                         .setTxnId(txnId).setDb(txnConf.getDb()).setTbl(txnConf.getTbl())
                         .setFileType(TFileType.FILE_STREAM).setFormatType(TFileFormatType.FORMAT_CSV_PLAIN)
@@ -142,46 +144,48 @@ public class CanalSyncChannel extends SyncChannel {
                         .setColumns(targetColumn);
                     txnConf.setTxnId(txnId).setAuthCodeUuid(authCodeUuid);
                     txnEntry.setLabel(label);
-                    txnExecutor.setTxnId (txnId);
+                    txnExecutor.setTxnId(txnId);
                 } catch (DuplicatedRequestException e) {
-                    LOG.warn ("duplicate request for sync channel. channel: {}, request id: {}, txn: {}, table: {}",
-                        id, e.getDuplicatedRequestId(), e.getTxnId(), targetTable);
+                    LOG.warn("duplicate request for sync channel. channel: {},"
+                                    + " request id: {}, txn: {}, table: {}",
+                            id, e.getDuplicatedRequestId(), e.getTxnId(), targetTable);
                     txnExecutor.setTxnId(e.getTxnId());
                 } catch (LabelAlreadyUsedException e) {
                     // this happens when channel re-consume same batch,
                     // we should just pass through it without begin a new txn
-                    LOG.warn ("Label already used in channel {}, label: {}, table: {}, batch: {}",
-                        id, label, targetTable, batchId);
+                    LOG.warn("Label already used in channel {}, label: {}, table: {}, batch: {}",
+                            id, label, targetTable, batchId);
                     return;
                 } catch (AnalysisException | BeginTransactionException e) {
-                    LOG.warn ("encounter an error when beginning txn in channel {}, table: {}",
-                        id, targetTable);
+                    LOG.warn("encounter an error when beginning txn in channel {}, table: {}",
+                            id, targetTable);
                     throw e;
                 } catch (UserException e) {
-                    LOG.warn ("encounter an error when creating plan in channel {}, table: {}",
-                        id, targetTable);
+                    LOG.warn("encounter an error when creating plan in channel {}, table: {}",
+                            id, targetTable);
                     throw e;
                 }
                 try {
                     // async exec begin transaction
                     long txnId = txnExecutor.getTxnId();
-                    if ( txnId != - 1L ) {
-                        this.txnExecutor.beginTransaction (request);
-                        LOG.info ("begin txn in channel {}, table: {}, label:{}, txn id: {}",
-                            id, targetTable, label, txnExecutor.getTxnId());
+                    if (txnId != - 1L) {
+                        this.txnExecutor.beginTransaction(request);
+                        LOG.info("begin txn in channel {}, table: {}, label:{}, txn id: {}",
+                                id, targetTable, label, txnExecutor.getTxnId());
                     }
-                } catch ( TException e) {
-                    LOG.warn ("Failed to begin txn in channel {}, table: {}, txn: {}, msg:{}",
-                        id, targetTable, txnExecutor.getTxnId(), e.getMessage());
+                } catch (TException e) {
+                    LOG.warn("Failed to begin txn in channel {}, table: {}, txn: {}, msg:{}",
+                            id, targetTable, txnExecutor.getTxnId(), e.getMessage());
                     throw e;
-                } catch ( TimeoutException | InterruptedException | ExecutionException e) {
-                    LOG.warn ("Error occur while waiting begin txn response in channel {}, table: {}, txn: {}, msg:{}",
-                        id, targetTable, txnExecutor.getTxnId(), e.getMessage());
+                } catch (TimeoutException | InterruptedException | ExecutionException e) {
+                    LOG.warn("Error occur while waiting begin txn response in channel {},"
+                            + " table: {}, txn: {}, msg:{}", id, targetTable, txnExecutor.getTxnId(), e.getMessage());
                     throw e;
                 }
             } else {
                 String failMsg = "current running txns on db " + db.getId() + " is "
-                    + databaseTransactionMgr.getRunningTxnNums() + ", larger than limit " + Config.max_running_txn_num_per_db;
+                        + databaseTransactionMgr.getRunningTxnNums()
+                        + ", larger than limit " + Config.max_running_txn_num_per_db;
                 LOG.warn(failMsg);
                 throw new BeginTransactionException(failMsg);
             }
@@ -199,7 +203,8 @@ public class CanalSyncChannel extends SyncChannel {
             LOG.info("abort txn in channel {}, table: {}, txn id: {}, last batch: {}, reason: {}",
                     id, targetTable, txnExecutor.getTxnId(), lastBatchId, reason);
         } catch (TException e) {
-            LOG.warn("Failed to abort txn in channel {}, table: {}, txn: {}, msg:{}", id, targetTable, txnExecutor.getTxnId(), e.getMessage());
+            LOG.warn("Failed to abort txn in channel {}, table: {}, txn: {}, msg:{}",
+                    id, targetTable, txnExecutor.getTxnId(), e.getMessage());
             throw e;
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             LOG.warn("Error occur while waiting abort txn response in channel {}, table: {}, txn: {}, msg:{}",
@@ -223,7 +228,8 @@ public class CanalSyncChannel extends SyncChannel {
             LOG.info("commit txn in channel {}, table: {}, txn id: {}, last batch: {}",
                     id, targetTable, txnExecutor.getTxnId(), lastBatchId);
         } catch (TException e) {
-            LOG.warn("Failed to commit txn in channel {}, table: {}, txn: {}, msg:{}", id, targetTable, txnExecutor.getTxnId(), e.getMessage());
+            LOG.warn("Failed to commit txn in channel {}, table: {}, txn: {}, msg:{}",
+                    id, targetTable, txnExecutor.getTxnId(), e.getMessage());
             throw e;
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             LOG.warn("Error occur while waiting commit txn return in channel {}, table: {}, txn: {}, msg:{}",

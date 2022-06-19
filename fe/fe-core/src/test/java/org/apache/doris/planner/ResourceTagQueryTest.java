@@ -136,7 +136,7 @@ public class ResourceTagQueryTest {
     }
 
     @AfterClass
-    public static void TearDown() {
+    public static void tearDown() {
         UtFrameUtils.cleanDorisFeDir(runningDirBase);
     }
 
@@ -181,15 +181,15 @@ public class ResourceTagQueryTest {
     public void test() throws Exception {
 
         // create table with default tag
-        String createStr = "create table test.tbl1\n" +
-                "(k1 date, k2 int)\n" +
-                "partition by range(k1)\n" +
-                "(\n" +
-                " partition p1 values less than(\"2021-06-01\"),\n" +
-                " partition p2 values less than(\"2021-07-01\"),\n" +
-                " partition p3 values less than(\"2021-08-01\")\n" +
-                ")\n" +
-                "distributed by hash(k2) buckets 10;";
+        String createStr = "create table test.tbl1\n"
+                + "(k1 date, k2 int)\n"
+                + "partition by range(k1)\n"
+                + "(\n"
+                + " partition p1 values less than(\"2021-06-01\"),\n"
+                + " partition p2 values less than(\"2021-07-01\"),\n"
+                + " partition p3 values less than(\"2021-08-01\")\n"
+                + ")\n"
+                + "distributed by hash(k2) buckets 10;";
         ExceptionChecker.expectThrowsNoException(() -> createTable(createStr));
         Database db = Catalog.getCurrentCatalog().getDbNullable("default_cluster:test");
         OlapTable tbl = (OlapTable) db.getTableNullable("tbl1");
@@ -208,7 +208,7 @@ public class ResourceTagQueryTest {
         String queryStr = "explain select * from test.tbl1";
         String explainString = UtFrameUtils.getSQLPlanOrErrorMsg(connectContext, queryStr);
         System.out.println(explainString);
-        Assert.assertTrue(explainString.contains("tabletRatio=30/30"));
+        Assert.assertTrue(explainString.contains("tablets=30/30"));
 
         // set zone1 tag for root
         String setPropStr2 = "set property for 'root' 'resource_tags.location' = 'zone1';";
@@ -246,7 +246,7 @@ public class ResourceTagQueryTest {
         queryStr = "explain select * from test.tbl1";
         explainString = UtFrameUtils.getSQLPlanOrErrorMsg(connectContext, queryStr);
         System.out.println(explainString);
-        Assert.assertTrue(explainString.contains("tabletRatio=30/30"));
+        Assert.assertTrue(explainString.contains("tablets=30/30"));
 
         // for now, 3 backends with tag zone1, 2 with tag default, so table is not stable.
         ExceptionChecker.expectThrows(UserException.class, () -> tbl.checkReplicaAllocation());
@@ -269,7 +269,7 @@ public class ResourceTagQueryTest {
         queryStr = "explain select * from test.tbl1";
         explainString = UtFrameUtils.getSQLPlanOrErrorMsg(connectContext, queryStr);
         System.out.println(explainString);
-        Assert.assertTrue(explainString.contains("tabletRatio=30/30"));
+        Assert.assertTrue(explainString.contains("tablets=30/30"));
 
         // set user exec mem limit
         String setExecMemLimitStr = "set property for 'root' 'exec_mem_limit' = '1000000';";

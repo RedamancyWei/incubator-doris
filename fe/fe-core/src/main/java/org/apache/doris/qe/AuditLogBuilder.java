@@ -43,19 +43,19 @@ import java.util.Set;
 public class AuditLogBuilder extends Plugin implements AuditPlugin {
     private static final Logger LOG = LogManager.getLogger(AuditLogBuilder.class);
 
-    private PluginInfo pluginInfo;
+    private final PluginInfo pluginInfo;
 
-    private final String[] LOAD_ANNONATION_NAMES = {"JobId", "Label", "LoadType", "Db", "TableList",
+    private static final String[] LOAD_ANNONATION_NAMES = {"JobId", "Label", "LoadType", "Db", "TableList",
         "FilePathList", "BrokerUser", "Timestamp", "LoadStartTime", "LoadFinishTime", "ScanRows",
         "ScanBytes", "FileNumber"};
 
-    private Set<String> loadAnnotationSet;
+    private final Set<String> loadAnnotationSet;
 
-    private final String[] STREAM_LOAD_ANNONATION_NAMES = {"Label", "Db", "Table", "User", "ClientIp",
+    private static final String[] STREAM_LOAD_ANNONATION_NAMES = {"Label", "Db", "Table", "User", "ClientIp",
             "Status", "Message", "Url", "TotalRows", "LoadedRows", "FilteredRows", "UnselectedRows",
             "LoadBytes", "StartTime", "FinishTime"};
 
-    private Set<String> streamLoadAnnotationSet;
+    private final Set<String> streamLoadAnnotationSet;
 
     public AuditLogBuilder() {
         pluginInfo = new PluginInfo(PluginMgr.BUILTIN_PLUGIN_PREFIX + "AuditLogBuilder", PluginType.AUDIT,
@@ -77,19 +77,19 @@ public class AuditLogBuilder extends Plugin implements AuditPlugin {
     @Override
     public void exec(AuditEvent event) {
         try {
-           switch (event.type) {
-               case AFTER_QUERY:
-                   auditQueryLog(event);
-                   break;
-               case LOAD_SUCCEED:
-                   auditLoadLog(event);
-                   break;
-               case STREAM_LOAD_FINISH:
-                   auditStreamLoadLog(event);
-                   break;
-               default:
-                   break;
-           }
+            switch (event.type) {
+                case AFTER_QUERY:
+                    auditQueryLog(event);
+                    break;
+                case LOAD_SUCCEED:
+                    auditLoadLog(event);
+                    break;
+                case STREAM_LOAD_FINISH:
+                    auditStreamLoadLog(event);
+                    break;
+                default:
+                    break;
+            }
         } catch (Exception e) {
             LOG.debug("failed to process audit event", e);
         }

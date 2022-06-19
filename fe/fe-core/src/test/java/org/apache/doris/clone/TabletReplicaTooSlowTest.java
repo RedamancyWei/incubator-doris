@@ -119,7 +119,7 @@ public class TabletReplicaTooSlowTest {
     }
 
     @AfterClass
-    public static void TearDown() {
+    public static void tearDown() {
         UtFrameUtils.cleanDorisFeDir(runningDirBase);
     }
 
@@ -137,7 +137,8 @@ public class TabletReplicaTooSlowTest {
             tabletId = cell.getRowKey();
             long beId = cell.getColumnKey();
             Backend be = Catalog.getCurrentSystemInfo().getBackend(beId);
-            List<Long> pathHashes = be.getDisks().values().stream().map(DiskInfo::getPathHash).collect(Collectors.toList());
+            List<Long> pathHashes = be.getDisks().values().stream()
+                    .map(DiskInfo::getPathHash).collect(Collectors.toList());
             if (be == null) {
                 continue;
             }
@@ -156,13 +157,13 @@ public class TabletReplicaTooSlowTest {
     @Test
     public void test() throws Exception {
         // test colocate tablet repair
-        String createStr = "create table test.tbl1\n" +
-                "(k1 date, k2 int)\n" +
-                "distributed by hash(k2) buckets 1\n" +
-                "properties\n" +
-                "(\n" +
-                "    \"replication_num\" = \"3\"\n" +
-                ")";
+        String createStr = "create table test.tbl1\n"
+                + "(k1 date, k2 int)\n"
+                + "distributed by hash(k2) buckets 1\n"
+                + "properties\n"
+                + "(\n"
+                + "    \"replication_num\" = \"3\"\n"
+                + ")";
         ExceptionChecker.expectThrowsNoException(() -> createTable(createStr));
 
         int maxLoop = 300;

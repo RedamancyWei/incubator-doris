@@ -89,8 +89,8 @@ public class LoadStmt extends DdlStmt {
 
     // mini load params
     public static final String KEY_IN_PARAM_COLUMNS = "columns";
-    public static final String KEY_IN_PARAM_SET= "set";
-    public static final String KEY_IN_PARAM_HLL= "hll";
+    public static final String KEY_IN_PARAM_SET = "set";
+    public static final String KEY_IN_PARAM_HLL = "hll";
     public static final String KEY_IN_PARAM_COLUMN_SEPARATOR = "column_separator";
     public static final String KEY_IN_PARAM_LINE_DELIMITER = "line_delimiter";
     public static final String KEY_IN_PARAM_PARTITIONS = "partitions";
@@ -124,7 +124,7 @@ public class LoadStmt extends DdlStmt {
 
     private EtlJobType etlJobType = EtlJobType.UNKNOWN;
 
-    public final static ImmutableMap<String, Function> PROPERTIES_MAP = new ImmutableMap.Builder<String, Function>()
+    public static final ImmutableMap<String, Function> PROPERTIES_MAP = new ImmutableMap.Builder<String, Function>()
             .put(TIMEOUT_PROPERTY, new Function<String, Long>() {
                 @Override
                 public @Nullable Long apply(@Nullable String s) {
@@ -337,7 +337,8 @@ public class LoadStmt extends DdlStmt {
             }
             Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(label.getDbName());
             OlapTable table = db.getOlapTableOrAnalysisException(dataDescription.getTableName());
-            if (dataDescription.getMergeType() != LoadTask.MergeType.APPEND && table.getKeysType() != KeysType.UNIQUE_KEYS) {
+            if (dataDescription.getMergeType() != LoadTask.MergeType.APPEND
+                    && table.getKeysType() != KeysType.UNIQUE_KEYS) {
                 throw new AnalysisException("load by MERGE or DELETE is only supported in unique tables.");
             }
             if (dataDescription.getMergeType() != LoadTask.MergeType.APPEND && !table.hasDeleteSign()) {
@@ -346,9 +347,9 @@ public class LoadStmt extends DdlStmt {
             if (brokerDesc != null && !brokerDesc.isMultiLoadBroker()) {
                 for (int i = 0; i < dataDescription.getFilePaths().size(); i++) {
                     dataDescription.getFilePaths().set(i,
-                        brokerDesc.convertPathToS3(dataDescription.getFilePaths().get(i)));
+                            brokerDesc.convertPathToS3(dataDescription.getFilePaths().get(i)));
                     dataDescription.getFilePaths().set(i,
-                        ExportStmt.checkPath(dataDescription.getFilePaths().get(i), brokerDesc.getStorageType()));
+                            ExportStmt.checkPath(dataDescription.getFilePaths().get(i), brokerDesc.getStorageType()));
                 }
             }
         }

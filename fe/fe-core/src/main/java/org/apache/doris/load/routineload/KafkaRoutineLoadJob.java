@@ -20,6 +20,7 @@ package org.apache.doris.load.routineload;
 import org.apache.doris.analysis.AlterRoutineLoadStmt;
 import org.apache.doris.analysis.CreateRoutineLoadStmt;
 import org.apache.doris.analysis.RoutineLoadDataSourceProperties;
+import org.apache.doris.analysis.UserIdentity;
 import org.apache.doris.catalog.Catalog;
 import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.OlapTable;
@@ -38,7 +39,6 @@ import org.apache.doris.common.util.SmallFileMgr;
 import org.apache.doris.common.util.SmallFileMgr.SmallFile;
 import org.apache.doris.common.util.TimeUtils;
 import org.apache.doris.persist.AlterRoutineLoadJobOperationLog;
-import org.apache.doris.system.SystemInfoService;
 import org.apache.doris.transaction.TransactionState;
 import org.apache.doris.transaction.TransactionStatus;
 
@@ -102,8 +102,9 @@ public class KafkaRoutineLoadJob extends RoutineLoadJob {
     }
 
     public KafkaRoutineLoadJob(Long id, String name, String clusterName,
-                               long dbId, long tableId, String brokerList, String topic) {
-        super(id, name, clusterName, dbId, tableId, LoadDataSourceType.KAFKA);
+                               long dbId, long tableId, String brokerList, String topic,
+                               UserIdentity userIdentity) {
+        super(id, name, clusterName, dbId, tableId, LoadDataSourceType.KAFKA, userIdentity);
         this.brokerList = brokerList;
         this.topic = topic;
         this.progress = new KafkaProgress();
@@ -181,9 +182,10 @@ public class KafkaRoutineLoadJob extends RoutineLoadJob {
         }
 
         // This is mainly for compatibility. In the previous version, we directly obtained the value of the
-        // KAFKA_DEFAULT_OFFSETS attribute. In the new version, we support date time as the value of KAFKA_DEFAULT_OFFSETS,
-        // and this attribute will be converted into a timestamp during the analyzing phase, thus losing some information.
-        // So we use KAFKA_ORIGIN_DEFAULT_OFFSETS to store the original datetime formatted KAFKA_DEFAULT_OFFSETS value
+        // KAFKA_DEFAULT_OFFSETS attribute. In the new version, we support date time as the value of
+        // KAFKA_DEFAULT_OFFSETS, and this attribute will be converted into a timestamp during the analyzing phase,
+        // thus losing some information. So we use KAFKA_ORIGIN_DEFAULT_OFFSETS to store the original datetime
+        // formatted KAFKA_DEFAULT_OFFSETS value
         if (convertedCustomProperties.containsKey(CreateRoutineLoadStmt.KAFKA_ORIGIN_DEFAULT_OFFSETS)) {
             kafkaDefaultOffSet = convertedCustomProperties.remove(CreateRoutineLoadStmt.KAFKA_ORIGIN_DEFAULT_OFFSETS);
         } else if (convertedCustomProperties.containsKey(CreateRoutineLoadStmt.KAFKA_DEFAULT_OFFSETS)) {
@@ -226,7 +228,6 @@ public class KafkaRoutineLoadJob extends RoutineLoadJob {
 
     @Override
     public int calculateCurrentConcurrentTaskNum() {
-        SystemInfoService systemInfoService = Catalog.getCurrentSystemInfo();
         int partitionNum = currentKafkaPartitions.size();
         if (desireTaskConcurrentNum == 0) {
             desireTaskConcurrentNum = Config.max_routine_load_task_concurrent_num;
@@ -252,8 +253,8 @@ public class KafkaRoutineLoadJob extends RoutineLoadJob {
 
         // Running here, the status of the transaction should be ABORTED,
         // and it is caused by other errors. In this case, we should not update the offset.
-        LOG.debug("no need to update the progress of kafka routine load. txn status: {}, " +
-                        "txnStatusChangeReason: {}, task: {}, job: {}",
+        LOG.debug("no need to update the progress of kafka routine load. txn status: {}, "
+                        + "txnStatusChangeReason: {}, task: {}, job: {}",
                 txnState.getTransactionStatus(), txnStatusChangeReason,
                 DebugUtil.printId(rlTaskTxnCommitAttachment.getTaskId()), id);
         return false;
@@ -393,7 +394,7 @@ public class KafkaRoutineLoadJob extends RoutineLoadJob {
         long id = Catalog.getCurrentCatalog().getNextId();
         KafkaRoutineLoadJob kafkaRoutineLoadJob = new KafkaRoutineLoadJob(id, stmt.getName(),
                 db.getClusterName(), db.getId(), tableId,
-                stmt.getKafkaBrokerList(), stmt.getKafkaTopic());
+                stmt.getKafkaBrokerList(), stmt.getKafkaTopic(), stmt.getUserInfo());
         kafkaRoutineLoadJob.setOptional(stmt);
         kafkaRoutineLoadJob.checkCustomProperties();
         kafkaRoutineLoadJob.checkCustomPartition();
@@ -435,7 +436,8 @@ public class KafkaRoutineLoadJob extends RoutineLoadJob {
                 if (!((KafkaProgress) progress).containsPartition(kafkaPartition)) {
                     List<Integer> newPartitions = Lists.newArrayList();
                     newPartitions.add(kafkaPartition);
-                    List<Pair<Integer, Long>> newPartitionsOffsets = getNewPartitionOffsetsFromDefaultOffset(newPartitions);
+                    List<Pair<Integer, Long>> newPartitionsOffsets
+                            = getNewPartitionOffsetsFromDefaultOffset(newPartitions);
                     Preconditions.checkState(newPartitionsOffsets.size() == 1);
                     for (Pair<Integer, Long> partitionOffset : newPartitionsOffsets) {
                         ((KafkaProgress) progress).addPartitionOffset(partitionOffset);
@@ -455,7 +457,8 @@ public class KafkaRoutineLoadJob extends RoutineLoadJob {
         }
     }
 
-    private List<Pair<Integer, Long>> getNewPartitionOffsetsFromDefaultOffset(List<Integer> newPartitions) throws UserException {
+    private List<Pair<Integer, Long>> getNewPartitionOffsetsFromDefaultOffset(List<Integer> newPartitions)
+            throws UserException {
         List<Pair<Integer, Long>> partitionOffsets = Lists.newArrayList();
         // get default offset
         long beginOffset = convertedDefaultOffsetToLong();
@@ -464,7 +467,8 @@ public class KafkaRoutineLoadJob extends RoutineLoadJob {
         }
         if (isOffsetForTimes()) {
             try {
-                partitionOffsets = KafkaUtil.getOffsetsForTimes(this.brokerList, this.topic, convertedCustomProperties, partitionOffsets);
+                partitionOffsets = KafkaUtil.getOffsetsForTimes(this.brokerList,
+                        this.topic, convertedCustomProperties, partitionOffsets);
             } catch (LoadException e) {
                 LOG.warn(new LogBuilder(LogKey.ROUTINE_LOAD_JOB, id)
                         .add("partition:timestamp", Joiner.on(",").join(partitionOffsets))

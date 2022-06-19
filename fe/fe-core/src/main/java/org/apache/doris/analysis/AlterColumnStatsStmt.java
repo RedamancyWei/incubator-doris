@@ -85,13 +85,13 @@ public class AlterColumnStatsStmt extends DdlStmt {
         tableName.analyze(analyzer);
         // check properties
         Optional<StatsType> optional = properties.keySet().stream().map(StatsType::fromString)
-            .filter(statsType -> !CONFIGURABLE_PROPERTIES_SET.contains(statsType)).findFirst();
+                .filter(statsType -> !CONFIGURABLE_PROPERTIES_SET.contains(statsType)).findFirst();
         if (optional.isPresent()) {
             throw new AnalysisException(optional.get() + " is invalid statistic");
         }
         // check auth
-        if (!Catalog.getCurrentCatalog().getAuth().checkTblPriv(ConnectContext.get(), tableName.getDb(), tableName.getTbl(),
-                PrivPredicate.ALTER)) {
+        if (!Catalog.getCurrentCatalog().getAuth().checkTblPriv(
+                ConnectContext.get(), tableName.getDb(), tableName.getTbl(), PrivPredicate.ALTER)) {
             ErrorReport.reportAnalysisException(ErrorCode.ERR_TABLEACCESS_DENIED_ERROR, "ALTER COLUMN STATS",
                     ConnectContext.get().getQualifiedUser(),
                     ConnectContext.get().getRemoteIP(),

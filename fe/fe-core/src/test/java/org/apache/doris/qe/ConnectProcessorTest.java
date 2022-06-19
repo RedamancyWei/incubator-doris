@@ -59,43 +59,43 @@ public class ConnectProcessorTest {
     @BeforeClass
     public static void setUpClass() {
         // Init Database packet
-        {
+        { // CHECKSTYLE IGNORE THIS LINE
             MysqlSerializer serializer = MysqlSerializer.newInstance();
             serializer.writeInt1(2);
             serializer.writeEofString("testCluster:testDb");
             initDbPacket = serializer.toByteBuffer();
-        }
+        } // CHECKSTYLE IGNORE THIS LINE
 
         // Ping packet
-        {
+        { // CHECKSTYLE IGNORE THIS LINE
             MysqlSerializer serializer = MysqlSerializer.newInstance();
             serializer.writeInt1(14);
             pingPacket = serializer.toByteBuffer();
-        }
+        } // CHECKSTYLE IGNORE THIS LINE
 
         // Quit packet
-        {
+        { // CHECKSTYLE IGNORE THIS LINE
             MysqlSerializer serializer = MysqlSerializer.newInstance();
             serializer.writeInt1(1);
             quitPacket = serializer.toByteBuffer();
-        }
+        } // CHECKSTYLE IGNORE THIS LINE
 
         // Query packet
-        {
+        { // CHECKSTYLE IGNORE THIS LINE
             MysqlSerializer serializer = MysqlSerializer.newInstance();
             serializer.writeInt1(3);
             serializer.writeEofString("select * from a");
             queryPacket = serializer.toByteBuffer();
-        }
+        } // CHECKSTYLE IGNORE THIS LINE
 
         // Field list packet
-        {
+        { // CHECKSTYLE IGNORE THIS LINE
             MysqlSerializer serializer = MysqlSerializer.newInstance();
             serializer.writeInt1(4);
             serializer.writeNulTerminateString("testTbl");
             serializer.writeEofString("");
             fieldListPacket = serializer.toByteBuffer();
-        }
+        } // CHECKSTYLE IGNORE THIS LINE
         statistics = statistics.toBuilder().setCpuMs(0L).setScanRows(0).setScanBytes(0).build();
 
         MetricRepo.init();
@@ -159,22 +159,27 @@ public class ConnectProcessorTest {
             public void setKilled() {
                 myContext.setKilled();
             }
+
             @Override
             public MysqlSerializer getSerializer() {
                 return myContext.getSerializer();
             }
+
             @Override
             public QueryState getState() {
                 return myContext.getState();
             }
+
             @Override
             public void setStartTime() {
                 myContext.setStartTime();
             }
+
             @Override
             public String getDatabase() {
                 return myContext.getDatabase();
             }
+
             @Override
             public void setCommand(MysqlCommand command) {
                 if (firstTimeToSetCommand) {

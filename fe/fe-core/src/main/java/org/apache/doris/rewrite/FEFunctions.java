@@ -44,7 +44,8 @@ import java.math.BigInteger;
 /**
  * compute functions in FE.
  *
- * when you add a new function, please ensure the name, argTypes , returnType and compute logic are consistent with BE's function
+ * when you add a new function, please ensure the name, argTypes,
+ * returnType and compute logic are consistent with BE's function
  */
 public class FEFunctions {
     private static final Logger LOG = LogManager.getLogger(FEFunctions.class);
@@ -71,7 +72,8 @@ public class FEFunctions {
         // DATEDIFF function only uses the date part for calculations and ignores the time part
         firstDate.castToDate();
         secondDate.castToDate();
-        long datediff = (firstDate.unixTimestamp(TimeUtils.getTimeZone()) - secondDate.unixTimestamp(TimeUtils.getTimeZone())) / 1000 / 60 / 60 / 24;
+        long datediff = (firstDate.unixTimestamp(TimeUtils.getTimeZone())
+                - secondDate.unixTimestamp(TimeUtils.getTimeZone())) / 1000 / 60 / 60 / 24;
         return new IntLiteral(datediff, Type.INT);
     }
 
@@ -338,7 +340,7 @@ public class FEFunctions {
 
     @FEFunction(name = "floor", argTypes = { "DOUBLE"}, returnType = "BIGINT")
     public static IntLiteral floor(LiteralExpr expr) throws AnalysisException {
-        long result = (long)Math.floor(expr.getDoubleValue());
+        long result = (long) Math.floor(expr.getDoubleValue());
         return new IntLiteral(result, Type.BIGINT);
     }
 
@@ -542,6 +544,20 @@ public class FEFunctions {
         @FEFunction(name = "ifnull", argTypes = { "DATETIME", "DATE" }, returnType = "DATETIME")
     })
     public static LiteralExpr ifNull(LiteralExpr first, LiteralExpr second) throws AnalysisException {
+        return first instanceof NullLiteral ? second : first;
+    }
+
+    // maybe use alias info to reduce redundant code
+    @FEFunctionList({
+        @FEFunction(name = "nvl", argTypes = {"VARCHAR", "VARCHAR"}, returnType = "VARCHAR"),
+        @FEFunction(name = "nvl", argTypes = {"TINYINT", "TINYINT"}, returnType = "TINYINT"),
+        @FEFunction(name = "nvl", argTypes = {"INT", "INT"}, returnType = "INT"),
+        @FEFunction(name = "nvl", argTypes = {"BIGINT", "BIGINT"}, returnType = "BIGINT"),
+        @FEFunction(name = "nvl", argTypes = {"DATETIME", "DATETIME"}, returnType = "DATETIME"),
+        @FEFunction(name = "nvl", argTypes = { "DATE", "DATETIME" }, returnType = "DATETIME"),
+        @FEFunction(name = "nvl", argTypes = { "DATETIME", "DATE" }, returnType = "DATETIME")
+    })
+    public static LiteralExpr nvl(LiteralExpr first, LiteralExpr second) throws AnalysisException {
         return first instanceof NullLiteral ? second : first;
     }
 

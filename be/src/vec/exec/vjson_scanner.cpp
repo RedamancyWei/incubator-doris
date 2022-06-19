@@ -21,18 +21,10 @@
 
 #include <algorithm>
 
-#include "env/env.h"
-#include "exec/broker_reader.h"
-#include "exec/buffered_reader.h"
-#include "exec/local_file_reader.h"
-#include "exec/plain_text_line_reader.h"
-#include "exec/s3_reader.h"
-#include "exprs/expr.h"
+#include "exec/line_reader.h"
 #include "exprs/json_functions.h"
-#include "gutil/strings/split.h"
-#include "runtime/exec_env.h"
 #include "runtime/runtime_state.h"
-#include "util/time.h"
+#include "vec/data_types/data_type_string.h"
 
 namespace doris::vectorized {
 
@@ -44,18 +36,12 @@ VJsonScanner::VJsonScanner(RuntimeState* state, RuntimeProfile* profile,
         : JsonScanner(state, profile, params, ranges, broker_addresses, pre_filter_texprs, counter),
           _cur_vjson_reader(nullptr) {}
 
-VJsonScanner::~VJsonScanner() {}
-
 Status VJsonScanner::get_next(vectorized::Block* output_block, bool* eof) {
     SCOPED_TIMER(_read_timer);
+    RETURN_IF_ERROR(_init_src_block());
     const int batch_size = _state->batch_size();
-    size_t slot_num = _src_slot_descs.size();
-    std::vector<vectorized::MutableColumnPtr> columns(slot_num);
-    auto string_type = make_nullable(std::make_shared<DataTypeString>());
-    for (int i = 0; i < slot_num; i++) {
-        columns[i] = string_type->create_column();
-    }
 
+    auto columns = _src_block.mutate_columns();
     // Get one line
     while (columns[0]->size() < batch_size && !_scanner_eof) {
         if (_cur_file_reader == nullptr || _cur_reader_eof) {
@@ -85,10 +71,8 @@ Status VJsonScanner::get_next(vectorized::Block* output_block, bool* eof) {
 
     COUNTER_UPDATE(_rows_read_counter, columns[0]->size());
     SCOPED_TIMER(_materialize_timer);
-    RETURN_IF_ERROR(BaseScanner::fill_dest_block(output_block, columns));
 
-    *eof = _scanner_eof;
-    return Status::OK();
+    return _fill_dest_block(output_block, eof);
 }
 
 Status VJsonScanner::open_next_reader() {
@@ -121,7 +105,7 @@ Status VJsonScanner::open_vjson_reader() {
     } else {
         _cur_vjson_reader.reset(new VJsonReader(_state, _counter, _profile, strip_outer_array,
                                                 num_as_string, fuzzy_parse, &_scanner_eof,
-                                                _cur_file_reader));
+                                                _cur_file_reader.get()));
     }
 
     RETURN_IF_ERROR(_cur_vjson_reader->init(jsonpath, json_root));
@@ -300,6 +284,7 @@ Status VJsonReader::_write_data_to_column(rapidjson::Value::ConstValueIterator v
     const char* str_value = nullptr;
     char tmp_buf[128] = {0};
     int32_t wbytes = 0;
+    std::string json_str;
 
     if (slot_desc->is_nullable()) {
         auto* nullable_column = reinterpret_cast<vectorized::ColumnNullable*>(column_ptr);
@@ -347,7 +332,7 @@ Status VJsonReader::_write_data_to_column(rapidjson::Value::ConstValueIterator v
         break;
     default:
         // for other type like array or object. we convert it to string to save
-        std::string json_str = JsonReader::_print_json_value(*value);
+        json_str = JsonReader::_print_json_value(*value);
         wbytes = json_str.size();
         str_value = json_str.c_str();
         break;

@@ -18,11 +18,10 @@
 package org.apache.doris.nereids.rules;
 
 import org.apache.doris.nereids.rules.analysis.AnalysisUnboundRelation;
-import org.apache.doris.nereids.rules.exploration.JoinAssociativeLeftToRight;
-import org.apache.doris.nereids.rules.exploration.JoinCommutative;
+import org.apache.doris.nereids.rules.exploration.join.JoinCommutative;
+import org.apache.doris.nereids.rules.exploration.join.JoinLeftAssociative;
 import org.apache.doris.nereids.rules.implementation.LogicalJoinToHashJoin;
 import org.apache.doris.nereids.trees.TreeNode;
-import org.apache.doris.nereids.trees.expressions.Expression;
 import org.apache.doris.nereids.trees.plans.Plan;
 
 import com.google.common.collect.ImmutableList;
@@ -39,8 +38,8 @@ public class RuleSet {
             .build();
 
     public static final List<Rule<Plan>> EXPLORATION_RULES = planRuleFactories()
-            .add(new JoinCommutative())
-            .add(new JoinAssociativeLeftToRight())
+            .add(new JoinCommutative(false))
+            .add(new JoinLeftAssociative())
             .build();
 
     public static final List<Rule<Plan>> IMPLEMENTATION_RULES = planRuleFactories()
@@ -63,11 +62,7 @@ public class RuleSet {
         return new RuleFactories();
     }
 
-    private static RuleFactories<Expression> expressionRuleFactories() {
-        return new RuleFactories();
-    }
-
-    private static class RuleFactories<TYPE extends TreeNode> {
+    private static class RuleFactories<TYPE extends TreeNode<TYPE>> {
         final Builder<Rule<TYPE>> rules = ImmutableList.builder();
 
         public RuleFactories<TYPE> add(RuleFactory<TYPE> ruleFactory) {

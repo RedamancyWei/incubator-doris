@@ -17,7 +17,7 @@
 
 package org.apache.doris.catalog;
 
-import org.apache.doris.catalog.Table.TableType;
+import org.apache.doris.catalog.TableIf.TableType;
 import org.apache.doris.cluster.ClusterNamespace;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.Config;
@@ -49,6 +49,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
@@ -70,7 +71,7 @@ import javax.annotation.Nullable;
  * if the table has never been loaded * if the table loading failed on the
  * previous attempt
  */
-public class Database extends MetaObject implements Writable {
+public class Database extends MetaObject implements Writable, DatabaseIf<Table> {
     private static final Logger LOG = LogManager.getLogger(Database.class);
 
     private long id;
@@ -313,7 +314,7 @@ public class Database extends MetaObject implements Writable {
         checkReplicaQuota();
     }
 
-    private boolean isTableExist(String tableName) {
+    public boolean isTableExist(String tableName) {
         if (Catalog.isTableNamesCaseInsensitive()) {
             tableName = lowerCaseToTableName.get(tableName.toLowerCase());
             if (tableName == null) {
@@ -324,7 +325,8 @@ public class Database extends MetaObject implements Writable {
     }
 
     // return pair <success?, table exist?>
-    public Pair<Boolean, Boolean> createTableWithLock(Table table, boolean isReplay, boolean setIfNotExist) throws DdlException {
+    public Pair<Boolean, Boolean> createTableWithLock(
+            Table table, boolean isReplay, boolean setIfNotExist) throws DdlException {
         boolean result = true;
         // if a table is already exists, then edit log won't be executed
         // some caller of this method may need to know this message
@@ -483,7 +485,8 @@ public class Database extends MetaObject implements Writable {
         return Optional.ofNullable(getTableNullable(tableId));
     }
 
-    public <E extends Exception> Table getTableOrException(String tableName, java.util.function.Function<String, E> e) throws E {
+    public <E extends Exception> Table getTableOrException(
+            String tableName, java.util.function.Function<String, E> e) throws E {
         Table table = getTableNullable(tableName);
         if (table == null) {
             throw e.apply(tableName);
@@ -491,7 +494,8 @@ public class Database extends MetaObject implements Writable {
         return table;
     }
 
-    public <E extends Exception> Table getTableOrException(long tableId, java.util.function.Function<Long, E> e) throws E {
+    public <E extends Exception> Table getTableOrException(
+            long tableId, java.util.function.Function<Long, E> e) throws E {
         Table table = getTableNullable(tableId);
         if (table == null) {
             throw e.apply(tableId);
@@ -508,21 +512,23 @@ public class Database extends MetaObject implements Writable {
     }
 
     @SuppressWarnings("unchecked")
-    public <T extends Table> T getTableOrMetaException(String tableName, TableType tableType) throws MetaNotFoundException {
+    public Table getTableOrMetaException(String tableName, TableType tableType) throws MetaNotFoundException {
         Table table = getTableOrMetaException(tableName);
         if (table.getType() != tableType) {
-            throw new MetaNotFoundException("table type is not " + tableType + ", tableName=" + tableName + ", type=" + table.getType());
+            throw new MetaNotFoundException("table type is not "
+                    + tableType + ", tableName=" + tableName + ", type=" + table.getType());
         }
-        return (T) table;
+        return table;
     }
 
     @SuppressWarnings("unchecked")
-    public <T extends Table> T getTableOrMetaException(long tableId, TableType tableType) throws MetaNotFoundException {
+    public Table getTableOrMetaException(long tableId, TableType tableType) throws MetaNotFoundException {
         Table table = getTableOrMetaException(tableId);
         if (table.getType() != tableType) {
-            throw new MetaNotFoundException("table type is not " + tableType + ", tableId=" + tableId + ", type=" + table.getType());
+            throw new MetaNotFoundException("table type is not " + tableType
+                    + ", tableId=" + tableId + ", type=" + table.getType());
         }
-        return (T) table;
+        return table;
     }
 
     public Table getTableOrDdlException(String tableName) throws DdlException {
@@ -542,8 +548,8 @@ public class Database extends MetaObject implements Writable {
     }
 
     public Table getTableOrAnalysisException(String tableName) throws AnalysisException {
-        return getTableOrException(tableName, t -> new AnalysisException(ErrorCode.ERR_UNKNOWN_TABLE.formatErrorMsg(t
-                , fullQualifiedName)));
+        return getTableOrException(tableName,
+                t -> new AnalysisException(ErrorCode.ERR_UNKNOWN_TABLE.formatErrorMsg(t, fullQualifiedName)));
     }
 
     public OlapTable getOlapTableOrAnalysisException(String tableName) throws AnalysisException {
@@ -555,7 +561,8 @@ public class Database extends MetaObject implements Writable {
     }
 
     public Table getTableOrAnalysisException(long tableId) throws AnalysisException {
-        return getTableOrException(tableId, t -> new AnalysisException(ErrorCode.ERR_BAD_TABLE_ERROR.formatErrorMsg(t)));
+        return getTableOrException(tableId,
+                t -> new AnalysisException(ErrorCode.ERR_BAD_TABLE_ERROR.formatErrorMsg(t)));
     }
 
     public int getMaxReplicationNum() {
@@ -570,7 +577,8 @@ public class Database extends MetaObject implements Writable {
                 table.readLock();
                 try {
                     for (Partition partition : olapTable.getAllPartitions()) {
-                        short replicationNum = olapTable.getPartitionInfo().getReplicaAllocation(partition.getId()).getTotalReplicaNum();
+                        short replicationNum = olapTable.getPartitionInfo()
+                                .getReplicaAllocation(partition.getId()).getTotalReplicaNum();
                         if (ret < replicationNum) {
                             ret = replicationNum;
                         }
@@ -679,6 +687,11 @@ public class Database extends MetaObject implements Writable {
         if (Catalog.getCurrentCatalogJournalVersion() >= FeMetaVersion.VERSION_105) {
             dbProperties = DatabaseProperty.read(in);
         }
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, fullQualifiedName, dataQuotaBytes);
     }
 
     @Override
@@ -874,7 +887,8 @@ public class Database extends MetaObject implements Writable {
         if (!isReplay) {
             if (existKey != null) {
                 if (existKey.isIdentical(encryptKey)) {
-                    throw new UserException("encryptKey [" + existKey.getEncryptKeyName().toString() + "] already exists");
+                    throw new UserException("encryptKey ["
+                            + existKey.getEncryptKeyName().toString() + "] already exists");
                 }
             }
         }

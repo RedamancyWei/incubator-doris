@@ -103,7 +103,8 @@ public:
 
     // read a page from file into a page handle
     Status read_page(const ColumnIteratorOptions& iter_opts, const PagePointer& pp,
-                     PageHandle* handle, Slice* page_body, PageFooterPB* footer);
+                     PageHandle* handle, Slice* page_body, PageFooterPB* footer,
+                     BlockCompressionCodec* codec);
 
     bool is_nullable() const { return _meta.is_nullable(); }
 
@@ -130,6 +131,8 @@ public:
     PagePointer get_dict_page_pointer() const { return _meta.dict_page(); }
 
     bool is_empty() const { return _num_rows == 0; }
+
+    CompressionTypePB get_compression() const { return _meta.compression(); }
 
 private:
     ColumnReader(const ColumnReaderOptions& opts, const ColumnMetaPB& meta, uint64_t num_rows,
@@ -175,7 +178,6 @@ private:
             TypeInfoPtr(nullptr, nullptr); // initialized in init(), may changed by subclasses.
     const EncodingInfo* _encoding_info =
             nullptr; // initialized in init(), used for create PageDecoder
-    std::unique_ptr<BlockCompressionCodec> _compress_codec; // initialized in init()
 
     // meta for various column indexes (null if the index is absent)
     const ZoneMapIndexPB* _zone_map_index_meta = nullptr;
@@ -253,6 +255,8 @@ public:
     explicit FileColumnIterator(ColumnReader* reader);
     ~FileColumnIterator() override;
 
+    Status init(const ColumnIteratorOptions& opts) override;
+
     Status seek_to_first() override;
 
     Status seek_to_ordinal(ordinal_t ord) override;
@@ -278,12 +282,15 @@ public:
     bool is_nullable() { return _reader->is_nullable(); }
 
 private:
-    void _seek_to_pos_in_page(ParsedPage* page, ordinal_t offset_in_page);
+    void _seek_to_pos_in_page(ParsedPage* page, ordinal_t offset_in_page) const;
     Status _load_next_page(bool* eos);
     Status _read_data_page(const OrdinalPageIndexIterator& iter);
 
 private:
     ColumnReader* _reader;
+
+    // iterator owned compress codec, should NOT be shared by threads, initialized in init()
+    std::unique_ptr<BlockCompressionCodec> _compress_codec;
 
     // 1. The _page represents current page.
     // 2. We define an operation is one seek and following read,
@@ -328,6 +335,8 @@ public:
 
     Status next_batch(size_t* n, ColumnBlockView* dst, bool* has_null) override;
 
+    Status next_batch(size_t* n, vectorized::MutableColumnPtr& dst, bool* has_null) override;
+
     Status seek_to_first() override {
         RETURN_IF_ERROR(_length_iterator->seek_to_first());
         RETURN_IF_ERROR(_item_iterator->seek_to_first()); // lazy???
@@ -360,7 +369,7 @@ public:
                                            : size_to_read;
                 ColumnBlockView ordinal_view(&ordinal_block);
                 RETURN_IF_ERROR(_length_iterator->next_batch(&this_read, &ordinal_view, &has_null));
-                auto* ordinals = reinterpret_cast<uint32_t*>(_length_batch->data());
+                auto* ordinals = reinterpret_cast<uint64_t*>(_length_batch->data());
                 for (int i = 0; i < this_read; ++i) {
                     item_ordinal += ordinals[i];
                 }

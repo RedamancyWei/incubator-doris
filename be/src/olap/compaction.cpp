@@ -18,7 +18,6 @@
 #include "olap/compaction.h"
 
 #include "gutil/strings/substitute.h"
-#include "olap/rowset/rowset_factory.h"
 #include "util/time.h"
 #include "util/trace.h"
 
@@ -27,11 +26,18 @@ using std::vector;
 namespace doris {
 
 Compaction::Compaction(TabletSharedPtr tablet, const std::string& label)
-        : _mem_tracker(MemTracker::create_tracker(-1, label, nullptr, MemTrackerLevel::INSTANCE)),
-          _tablet(tablet),
+        : _tablet(tablet),
           _input_rowsets_size(0),
           _input_row_num(0),
-          _state(CompactionState::INITED) {}
+          _state(CompactionState::INITED) {
+#ifndef BE_TEST
+    _mem_tracker = MemTracker::create_tracker(-1, label,
+                                              StorageEngine::instance()->compaction_mem_tracker(),
+                                              MemTrackerLevel::INSTANCE);
+#else
+    _mem_tracker = MemTracker::get_process_tracker();
+#endif
+}
 
 Compaction::~Compaction() {}
 
@@ -47,6 +53,57 @@ Status Compaction::execute_compact() {
         gc_output_rowset();
     }
     return st;
+}
+
+Status Compaction::quick_rowsets_compact() {
+    std::unique_lock<std::mutex> lock(_tablet->get_cumulative_compaction_lock(), std::try_to_lock);
+    if (!lock.owns_lock()) {
+        LOG(WARNING) << "The tablet is under cumulative compaction. tablet="
+                     << _tablet->full_name();
+        return Status::OLAPInternalError(OLAP_ERR_CE_TRY_CE_LOCK_ERROR);
+    }
+
+    // Clone task may happen after compaction task is submitted to thread pool, and rowsets picked
+    // for compaction may change. In this case, current compaction task should not be executed.
+    if (_tablet->get_clone_occurred()) {
+        _tablet->set_clone_occurred(false);
+        return Status::OLAPInternalError(OLAP_ERR_CUMULATIVE_CLONE_OCCURRED);
+    }
+
+    _input_rowsets.clear();
+    int version_count = _tablet->version_count();
+    MonotonicStopWatch watch;
+    watch.start();
+    int64_t permits = 0;
+    _tablet->pick_quick_compaction_rowsets(&_input_rowsets, &permits);
+    std::vector<Version> missedVersions;
+    find_longest_consecutive_version(&_input_rowsets, &missedVersions);
+    if (missedVersions.size() != 0) {
+        LOG(WARNING) << "quick_rowsets_compaction, find missed version"
+                     << ",input_size:" << _input_rowsets.size();
+    }
+    int nums = _input_rowsets.size();
+    if (_input_rowsets.size() >= config::quick_compaction_min_rowsets) {
+        Status st = check_version_continuity(_input_rowsets);
+        if (!st.ok()) {
+            LOG(WARNING) << "quick_rowsets_compaction failed, cause version not continuous";
+            return st;
+        }
+        st = do_compaction(permits);
+        if (!st.ok()) {
+            gc_output_rowset();
+            LOG(WARNING) << "quick_rowsets_compaction failed";
+        } else {
+            LOG(INFO) << "quick_compaction succ"
+                      << ", before_versions:" << version_count
+                      << ", after_versions:" << _tablet->version_count()
+                      << ", cost:" << (watch.elapsed_time() / 1000 / 1000) << "ms"
+                      << ", merged: " << nums << ", batch:" << config::quick_compaction_batch_size
+                      << ", segments:" << permits << ", tabletid:" << _tablet->tablet_id();
+            _tablet->set_last_quick_compaction_success_time(UnixMillis());
+        }
+    }
+    return Status::OK();
 }
 
 Status Compaction::do_compaction(int64_t permits) {
@@ -76,7 +133,10 @@ Status Compaction::do_compaction_impl(int64_t permits) {
     _output_version =
             Version(_input_rowsets.front()->start_version(), _input_rowsets.back()->end_version());
 
-    LOG(INFO) << "start " << compaction_name() << ". tablet=" << _tablet->full_name()
+    auto use_vectorized_compaction = config::enable_vectorized_compaction;
+    string merge_type = use_vectorized_compaction ? "v" : "";
+
+    LOG(INFO) << "start " << merge_type << compaction_name() << ". tablet=" << _tablet->full_name()
               << ", output_version=" << _output_version << ", permits: " << permits;
 
     RETURN_NOT_OK(construct_output_rowset_writer());
@@ -87,7 +147,7 @@ Status Compaction::do_compaction_impl(int64_t permits) {
     // The test results show that merger is low-memory-footprint, there is no need to tracker its mem pool
     Merger::Statistics stats;
     Status res;
-    auto use_vectorized_compaction = _should_use_vectorized_compaction();
+
     if (use_vectorized_compaction) {
         res = Merger::vmerge_rowsets(_tablet, compaction_type(), _input_rs_readers,
                                      _output_rs_writer.get(), &stats);
@@ -95,7 +155,7 @@ Status Compaction::do_compaction_impl(int64_t permits) {
         res = Merger::merge_rowsets(_tablet, compaction_type(), _input_rs_readers,
                                     _output_rs_writer.get(), &stats);
     }
-    string merge_type = use_vectorized_compaction ? "v" : "";
+
     if (!res.ok()) {
         LOG(WARNING) << "fail to do " << merge_type << compaction_name() << ". res=" << res
                      << ", tablet=" << _tablet->full_name()
@@ -122,7 +182,7 @@ Status Compaction::do_compaction_impl(int64_t permits) {
     TRACE("check correctness finished");
 
     // 4. modify rowsets in memory
-    modify_rowsets();
+    RETURN_NOT_OK(modify_rowsets());
     TRACE("modify rowsets finished");
 
     // 5. update last success compaction time
@@ -157,25 +217,8 @@ Status Compaction::do_compaction_impl(int64_t permits) {
 }
 
 Status Compaction::construct_output_rowset_writer() {
-    RowsetWriterContext context;
-    context.rowset_id = StorageEngine::instance()->next_rowset_id();
-    context.tablet_uid = _tablet->tablet_uid();
-    context.tablet_id = _tablet->tablet_id();
-    context.partition_id = _tablet->partition_id();
-    context.tablet_schema_hash = _tablet->schema_hash();
-    context.data_dir = _tablet->data_dir();
-    context.rowset_type = StorageEngine::instance()->default_rowset_type();
-    if (_tablet->tablet_meta()->preferred_rowset_type() == BETA_ROWSET) {
-        context.rowset_type = BETA_ROWSET;
-    }
-    context.path_desc = _tablet->tablet_path_desc();
-    context.tablet_schema = &(_tablet->tablet_schema());
-    context.rowset_state = VISIBLE;
-    context.version = _output_version;
-    context.segments_overlap = NONOVERLAPPING;
-    // The test results show that one rs writer is low-memory-footprint, there is no need to tracker its mem pool
-    RETURN_NOT_OK(RowsetFactory::create_rowset_writer(context, &_output_rs_writer));
-    return Status::OK();
+    return _tablet->create_rowset_writer(_output_version, VISIBLE, NONOVERLAPPING,
+                                         &_output_rs_writer);
 }
 
 Status Compaction::construct_input_rowset_readers() {
@@ -187,13 +230,13 @@ Status Compaction::construct_input_rowset_readers() {
     return Status::OK();
 }
 
-void Compaction::modify_rowsets() {
+Status Compaction::modify_rowsets() {
     std::vector<RowsetSharedPtr> output_rowsets;
     output_rowsets.push_back(_output_rowset);
-
     std::lock_guard<std::shared_mutex> wrlock(_tablet->get_header_lock());
-    _tablet->modify_rowsets(output_rowsets, _input_rowsets);
+    RETURN_NOT_OK(_tablet->modify_rowsets(output_rowsets, _input_rowsets, true));
     _tablet->save_meta();
+    return Status::OK();
 }
 
 void Compaction::gc_output_rowset() {
@@ -202,7 +245,7 @@ void Compaction::gc_output_rowset() {
     }
 }
 
-// Find the longest consecutive version path in "rowset", from begining.
+// Find the longest consecutive version path in "rowset", from beginning.
 // Two versions before and after the missing version will be saved in missing_version,
 // if missing_version is not null.
 Status Compaction::find_longest_consecutive_version(std::vector<RowsetSharedPtr>* rowsets,
@@ -290,16 +333,6 @@ int64_t Compaction::_get_input_num_rows_from_seg_grps() {
         }
     }
     return num_rows;
-}
-
-bool Compaction::_should_use_vectorized_compaction() {
-    auto cols = _tablet->tablet_schema().columns();
-    for (auto it = cols.begin(); it != cols.end(); it++) {
-        if ((*it).type() == FieldType::OLAP_FIELD_TYPE_STRING) {
-            return false;
-        }
-    }
-    return config::enable_vectorized_compaction;
 }
 
 int64_t Compaction::get_compaction_permits() {

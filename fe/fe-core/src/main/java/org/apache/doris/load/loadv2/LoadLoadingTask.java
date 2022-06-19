@@ -21,6 +21,7 @@ import org.apache.doris.analysis.BrokerDesc;
 import org.apache.doris.analysis.UserIdentity;
 import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.OlapTable;
+import org.apache.doris.common.Config;
 import org.apache.doris.common.LoadException;
 import org.apache.doris.common.Status;
 import org.apache.doris.common.UserException;
@@ -100,10 +101,11 @@ public class LoadLoadingTask extends LoadTask {
         this.singleTabletLoadPerSink = singleTabletLoadPerSink;
     }
 
-    public void init(TUniqueId loadId, List<List<TBrokerFileStatus>> fileStatusList, int fileNum, UserIdentity userInfo) throws UserException {
+    public void init(TUniqueId loadId, List<List<TBrokerFileStatus>> fileStatusList,
+            int fileNum, UserIdentity userInfo) throws UserException {
         this.loadId = loadId;
-        planner = new LoadingTaskPlanner(callback.getCallbackId(), txnId, db.getId(), table,
-                brokerDesc, fileGroups, strictMode, timezone, this.timeoutS, this.loadParallelism, this.sendBatchParallelism, userInfo);
+        planner = new LoadingTaskPlanner(callback.getCallbackId(), txnId, db.getId(), table, brokerDesc, fileGroups,
+                strictMode, timezone, this.timeoutS, this.loadParallelism, this.sendBatchParallelism, userInfo);
         planner.plan(loadId, fileStatusList, fileNum);
     }
 
@@ -130,6 +132,7 @@ public class LoadLoadingTask extends LoadTask {
                 planner.getFragments(), planner.getScanNodes(), planner.getTimezone(), loadZeroTolerance);
         curCoordinator.setQueryType(TQueryType.LOAD);
         curCoordinator.setExecMemoryLimit(execMemLimit);
+        curCoordinator.setExecVecEngine(Config.enable_vectorized_load);
         /*
          * For broker load job, user only need to set mem limit by 'exec_mem_limit' property.
          * And the variable 'load_mem_limit' does not make any effect.

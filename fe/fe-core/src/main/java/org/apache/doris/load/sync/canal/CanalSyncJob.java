@@ -49,13 +49,13 @@ import java.util.Map;
 public class CanalSyncJob extends SyncJob {
     private static final Logger LOG = LogManager.getLogger(CanalSyncJob.class);
 
-    protected final static String CANAL_SERVER_IP = "canal.server.ip";
-    protected final static String CANAL_SERVER_PORT = "canal.server.port";
-    protected final static String CANAL_DESTINATION = "canal.destination";
-    protected final static String CANAL_USERNAME = "canal.username";
-    protected final static String CANAL_PASSWORD = "canal.password";
-    protected final static String CANAL_BATCH_SIZE = "canal.batchSize";
-    protected final static String CANAL_DEBUG = "canal.debug";
+    protected static final String CANAL_SERVER_IP = "canal.server.ip";
+    protected static final String CANAL_SERVER_PORT = "canal.server.port";
+    protected static final String CANAL_DESTINATION = "canal.destination";
+    protected static final String CANAL_USERNAME = "canal.username";
+    protected static final String CANAL_PASSWORD = "canal.password";
+    protected static final String CANAL_BATCH_SIZE = "canal.batchSize";
+    protected static final String CANAL_DEBUG = "canal.debug";
 
     @SerializedName(value = "remote")
     private final CanalDestination remote;
@@ -273,6 +273,8 @@ public class CanalSyncJob extends SyncJob {
                 case CANCELLED:
                     updateState(JobState.CANCELLED, true);
                     break;
+                default:
+                    throw new UserException("job state is invalid: " + jobState);
             }
         } catch (UserException e) {
             LOG.error(new LogBuilder(LogKey.SYNC_JOB, id)
@@ -311,7 +313,7 @@ public class CanalSyncJob extends SyncJob {
     @Override
     public String toString() {
         return "SyncJob [jobId=" + id
-                + ", jobName=" +jobName
+                + ", jobName=" + jobName
                 + ", dbId=" + dbId
                 + ", state=" + jobState
                 + ", createTimeMs=" + TimeUtils.longToTimeString(createTimeMs)

@@ -30,7 +30,8 @@ import org.apache.hadoop.hive.serde2.objectinspector.primitive.PrimitiveObjectIn
 
 import java.io.IOException;
 
-@Description(name = "bitmap_count", value = "a _FUNC_ b - Returns the number of distinct integers added to the bitmap (e.g., number of bits set)")
+@Description(name = "bitmap_count", value = "a _FUNC_ b - Returns the number of distinct integers"
+        + " added to the bitmap (e.g., number of bits set)")
 public class BitmapCountUDF extends GenericUDF {
 
     private transient BinaryObjectInspector inputOI;
@@ -50,15 +51,15 @@ public class BitmapCountUDF extends GenericUDF {
 
     @Override
     public Object evaluate(DeferredObject[]  args) throws HiveException {
-        if(args[0] == null){
+        if (args[0] == null) {
             return 0;
         }
         byte[] inputBytes = this.inputOI.getPrimitiveJavaObject(args[0].get());
 
-        try{
+        try {
             BitmapValue bitmapValue = BitmapValueUtil.deserializeToBitmap(inputBytes);
             return bitmapValue.cardinality();
-        }catch (IOException ioException){
+        } catch (IOException ioException) {
             ioException.printStackTrace();
             throw new HiveException(ioException);
         }

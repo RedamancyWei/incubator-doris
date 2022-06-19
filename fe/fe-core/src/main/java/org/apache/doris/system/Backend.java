@@ -43,6 +43,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -416,7 +417,8 @@ public class Backend implements Writable {
         ImmutableMap<String, DiskInfo> diskInfos = disksRef;
         boolean exceedLimit = true;
         for (DiskInfo diskInfo : diskInfos.values()) {
-            if (diskInfo.getState() == DiskState.ONLINE && diskInfo.getStorageMedium() == storageMedium && !diskInfo.exceedLimit(true)) {
+            if (diskInfo.getState() == DiskState.ONLINE && diskInfo.getStorageMedium()
+                    == storageMedium && !diskInfo.exceedLimit(true)) {
                 exceedLimit = false;
                 break;
             }
@@ -567,6 +569,11 @@ public class Backend implements Writable {
         backendState = in.readInt();
         decommissionType = in.readInt();
         brpcPort = in.readInt();
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, host, heartbeatPort, bePort, isAlive);
     }
 
     @Override
