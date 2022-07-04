@@ -53,13 +53,7 @@ public class MetaStatisticsTask extends StatisticsTask {
             checkStatisticsDesc(statsDesc);
             StatsCategory category = statsDesc.getCategory();
             StatsGranularity granularity = statsDesc.getGranularity();
-
-            TaskResult result = new TaskResult();
-            result.setDbId(category.getDbId());
-            result.setTableId(category.getTableId());
-            result.setStatsTypeToValue(Maps.newHashMap());
-            result.setGranularity(granularity.getGranularity());
-
+            TaskResult result = createNewTaskResult(category, granularity);
             List<StatsType> statsTypes = statsDesc.getStatsTypes();
 
             for (StatsType statsType : statsTypes) {
@@ -87,13 +81,13 @@ public class MetaStatisticsTask extends StatisticsTask {
 
     private void getColSize(StatsCategory category, StatsType statsType, StatsGranularity granularity,
                             TaskResult result) throws DdlException {
-        Preconditions.checkState(category.getDbId() > 0L);
-        Preconditions.checkState(category.getTableId() > 0L);
         Database db = Catalog.getCurrentCatalog().getDbOrDdlException(category.getDbId());
         OlapTable table = (OlapTable) db.getTableOrDdlException(category.getTableId());
-
         Column column = getNotNullColumn(table, category.getColumnName());
         int colSize = column.getDataType().getSlotSize();
+
+        result.setTableId(granularity.getTableId());
+        result.setColumnName(category.getColumnName());
 
         switch (granularity.getGranularity()) {
             case TABLE:
@@ -112,10 +106,10 @@ public class MetaStatisticsTask extends StatisticsTask {
 
     private void getRowCount(long dbId, long tableId, StatsGranularity granularity,
                              TaskResult result) throws DdlException {
-        Preconditions.checkState(dbId > 0L);
-        Preconditions.checkState(tableId > 0L);
         Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbId);
         OlapTable table = (OlapTable) db.getTableOrDdlException(tableId);
+
+        result.setTableId(granularity.getTableId());
 
         switch (granularity.getGranularity()) {
             case TABLE:
@@ -142,10 +136,10 @@ public class MetaStatisticsTask extends StatisticsTask {
 
     private void getDataSize(long dbId, long tableId, StatsGranularity granularity,
                              TaskResult result) throws DdlException {
-        Preconditions.checkState(dbId > 0L);
-        Preconditions.checkState(tableId > 0L);
         Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbId);
         OlapTable table = (OlapTable) db.getTableOrDdlException(tableId);
+
+        result.setTableId(granularity.getTableId());
 
         switch (granularity.getGranularity()) {
             case TABLE:
@@ -178,8 +172,8 @@ public class MetaStatisticsTask extends StatisticsTask {
         return partition;
     }
 
-    private Tablet getNotNullTablet(StatsGranularity granularity, Partition partition2) throws DdlException {
-        Tablet tablet = partition2.getBaseIndex().getTablet(granularity.getTabletId());
+    private Tablet getNotNullTablet(StatsGranularity granularity, Partition partition) throws DdlException {
+        Tablet tablet = partition.getBaseIndex().getTablet(granularity.getTabletId());
         if (tablet == null) {
             throw new DdlException("Tablet(" + granularity.getTabletId() + ") not found.");
         }
@@ -206,5 +200,17 @@ public class MetaStatisticsTask extends StatisticsTask {
         if (statisticsDesc.getGranularity() == null) {
             throw new DdlException("Granularity is null.");
         }
+
+        Preconditions.checkState(statisticsDesc.getCategory().getDbId() > 0L);
+        Preconditions.checkState(statisticsDesc.getCategory().getTableId() > 0L);
+    }
+
+    private TaskResult createNewTaskResult(StatsCategory category, StatsGranularity granularity) {
+        TaskResult result = new TaskResult();
+        result.setDbId(category.getDbId());
+        result.setCategory(category.getCategory());
+        result.setGranularity(granularity.getGranularity());
+        result.setStatsTypeToValue(Maps.newHashMap());
+        return result;
     }
 }

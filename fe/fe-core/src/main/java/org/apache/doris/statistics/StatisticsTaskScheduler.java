@@ -163,7 +163,8 @@ public class StatisticsTaskScheduler extends MasterDaemon {
                         try {
                             StatisticsTaskResult taskResult = future.get(timeout, TimeUnit.SECONDS);
                             taskResults.add(taskResult);
-                        } catch (TimeoutException | ExecutionException | InterruptedException | CancellationException e) {
+                        } catch (TimeoutException | ExecutionException | InterruptedException
+                                | CancellationException e) {
                             errorMsg = e.getMessage();
                             LOG.info("Failed to get statistics. jobId: {}, taskId: {}, e: {}", jobId, taskId, e);
                         }

@@ -220,7 +220,7 @@ public class StatisticsJobScheduler extends MasterDaemon {
                     strColNames.add(colName);
                     continue;
                 }
-                StatsCategory colCategory = getColumnStatsCategory(job.getDbId(), tableId, colName);
+                StatsCategory colCategory = getColumnStatsCategory(job.getDbId(), tableId, partitionName, colName);
                 StatsGranularity colGranularity = getPartitionGranularity(partitionId);
                 StatisticsDesc colStatsDesc = new StatisticsDesc(colCategory,
                         colGranularity, Arrays.asList(StatsType.MAX_SIZE, StatsType.AVG_SIZE));
@@ -289,7 +289,8 @@ public class StatisticsJobScheduler extends MasterDaemon {
                     // divide subtasks by tablet
                     List<Tablet> tablets = partition.getBaseIndex().getTablets();
                     tablets.forEach(tablet -> {
-                        StatsCategory colCategory = getColumnStatsCategory(job.getDbId(), tableId, partitionName, colName);
+                        StatsCategory colCategory = getColumnStatsCategory(job.getDbId(),
+                                tableId, partitionName, colName);
                         StatsGranularity colGranularity = getTabletGranularity(tablet.getId());
                         StatisticsDesc colStatsDesc = new StatisticsDesc(colCategory,
                                 colGranularity, Arrays.asList(StatsType.MAX_VALUE, StatsType.MIN_VALUE, StatsType.NDV));
@@ -401,6 +402,7 @@ public class StatisticsJobScheduler extends MasterDaemon {
             getColumnSizeSQLTask(job, rowCount, colCategory, colGranularity);
         }
 
+        // column num nulls
         for (String colName : colNames) {
             StatsCategory colCategory = getColumnStatsCategory(job.getDbId(), tableId, colName);
             StatsGranularity colGranularity = getTableGranularity(tableId);

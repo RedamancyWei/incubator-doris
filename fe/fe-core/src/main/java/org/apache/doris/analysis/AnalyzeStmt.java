@@ -83,12 +83,12 @@ public class AnalyzeStmt extends DdlStmt {
     private final Set<Long> tblIds = Sets.newHashSet();
 
     public AnalyzeStmt(TableName dbTableName,
-            PartitionNames partitionNames,
             List<String> columns,
+            PartitionNames partitionNames,
             Map<String, String> properties) {
         this.dbTableName = dbTableName;
-        this.partitionNames = partitionNames;
         this.columnNames = columns;
+        this.partitionNames = partitionNames;
         this.properties = properties == null ? Maps.newHashMap() : properties;
     }
 

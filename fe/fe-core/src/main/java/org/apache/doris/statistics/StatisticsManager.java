@@ -127,6 +127,10 @@ public class StatisticsManager {
         Map<StatsType, Map<TaskResult, List<String>>> tabletStats = Maps.newHashMap();
 
         for (StatisticsTaskResult statsTaskResult : statsTaskResults) {
+            if (statsTaskResult == null) {
+                continue;
+            }
+
             List<TaskResult> taskResults = statsTaskResult.getTaskResults();
 
             for (TaskResult result : taskResults) {
