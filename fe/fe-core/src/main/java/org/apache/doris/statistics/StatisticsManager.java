@@ -39,19 +39,15 @@ import org.apache.doris.statistics.StatsGranularity.Granularity;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-
 import org.apache.commons.lang3.math.NumberUtils;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
 public class StatisticsManager {
-    private static final Logger LOG = LogManager.getLogger(StatisticsManager.class);
 
-    private Statistics statistics;
+    private final Statistics statistics;
 
     public StatisticsManager() {
         statistics = new Statistics();
@@ -70,7 +66,6 @@ public class StatisticsManager {
     public void alterTableStatistics(AlterTableStatsStmt stmt) throws AnalysisException {
         Table table = validateTableName(stmt.getTableName());
         List<String> partitionNames = stmt.getPartitionNames();
-
         Map<StatsType, String> statsTypeToValue = stmt.getStatsTypeToValue();
 
         if (partitionNames == null || partitionNames.isEmpty()) {
@@ -94,7 +89,6 @@ public class StatisticsManager {
         Table table = validateTableName(stmt.getTableName());
         String colName = stmt.getColumnName();
         List<String> partitionNames = stmt.getPartitionNames();
-
         Map<StatsType, String> statsTypeToValue = stmt.getStatsTypeToValue();
 
         if ((partitionNames.isEmpty()) && table.isPartitioned()) {
@@ -127,47 +121,45 @@ public class StatisticsManager {
         Map<StatsType, Map<TaskResult, List<String>>> tabletStats = Maps.newHashMap();
 
         for (StatisticsTaskResult statsTaskResult : statsTaskResults) {
-            if (statsTaskResult == null) {
-                continue;
-            }
+            if (statsTaskResult != null) {
+                List<TaskResult> taskResults = statsTaskResult.getTaskResults();
 
-            List<TaskResult> taskResults = statsTaskResult.getTaskResults();
+                for (TaskResult result : taskResults) {
+                    validateResult(result);
+                    long tblId = result.getTableId();
+                    Map<StatsType, String> statsTypeToValue = result.getStatsTypeToValue();
 
-            for (TaskResult result : taskResults) {
-                validateResult(result);
-                long tblId = result.getTableId();
-                Map<StatsType, String> statsTypeToValue = result.getStatsTypeToValue();
+                    if (result.getGranularity() == Granularity.TABLET) {
+                        statsTypeToValue.forEach((statsType, value) -> {
+                            if (tabletStats.containsKey(statsType)) {
+                                Map<TaskResult, List<String>> resultToValue = tabletStats.get(statsType);
+                                List<String> values = resultToValue.get(result);
+                                values.add(value);
+                            } else {
+                                Map<TaskResult, List<String>> resultToValue = Maps.newHashMap();
+                                List<String> values = Lists.newArrayList();
+                                values.add(value);
+                                resultToValue.put(result, values);
+                                tabletStats.put(statsType, resultToValue);
+                            }
+                        });
+                        continue;
+                    }
 
-                if (result.getGranularity() == Granularity.TABLET) {
-                    statsTypeToValue.forEach((statsType, value) -> {
-                        if (tabletStats.containsKey(statsType)) {
-                            Map<TaskResult, List<String>> resultToValue = tabletStats.get(statsType);
-                            List<String> values = resultToValue.get(result);
-                            values.add(value);
-                        } else {
-                            Map<TaskResult, List<String>> resultToValue = Maps.newHashMap();
-                            List<String> values = Lists.newArrayList();
-                            values.add(value);
-                            resultToValue.put(result, values);
-                            tabletStats.put(statsType, resultToValue);
-                        }
-                    });
-                    continue;
-                }
-
-                switch (result.getCategory()) {
-                    case TABLE:
-                        statistics.updateTableStats(tblId, statsTypeToValue);
-                        break;
-                    case PARTITION:
-                        String partitionName = result.getPartitionName();
-                        statistics.updatePartitionStats(tblId, partitionName, statsTypeToValue);
-                        break;
-                    case COLUMN:
-                        updateColumnStats(result, statsTypeToValue);
-                        break;
-                    default:
-                        throw new AnalysisException("Unknown stats category: " + result.getCategory());
+                    switch (result.getCategory()) {
+                        case TABLE:
+                            statistics.updateTableStats(tblId, statsTypeToValue);
+                            break;
+                        case PARTITION:
+                            String partitionName = result.getPartitionName();
+                            statistics.updatePartitionStats(tblId, partitionName, statsTypeToValue);
+                            break;
+                        case COLUMN:
+                            updateColumnStats(result, statsTypeToValue);
+                            break;
+                        default:
+                            throw new AnalysisException("Unknown stats category: " + result.getCategory());
+                    }
                 }
             }
         }
@@ -242,7 +234,6 @@ public class StatisticsManager {
         String dbName = stmt.getDbName();
         Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(dbName);
         String tableName = stmt.getTableName();
-
         List<List<String>> result = Lists.newArrayList();
 
         if (tableName != null) {
@@ -292,6 +283,7 @@ public class StatisticsManager {
      */
     public List<List<String>> showColumnStatsList(ShowColumnStatsStmt stmt) throws AnalysisException {
         TableName tableName = stmt.getTableName();
+        List<String> partitionNames = stmt.getPartitionNames();
 
         // check meta
         Table table = validateTableName(tableName);
@@ -304,8 +296,6 @@ public class StatisticsManager {
                     ConnectContext.get().getRemoteIP(),
                     tableName.getDb() + ": " + tableName.getTbl());
         }
-
-        List<String> partitionNames = stmt.getPartitionNames();
 
         // partitioned table
         if (table.isPartitioned()) {
@@ -334,7 +324,7 @@ public class StatisticsManager {
         }
         List<String> row = Lists.newArrayList();
         row.add(table.getName());
-        row.addAll(tableStats.getShowInfo(table.isPartitioned()));
+        row.addAll(tableStats.getShowInfo());
         return row;
     }
 

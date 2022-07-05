@@ -68,7 +68,6 @@ public class TableStats {
                         DESIRED_DATA_SIZE_PRED, DATA_SIZE + " should >= -1");
             }
         }
-
     }
 
     public void updatePartitionStats(String partitionName, Map<StatsType, String> statsTypeToValue)
@@ -113,13 +112,10 @@ public class TableStats {
         return columnStats;
     }
 
-    public List<String> getShowInfo(boolean isPartitioned) {
+    public List<String> getShowInfo() {
         List<String> result = Lists.newArrayList();
-        if (isPartitioned) {
-            aggPartitionStats();
-        }
-        result.add(Long.toString(rowCount));
-        result.add(Long.toString(dataSize));
+        result.add(Long.toString(getRowCount()));
+        result.add(Long.toString(getDataSize()));
         return result;
     }
 
