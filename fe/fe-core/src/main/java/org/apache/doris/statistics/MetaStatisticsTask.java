@@ -81,35 +81,15 @@ public class MetaStatisticsTask extends StatisticsTask {
 
     private void getColSize(StatsCategory category, StatsType statsType, StatsGranularity granularity,
                             TaskResult result) throws DdlException {
-        Database db = Catalog.getCurrentCatalog().getDbOrDdlException(category.getDbId());
-        OlapTable table = (OlapTable) db.getTableOrDdlException(category.getTableId());
+        OlapTable table = getNotNullOlapTable(category.getDbId(), category.getTableId());
         Column column = getNotNullColumn(table, category.getColumnName());
         int colSize = column.getDataType().getSlotSize();
-
-        result.setTableId(granularity.getTableId());
-        result.setColumnName(category.getColumnName());
-
-        switch (granularity.getGranularity()) {
-            case TABLE:
-                result.getStatsTypeToValue().put(statsType, String.valueOf(colSize));
-                break;
-            case PARTITION:
-                Partition partition = getNotNullPartition(granularity, table);
-                result.setPartitionName(partition.getName());
-                result.getStatsTypeToValue().put(statsType, String.valueOf(colSize));
-                break;
-            default:
-                // the granularity of max and min size only can be table or partition
-                throw new DdlException("Unsupported granularity(" + granularity + ").");
-        }
+        result.getStatsTypeToValue().put(statsType, String.valueOf(colSize));
     }
 
     private void getRowCount(long dbId, long tableId, StatsGranularity granularity,
                              TaskResult result) throws DdlException {
-        Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbId);
-        OlapTable table = (OlapTable) db.getTableOrDdlException(tableId);
-
-        result.setTableId(granularity.getTableId());
+        OlapTable table = getNotNullOlapTable(dbId, tableId);
 
         switch (granularity.getGranularity()) {
             case TABLE:
@@ -118,13 +98,11 @@ public class MetaStatisticsTask extends StatisticsTask {
                 break;
             case PARTITION:
                 Partition partition = getNotNullPartition(granularity, table);
-                result.setPartitionName(partition.getName());
                 long ptRowCount = partition.getBaseIndex().getRowCount();
                 result.getStatsTypeToValue().put(StatsType.ROW_COUNT, String.valueOf(ptRowCount));
                 break;
             case TABLET:
                 Partition tabletPartition = getNotNullPartition(granularity, table);
-                result.setPartitionName(tabletPartition.getName());
                 Tablet tablet = getNotNullTablet(granularity, tabletPartition);
                 long tabletRowCount = tablet.getRowCount(true);
                 result.getStatsTypeToValue().put(StatsType.ROW_COUNT, String.valueOf(tabletRowCount));
@@ -136,10 +114,7 @@ public class MetaStatisticsTask extends StatisticsTask {
 
     private void getDataSize(long dbId, long tableId, StatsGranularity granularity,
                              TaskResult result) throws DdlException {
-        Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbId);
-        OlapTable table = (OlapTable) db.getTableOrDdlException(tableId);
-
-        result.setTableId(granularity.getTableId());
+        OlapTable table = getNotNullOlapTable(dbId, tableId);
 
         switch (granularity.getGranularity()) {
             case TABLE:
@@ -148,13 +123,11 @@ public class MetaStatisticsTask extends StatisticsTask {
                 break;
             case PARTITION:
                 Partition partition = getNotNullPartition(granularity, table);
-                result.setPartitionName(partition.getName());
                 long partitionSize = partition.getBaseIndex().getDataSize();
                 result.getStatsTypeToValue().put(StatsType.DATA_SIZE, String.valueOf(partitionSize));
                 break;
             case TABLET:
                 Partition tabletPartition = getNotNullPartition(granularity, table);
-                result.setPartitionName(tabletPartition.getName());
                 Tablet tablet = getNotNullTablet(granularity, tabletPartition);
                 long tabletSize = tablet.getDataSize(false);
                 result.getStatsTypeToValue().put(StatsType.DATA_SIZE, String.valueOf(tabletSize));
@@ -162,6 +135,11 @@ public class MetaStatisticsTask extends StatisticsTask {
             default:
                 throw new DdlException("Unsupported granularity(" + granularity + ").");
         }
+    }
+
+    private OlapTable getNotNullOlapTable(long dbId, long tableId) throws DdlException {
+        Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbId);
+        return (OlapTable) db.getTableOrDdlException(tableId);
     }
 
     private Partition getNotNullPartition(StatsGranularity granularity, OlapTable olapTable) throws DdlException {
@@ -208,6 +186,9 @@ public class MetaStatisticsTask extends StatisticsTask {
     private TaskResult createNewTaskResult(StatsCategory category, StatsGranularity granularity) {
         TaskResult result = new TaskResult();
         result.setDbId(category.getDbId());
+        result.setTableId(category.getTableId());
+        result.setPartitionName(category.getPartitionName());
+        result.setColumnName(category.getColumnName());
         result.setCategory(category.getCategory());
         result.setGranularity(granularity.getGranularity());
         result.setStatsTypeToValue(Maps.newHashMap());

@@ -113,8 +113,11 @@ public class TableStats {
         return columnStats;
     }
 
-    public List<String> getShowInfo() {
+    public List<String> getShowInfo(boolean isPartitioned) {
         List<String> result = Lists.newArrayList();
+        if (isPartitioned) {
+            aggPartitionStats();
+        }
         result.add(Long.toString(rowCount));
         result.add(Long.toString(dataSize));
         return result;
@@ -157,5 +160,14 @@ public class TableStats {
 
     public void setDataSize(long dataSize) {
         this.dataSize = dataSize;
+    }
+
+    private void aggPartitionStats() {
+        dataSize = 0;
+        rowCount = 0;
+        for (PartitionStats partitionStats : nameToPartitionStats.values()) {
+            dataSize += partitionStats.getDataSize();
+            rowCount += partitionStats.getRowCount();
+        }
     }
 }

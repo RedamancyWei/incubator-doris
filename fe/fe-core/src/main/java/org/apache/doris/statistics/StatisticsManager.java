@@ -283,7 +283,8 @@ public class StatisticsManager {
     }
 
     /**
-     * Get the column statistics of a table. if specified partition name, get the column statistics of the partition.
+     * Get the column statistics of a table. if specified partition name,
+     * get the column statistics of the partition.
      *
      * @param stmt statement
      * @return column statistics for  a partition or table
@@ -306,16 +307,24 @@ public class StatisticsManager {
 
         List<String> partitionNames = stmt.getPartitionNames();
 
+        // partitioned table
+        if (table.isPartitioned()) {
+            if (partitionNames != null && partitionNames.size() > 0) {
+                List<List<String>> result = Lists.newArrayList();
+                for (String partitionName : partitionNames) {
+                    validatePartitionName(table, partitionName);
+                    result.addAll(showColumnStats(table.getId(), partitionName));
+                }
+                return result;
+            }
+            throw new AnalysisException("Please specify partition to view column statistics of partitioned table");
+        }
+
+        // non-partitioned table
         if (partitionNames == null || partitionNames.isEmpty()) {
             return showColumnStats(table.getId());
-        } else {
-            List<List<String>> result = Lists.newArrayList();
-            for (String partitionName : partitionNames) {
-                validatePartitionName(table, partitionName);
-                result.addAll(showColumnStats(table.getId(), partitionName));
-            }
-            return result;
         }
+        throw new AnalysisException("Please do not specify a partition, this table is not a partitioned table");
     }
 
     private List<String> showTableStats(Table table) throws AnalysisException {
@@ -325,7 +334,7 @@ public class StatisticsManager {
         }
         List<String> row = Lists.newArrayList();
         row.add(table.getName());
-        row.addAll(tableStats.getShowInfo());
+        row.addAll(tableStats.getShowInfo(table.isPartitioned()));
         return row;
     }
 

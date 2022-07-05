@@ -29,6 +29,8 @@ import org.apache.doris.catalog.Type;
 import org.apache.doris.common.Config;
 import org.apache.doris.common.DdlException;
 import org.apache.doris.common.util.MasterDaemon;
+import org.apache.doris.statistics.StatsCategory.Category;
+import org.apache.doris.statistics.StatsGranularity.Granularity;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Queues;
@@ -466,7 +468,7 @@ public class StatisticsJobScheduler extends MasterDaemon {
 
     private StatsCategory getPartitionStatsCategory(long dbId, long tableId, String partitionName) {
         StatsCategory category = new StatsCategory();
-        category.setCategory(StatsCategory.Category.TABLE);
+        category.setCategory(Category.PARTITION);
         category.setDbId(dbId);
         category.setTableId(tableId);
         category.setPartitionName(partitionName);
@@ -478,7 +480,7 @@ public class StatisticsJobScheduler extends MasterDaemon {
         category.setDbId(dbId);
         category.setTableId(tableId);
         category.setColumnName(columnName);
-        category.setCategory(StatsCategory.Category.COLUMN);
+        category.setCategory(Category.COLUMN);
         category.setColumnName(columnName);
         return category;
     }
@@ -489,7 +491,7 @@ public class StatisticsJobScheduler extends MasterDaemon {
         category.setTableId(tableId);
         category.setPartitionName(partitionName);
         category.setColumnName(columnName);
-        category.setCategory(StatsCategory.Category.COLUMN);
+        category.setCategory(Category.COLUMN);
         category.setColumnName(columnName);
         return category;
     }
@@ -497,21 +499,21 @@ public class StatisticsJobScheduler extends MasterDaemon {
     private StatsGranularity getTableGranularity(long tableId) {
         StatsGranularity granularity = new StatsGranularity();
         granularity.setTableId(tableId);
-        granularity.setGranularity(StatsGranularity.Granularity.TABLE);
+        granularity.setGranularity(Granularity.TABLE);
         return granularity;
     }
 
     private StatsGranularity getPartitionGranularity(long partitionId) {
         StatsGranularity granularity = new StatsGranularity();
         granularity.setPartitionId(partitionId);
-        granularity.setGranularity(StatsGranularity.Granularity.PARTITION);
+        granularity.setGranularity(Granularity.PARTITION);
         return granularity;
     }
 
     private StatsGranularity getTabletGranularity(long tabletId) {
         StatsGranularity granularity = new StatsGranularity();
         granularity.setTabletId(tabletId);
-        granularity.setGranularity(StatsGranularity.Granularity.TABLET);
+        granularity.setGranularity(Granularity.TABLET);
         return granularity;
     }
 }
