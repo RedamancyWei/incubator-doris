@@ -59,6 +59,26 @@ public class PartitionStats {
     private long dataSize = -1;
     private final Map<String, ColumnStats> nameToColumnStats = Maps.newConcurrentMap();
 
+    public Map<String, ColumnStats> getNameToColumnStats() {
+        return nameToColumnStats;
+    }
+
+    public long getRowCount() {
+        return rowCount;
+    }
+
+    public void setRowCount(long rowCount) {
+        this.rowCount = rowCount;
+    }
+
+    public long getDataSize() {
+        return dataSize;
+    }
+
+    public void setDataSize(long dataSize) {
+        this.dataSize = dataSize;
+    }
+
     /**
      * Update the partition stats.
      *
@@ -109,21 +129,5 @@ public class PartitionStats {
         result.add(Long.toString(rowCount));
         result.add(Long.toString(dataSize));
         return result;
-    }
-
-    public Map<String, ColumnStats> getNameToColumnStats() {
-        return nameToColumnStats;
-    }
-
-    public long getRowCount() {
-        return rowCount;
-    }
-
-    public long getDataSize() {
-        return dataSize;
-    }
-
-    public void setRowCount(long rowCount) {
-        this.rowCount = rowCount;
     }
 }

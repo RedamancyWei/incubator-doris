@@ -39,8 +39,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.List;
 import java.util.Map;
@@ -62,10 +60,8 @@ import java.util.stream.Collectors;
  *      properties: properties of statistics jobs
  */
 public class AnalyzeStmt extends DdlStmt {
-    // time to wait for collect  statistics
+    /** time to wait for collect  statistics */
     public static final String CBO_STATISTICS_TASK_TIMEOUT_SEC = "cbo_statistics_task_timeout_sec";
-
-    private static final Logger LOG = LogManager.getLogger(AnalyzeStmt.class);
 
     private static final ImmutableSet<String> PROPERTIES_SET = new ImmutableSet.Builder<String>()
             .add(CBO_STATISTICS_TASK_TIMEOUT_SEC)
@@ -146,7 +142,7 @@ public class AnalyzeStmt extends DdlStmt {
             try {
                 OlapTable olapTable = (OlapTable) table;
                 List<String> partitionNames = getPartitionNames();
-                if (partitionNames.isEmpty()) {
+                if (partitionNames.isEmpty() && olapTable.isPartitioned()) {
                     partitionNames.addAll(olapTable.getPartitionNames());
                 }
                 tableIdToPartitionName.put(table.getId(), partitionNames);

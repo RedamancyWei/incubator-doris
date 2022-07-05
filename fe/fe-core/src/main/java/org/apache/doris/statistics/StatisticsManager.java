@@ -297,24 +297,16 @@ public class StatisticsManager {
                     tableName.getDb() + ": " + tableName.getTbl());
         }
 
-        // partitioned table
-        if (table.isPartitioned()) {
-            if (partitionNames != null && partitionNames.size() > 0) {
-                List<List<String>> result = Lists.newArrayList();
-                for (String partitionName : partitionNames) {
-                    validatePartitionName(table, partitionName);
-                    result.addAll(showColumnStats(table.getId(), partitionName));
-                }
-                return result;
-            }
-            throw new AnalysisException("Please specify partition to view column statistics of partitioned table");
-        }
-
-        // non-partitioned table
-        if (partitionNames == null || partitionNames.isEmpty()) {
+        if (partitionNames == null || partitionNames.size() == 0) {
             return showColumnStats(table.getId());
         }
-        throw new AnalysisException("Please do not specify a partition, this table is not a partitioned table");
+
+        List<List<String>> result = Lists.newArrayList();
+        for (String partitionName : partitionNames) {
+            validatePartitionName(table, partitionName);
+            result.addAll(showColumnStats(table.getId(), partitionName));
+        }
+        return result;
     }
 
     private List<String> showTableStats(Table table) throws AnalysisException {
@@ -392,7 +384,7 @@ public class StatisticsManager {
     private void updateTabletMinValue(TaskResult result, List<String> values) throws AnalysisException {
         Column column = getNotNullColumn(result);
         Type type = column.getType();
-        String minValue = getNumericMaxOrMinValue(values, type, true);
+        String minValue = getNumericMaxOrMinValue(values, type, false);
 
         Map<StatsType, String> statsTypeToValue = Maps.newHashMap();
         statsTypeToValue.put(StatsType.MIN_VALUE, minValue);
@@ -412,8 +404,8 @@ public class StatisticsManager {
         updateTabletGranularityStats(result, type, statsTypeToValue);
     }
 
-    private void updateTabletGranularityStats(TaskResult result, Type columnType, Map<StatsType, String> statsTypeToValue)
-            throws AnalysisException {
+    private void updateTabletGranularityStats(TaskResult result, Type columnType,
+            Map<StatsType, String> statsTypeToValue) throws AnalysisException {
         if (result.getCategory() == StatsCategory.Category.TABLE) {
             statistics.updateColumnStats(result.getTableId(),
                     result.getColumnName(), columnType, statsTypeToValue);
@@ -503,38 +495,37 @@ public class StatisticsManager {
      */
     private String getNumericMaxOrMinValue(List<String> values, Type type, boolean maxOrMin) {
         if (type.isFixedPointType()) {
-            long maxValue = 0L;
+            long result = 0L;
             for (String value : values) {
                 if (NumberUtils.isCreatable(value)) {
                     long temp = Long.parseLong(value);
                     if (maxOrMin) {
-                        maxValue = Math.max(maxValue, temp);
+                        result = Math.max(result, temp);
                     } else {
-                        maxValue = Math.min(maxValue, temp);
+                        result = Math.min(result, temp);
                     }
                 }
             }
-            return String.valueOf(maxValue);
+            return String.valueOf(result);
         }
 
         if (type.isFloatingPointType()) {
-            double maxValue = 0.0;
+            double result = 0.0;
             for (String value : values) {
                 if (NumberUtils.isCreatable(value)) {
                     double temp = Double.parseDouble(value);
                     if (maxOrMin) {
-                        maxValue = Math.max(maxValue, temp);
+                        result = Math.max(result, temp);
                     } else {
-                        maxValue = Math.min(maxValue, temp);
+                        result = Math.min(result, temp);
                     }
                 }
             }
-            return String.valueOf(maxValue);
+            return String.valueOf(result);
         }
 
         // is not numeric type
         values.sort(Comparator.naturalOrder());
         return values.size() > 0 ? values.get(values.size() - 1) : null;
     }
-
 }

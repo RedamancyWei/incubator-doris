@@ -17,6 +17,7 @@
 
 package org.apache.doris.statistics;
 
+import org.apache.doris.analysis.LiteralExpr;
 import org.apache.doris.catalog.Type;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.util.Util;
@@ -57,6 +58,43 @@ public class TableStats {
     private long dataSize = -1;
     private final Map<String, PartitionStats> nameToPartitionStats = Maps.newConcurrentMap();
     private final Map<String, ColumnStats> nameToColumnStats = Maps.newConcurrentMap();
+
+    public long getRowCount() {
+        if  (rowCount == -1) {
+            return nameToPartitionStats.values().stream()
+                    .filter(partitionStats -> partitionStats.getRowCount() != -1)
+                    .mapToLong(PartitionStats::getRowCount).sum();
+        }
+        return rowCount;
+    }
+
+    public void setRowCount(long rowCount) {
+        this.rowCount = rowCount;
+    }
+
+    public long getDataSize() {
+        if (dataSize == -1) {
+            return nameToPartitionStats.values().stream()
+                    .filter(partitionStats -> partitionStats.getDataSize() != -1)
+                    .mapToLong(PartitionStats::getDataSize).sum();
+        }
+        return dataSize;
+    }
+
+    public Map<String, PartitionStats> getNameToPartitionStats() {
+        return nameToPartitionStats;
+    }
+
+    public Map<String, ColumnStats> getNameToColumnStats() {
+        if (nameToColumnStats.isEmpty()) {
+            nameToPartitionStats.values().forEach(this::updateTableColStats);
+        }
+        return nameToColumnStats;
+    }
+
+    public void setDataSize(long dataSize) {
+        this.dataSize = dataSize;
+    }
 
     public void updateTableStats(Map<StatsType, String> statsTypeToValue) throws AnalysisException {
         for (Map.Entry<StatsType, String> entry : statsTypeToValue.entrySet()) {
@@ -124,46 +162,84 @@ public class TableStats {
         return partitionStats.getShowInfo();
     }
 
-    public Map<String, PartitionStats> getNameToPartitionStats() {
-        return nameToPartitionStats;
+    private void updateTableColStats(PartitionStats partitionStats) {
+        partitionStats.getNameToColumnStats().forEach((colName, columnStats) -> {
+            if (!nameToColumnStats.containsKey(colName)) {
+                nameToColumnStats.put(colName, columnStats);
+            } else {
+                ColumnStats tblColStats = nameToColumnStats.get(colName);
+                aggPartitionColumnStats(tblColStats, columnStats);
+            }
+        });
     }
 
-    public Map<String, ColumnStats> getNameToColumnStats() {
-        return nameToColumnStats;
-    }
-
-    public long getRowCount() {
-        if  (rowCount == -1) {
-            return nameToPartitionStats.values().stream()
-                    .filter(partitionStats -> partitionStats.getRowCount() != -1)
-                    .mapToLong(PartitionStats::getRowCount).sum();
+    private void aggPartitionColumnStats(ColumnStats leftStats, ColumnStats rightStats) {
+        if (leftStats.getNdv() == -1) {
+            if (rightStats.getNdv() != -1) {
+                leftStats.setNdv(rightStats.getNdv());
+            }
+        } else {
+            if (rightStats.getNdv() != -1) {
+                long ndv = leftStats.getNdv() + rightStats.getNdv();
+                leftStats.setNdv(ndv);
+            }
         }
-        return rowCount;
-    }
 
-    public long getDataSize() {
-        if (dataSize == -1) {
-            return nameToPartitionStats.values().stream()
-                    .filter(partitionStats -> partitionStats.getDataSize() != -1)
-                    .mapToLong(PartitionStats::getDataSize).sum();
+        if (leftStats.getAvgSize() == -1) {
+            if (rightStats.getAvgSize() != -1) {
+                leftStats.setAvgSize(rightStats.getAvgSize());
+            }
+        } else {
+            if (rightStats.getAvgSize() != -1) {
+                float avgSize = (leftStats.getAvgSize() + rightStats.getAvgSize()) / 2;
+                leftStats.setAvgSize(avgSize);
+            }
         }
-        return dataSize;
-    }
 
-    public void setRowCount(long rowCount) {
-        this.rowCount = rowCount;
-    }
+        if (leftStats.getMaxSize() == -1) {
+            if (rightStats.getMaxSize() != -1) {
+                leftStats.setMaxSize(rightStats.getMaxSize());
+            }
+        } else {
+            if (rightStats.getMaxSize() != -1) {
+                long maxSize = Math.max(leftStats.getMaxSize(), rightStats.getMaxSize());
+                leftStats.setMaxSize(maxSize);
+            }
+        }
 
-    public void setDataSize(long dataSize) {
-        this.dataSize = dataSize;
-    }
+        if (leftStats.getNumNulls() == -1) {
+            if (rightStats.getNumNulls() != -1) {
+                leftStats.setNumNulls(rightStats.getNumNulls());
+            }
+        } else {
+            if (rightStats.getNumNulls() != -1) {
+                long numNulls = leftStats.getNumNulls() + rightStats.getNumNulls();
+                leftStats.setNumNulls(numNulls);
+            }
+        }
 
-    private void aggPartitionStats() {
-        dataSize = 0;
-        rowCount = 0;
-        for (PartitionStats partitionStats : nameToPartitionStats.values()) {
-            dataSize += partitionStats.getDataSize();
-            rowCount += partitionStats.getRowCount();
+        if (leftStats.getMinValue() == null) {
+            if (rightStats.getMinValue() != null) {
+                leftStats.setMinValue(rightStats.getMinValue());
+            }
+        } else {
+            if (rightStats.getMinValue() != null) {
+                LiteralExpr minValue = leftStats.getMinValue().compareTo(rightStats.getMinValue()) > 0
+                        ? leftStats.getMinValue() : rightStats.getMinValue();
+                leftStats.setMinValue(minValue);
+            }
+        }
+
+        if (leftStats.getMaxValue() == null) {
+            if (rightStats.getMaxValue() != null) {
+                leftStats.setMaxValue(rightStats.getMaxValue());
+            }
+        } else {
+            if (rightStats.getMaxValue() != null) {
+                LiteralExpr maxValue = leftStats.getMaxValue().compareTo(rightStats.getMaxValue()) > 0
+                        ? leftStats.getMaxValue() : rightStats.getMaxValue();
+                leftStats.setMaxValue(maxValue);
+            }
         }
     }
 }
