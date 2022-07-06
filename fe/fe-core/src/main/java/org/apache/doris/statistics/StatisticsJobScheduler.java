@@ -255,7 +255,7 @@ public class StatisticsJobScheduler extends MasterDaemon {
         for (String colName : strColNames) {
             StatsCategory colCategory = getColumnStatsCategory(job.getDbId(), tableId, colName);
             StatsGranularity colGranularity = getTableGranularity(tableId);
-            getColumnSizeSQLTask(job, rowCount, colCategory, colGranularity);
+            getColumnSizeSqlTask(job, rowCount, colCategory, colGranularity);
         }
 
         // column num nulls
@@ -403,7 +403,7 @@ public class StatisticsJobScheduler extends MasterDaemon {
             for (String colName : strColNames) {
                 StatsCategory colCategory = getColumnStatsCategory(job.getDbId(), tableId, partitionName, colName);
                 StatsGranularity colGranularity = getPartitionGranularity(partitionId);
-                getColumnSizeSQLTask(job, rowCount, colCategory, colGranularity);
+                getColumnSizeSqlTask(job, rowCount, colCategory, colGranularity);
             }
 
             // column null nums
@@ -445,7 +445,7 @@ public class StatisticsJobScheduler extends MasterDaemon {
         }
     }
 
-    private void getColumnSizeSQLTask(StatisticsJob job, long rowCount,
+    private void getColumnSizeSqlTask(StatisticsJob job, long rowCount,
                                       StatsCategory colCategory, StatsGranularity colGranularity) {
         StatisticsDesc colStatsDesc = new StatisticsDesc(colCategory,
                 colGranularity, Arrays.asList(StatsType.MAX_SIZE, StatsType.AVG_SIZE));
