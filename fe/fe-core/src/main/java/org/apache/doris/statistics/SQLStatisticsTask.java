@@ -17,16 +17,19 @@
 
 package org.apache.doris.statistics;
 
-import org.apache.doris.analysis.SelectStmt;
+import org.apache.doris.statistics.StatisticsTaskResult.TaskResult;
+
+import com.google.common.collect.Lists;
 
 import java.util.List;
+import java.util.stream.IntStream;
 
 /*
 A statistics task that collects statistics by executing query.
 The results of the query will be returned as @StatisticsTaskResult.
  */
 public class SQLStatisticsTask extends StatisticsTask {
-    private SelectStmt query;
+    private String sql;
 
     public SQLStatisticsTask(long jobId, List<StatisticsDesc> statsDescs) {
         super(jobId, statsDescs);
@@ -34,26 +37,48 @@ public class SQLStatisticsTask extends StatisticsTask {
 
     @Override
     public StatisticsTaskResult call() throws Exception {
-        // TODO
-        // step1: construct query by statsDescList
-        constructQuery();
-        // step2: execute query
-        // the result should be sequence by @statsTypeList
-        List<String> queryResultList = executeQuery(query);
+        checkStatisticsDesc();
+        List<TaskResult> taskResults = Lists.newArrayList();
+
+        for (StatisticsDesc statsDesc : statsDescs) {
+            // step1: construct query by statsDescList
+            constructQuery(statsDesc);
+            // step2: execute query
+            // the result should be sequence by @statsTypeList
+            TaskResult taskResult = executeQuery(statsDesc);
+            taskResults.add(taskResult);
+            // TaskResult result = createNewTaskResult(category, granularity);
+            // List<StatsType> statsTypes = statsDesc.getStatsTypes();
+        }
+
         // step3: construct StatisticsTaskResult by query result
-        constructTaskResult(queryResultList);
-        return null;
+        // constructTaskResult(queryResultList);
+        return new StatisticsTaskResult(taskResults);
     }
 
-    protected void constructQuery() {
+    protected void constructQuery(StatisticsDesc statsDesc) {
         // TODO
         // step1: construct FROM by @granularityDesc
         // step2: construct SELECT LIST by @statsTypeList
     }
 
-    protected List<String> executeQuery(SelectStmt query) {
-        // TODO (ML)
-        return null;
+    protected TaskResult executeQuery(StatisticsDesc statsDesc) {
+        StatsCategory category = statsDesc.getCategory();
+        StatsGranularity granularity = statsDesc.getGranularity();
+        List<StatsType> statsTypes = statsDesc.getStatsTypes();
+
+        List<String> queryRes = Lists.newArrayList();
+        queryRes.add("1");
+        assert queryRes.size() == statsDesc.getStatsTypes().size();
+        TaskResult result = createNewTaskResult(category, granularity);
+
+        IntStream.range(0, statsTypes.size()).forEach(i -> {
+            StatsType statsType = statsTypes.get(i);
+            String statsValue = queryRes.get(i);
+            result.getStatsTypeToValue().put(statsType, statsValue);
+        });
+
+        return result;
     }
 
     protected StatisticsTaskResult constructTaskResult(List<String> queryResultList) {

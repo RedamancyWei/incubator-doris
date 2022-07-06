@@ -32,11 +32,4 @@ public class SampleSQLStatisticsTask extends SQLStatisticsTask {
     public SampleSQLStatisticsTask(long jobId, List<StatisticsDesc> statsDescs) {
         super(jobId, statsDescs);
     }
-
-    @Override
-    protected void constructQuery() {
-        // TODO
-        super.constructQuery();
-        // step1: construct table sample
-    }
 }

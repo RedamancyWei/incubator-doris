@@ -453,7 +453,7 @@ public class StatisticsJobScheduler extends MasterDaemon {
         if (rowCount < MIN_SAMPLE_ROWS) {
             sqlTask = new SQLStatisticsTask(job.getId(), Collections.singletonList(colStatsDesc));
         } else {
-            sqlTask = new SampleSQLStatisticsTask(job.getId(), Arrays.asList(colStatsDesc, colStatsDesc));
+            sqlTask = new SampleSQLStatisticsTask(job.getId(), Collections.singletonList(colStatsDesc));
         }
         job.getTasks().add(sqlTask);
     }

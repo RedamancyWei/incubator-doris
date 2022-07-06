@@ -27,9 +27,7 @@ import org.apache.doris.catalog.Tablet;
 import org.apache.doris.common.DdlException;
 import org.apache.doris.statistics.StatisticsTaskResult.TaskResult;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 
 import java.util.List;
 
@@ -47,10 +45,10 @@ public class MetaStatisticsTask extends StatisticsTask {
 
     @Override
     public StatisticsTaskResult call() throws Exception {
+        checkStatisticsDesc();
         List<TaskResult> taskResults = Lists.newArrayList();
 
         for (StatisticsDesc statsDesc : statsDescs) {
-            checkStatisticsDesc(statsDesc);
             StatsCategory category = statsDesc.getCategory();
             StatsGranularity granularity = statsDesc.getGranularity();
             TaskResult result = createNewTaskResult(category, granularity);
@@ -164,34 +162,5 @@ public class MetaStatisticsTask extends StatisticsTask {
             throw new DdlException("Column(" + colName + ") not found.");
         }
         return column;
-    }
-
-    private void checkStatisticsDesc(StatisticsDesc statisticsDesc) throws DdlException {
-        if (statisticsDesc == null) {
-            throw new DdlException("StatisticsDesc is null.");
-        }
-
-        if (statisticsDesc.getCategory() == null) {
-            throw new DdlException("Category is null.");
-        }
-
-        if (statisticsDesc.getGranularity() == null) {
-            throw new DdlException("Granularity is null.");
-        }
-
-        Preconditions.checkState(statisticsDesc.getCategory().getDbId() > 0L);
-        Preconditions.checkState(statisticsDesc.getCategory().getTableId() > 0L);
-    }
-
-    private TaskResult createNewTaskResult(StatsCategory category, StatsGranularity granularity) {
-        TaskResult result = new TaskResult();
-        result.setDbId(category.getDbId());
-        result.setTableId(category.getTableId());
-        result.setPartitionName(category.getPartitionName());
-        result.setColumnName(category.getColumnName());
-        result.setCategory(category.getCategory());
-        result.setGranularity(granularity.getGranularity());
-        result.setStatsTypeToValue(Maps.newHashMap());
-        return result;
     }
 }

@@ -19,7 +19,10 @@ package org.apache.doris.statistics;
 
 import org.apache.doris.catalog.Catalog;
 import org.apache.doris.common.DdlException;
+import org.apache.doris.statistics.StatisticsTaskResult.TaskResult;
 
+import com.google.common.base.Preconditions;
+import com.google.common.collect.Maps;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -134,5 +137,36 @@ public abstract class StatisticsTask implements Callable<StatisticsTaskResult> {
 
         LOG.info("Statistics job(id={}) state changed from {} to {}", id, taskState, newState);
         taskState = newState;
+    }
+
+    protected void checkStatisticsDesc() throws DdlException {
+        for (StatisticsDesc statsDesc : statsDescs) {
+            if (statsDesc == null) {
+                throw new DdlException("StatisticsDesc is null.");
+            }
+
+            if (statsDesc.getCategory() == null) {
+                throw new DdlException("Category is null.");
+            }
+
+            if (statsDesc.getGranularity() == null) {
+                throw new DdlException("Granularity is null.");
+            }
+
+            Preconditions.checkState(statsDesc.getCategory().getDbId() > 0L);
+            Preconditions.checkState(statsDesc.getCategory().getTableId() > 0L);
+        }
+    }
+
+    protected TaskResult createNewTaskResult(StatsCategory category, StatsGranularity granularity) {
+        TaskResult result = new TaskResult();
+        result.setDbId(category.getDbId());
+        result.setTableId(category.getTableId());
+        result.setPartitionName(category.getPartitionName());
+        result.setColumnName(category.getColumnName());
+        result.setCategory(category.getCategory());
+        result.setGranularity(granularity.getGranularity());
+        result.setStatsTypeToValue(Maps.newHashMap());
+        return result;
     }
 }
