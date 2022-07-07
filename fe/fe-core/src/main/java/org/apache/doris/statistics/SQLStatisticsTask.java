@@ -21,11 +21,18 @@ import org.apache.doris.catalog.Catalog;
 import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.Table;
 import org.apache.doris.common.DdlException;
+import org.apache.doris.common.InvalidFormatException;
 import org.apache.doris.statistics.StatisticsTaskResult.TaskResult;
+import org.apache.doris.statistics.util.QueryResultSet;
+import org.apache.doris.statistics.util.SqlClient;
+import org.apache.doris.statistics.util.SqlFactory;
 
+import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
+import java.io.IOException;
+import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
@@ -47,96 +54,82 @@ public class SQLStatisticsTask extends StatisticsTask {
         List<TaskResult> taskResults = Lists.newArrayList();
 
         for (StatisticsDesc statsDesc : statsDescs) {
-            // step1: construct query by statsDescList
-            constructQuery(statsDesc);
-            // step2: execute query
-            // the result should be sequence by @statsTypeList
+            query = constructQuery(statsDesc);
             TaskResult taskResult = executeQuery(statsDesc);
             taskResults.add(taskResult);
-            // TaskResult result = createNewTaskResult(category, granularity);
-            // List<StatsType> statsTypes = statsDesc.getStatsTypes();
         }
 
-        // step3: construct StatisticsTaskResult by query result
-        // constructTaskResult(queryResultList);
         return new StatisticsTaskResult(taskResults);
     }
 
-    protected String constructQuery(StatisticsDesc statsDesc) throws DdlException {
+    protected String constructQuery(StatisticsDesc statsDesc) throws DdlException, InvalidFormatException {
         Map<String, String> params = getQueryParams(statsDesc);
         List<StatsType> statsTypes = statsDesc.getStatsTypes();
-        for (StatsType statsType : statsTypes) {
-            switch (statsType) {
-                case ROW_COUNT:
-                    return getRowContQuery(params);
-                case NUM_NULLS:
-                    return getNumNullsQuery(params);
-                case MAX_SIZE:
-                case AVG_SIZE:
-                    return getMaxMinSizeQuery(params);
-                case NDV:
-                case MAX_VALUE:
-                case MIN_VALUE:
-                    return getNdvMaxMinValueQuery(params);
-                case DATA_SIZE:
-                default:
-                    return null;
-            }
+        String partitionName = statsDesc.getCategory().getPartitionName();
+
+        switch (statsTypes.get(0)) {
+            case ROW_COUNT:
+                if (Strings.isNullOrEmpty(partitionName)) {
+                    return SqlFactory.buildRowCountSql(params);
+                }
+                return SqlFactory.buildPartitionRowCountSql(params);
+            case NUM_NULLS:
+                if (Strings.isNullOrEmpty(partitionName)) {
+                    return SqlFactory.buildNumNullsSql(params);
+                }
+                return SqlFactory.buildPartitionNumNullsSql(params);
+            case MAX_SIZE:
+            case AVG_SIZE:
+                if (Strings.isNullOrEmpty(partitionName)) {
+                    return SqlFactory.buildMaxAvgColLensSql(params);
+                }
+                return SqlFactory.buildPartitionMaxAvgColLensSql(params);
+            case NDV:
+            case MAX_VALUE:
+            case MIN_VALUE:
+                if (Strings.isNullOrEmpty(partitionName)) {
+                    return SqlFactory.buildMinMaxNdvValueSql(params);
+                }
+                return SqlFactory.buildPartitionMinMaxNdvValueSql(params);
+            case DATA_SIZE:
+            default:
+                throw new DdlException("Unsupported statistics type(" + statsTypes.get(0) + ").");
         }
-        return null;
-        // TODO
-        // step1: construct FROM by @granularityDesc
-        // step2: construct SELECT LIST by @statsTypeList
     }
 
-    private String getNdvMaxMinValueQuery(Map<String, String> params) {
-        return null;
-    }
-
-    private String buildRowContQuery(Map<String, String> params) {
-        return null;
-    }
-
-    private String getMaxMinSizeQuery(Map<String, String> params) {
-        return null;
-    }
-
-    private String getNumNullsQuery(Map<String, String> params) {
-        return null;
-    }
-
-    private String getRowContQuery(Map<String, String> params) {
-        return null;
-    }
-
-    protected TaskResult executeQuery(StatisticsDesc statsDesc) {
-        StatsCategory category = statsDesc.getCategory();
+    protected TaskResult executeQuery(StatisticsDesc statsDesc)
+            throws DdlException, IOException, NoSuchAlgorithmException {
         StatsGranularity granularity = statsDesc.getGranularity();
         List<StatsType> statsTypes = statsDesc.getStatsTypes();
+        StatsCategory category = statsDesc.getCategory();
 
-        List<String> queryRes = Lists.newArrayList();
-        queryRes.add("1");
-        assert queryRes.size() == statsDesc.getStatsTypes().size();
-        TaskResult result = createNewTaskResult(category, granularity);
-
-        IntStream.range(0, statsTypes.size()).forEach(i -> {
-            StatsType statsType = statsTypes.get(i);
-            String statsValue = queryRes.get(i);
-            result.getStatsTypeToValue().put(statsType, statsValue);
-        });
-
-        return result;
-    }
-
-    protected StatisticsTaskResult constructTaskResult(List<String> queryResultList) {
+        String dbName = Catalog.getCurrentCatalog()
+                .getDbOrDdlException(category.getDbId()).getFullName().split(":")[1];
+        SqlClient sqlClient = new SqlClient(dbName);
         // TODO
-        return null;
+        sqlClient.init();
+        QueryResultSet query = sqlClient.query(this.query);
+        List<List<Object>> rows = query.getRows();
+
+        if (rows.size() == 1) {
+            List<Object> row = rows.get(0);
+            assert row.size() == statsTypes.size();
+            TaskResult result = createNewTaskResult(category, granularity);
+            IntStream.range(0, statsTypes.size()).forEach(i -> {
+                StatsType statsType = statsTypes.get(i);
+                String statsValue = (String) row.get(i);
+                result.getStatsTypeToValue().put(statsType, statsValue);
+            });
+            return result;
+        } else {
+            throw new DdlException("Statistics query result is incorrect, " + rows);
+        }
     }
 
     private Map<String, String> getQueryParams(StatisticsDesc statsDesc) throws DdlException {
         StatsCategory category = statsDesc.getCategory();
         Database db = Catalog.getCurrentCatalog().getDbOrDdlException(category.getDbId());
-        Table table =  db.getTableOrDdlException(category.getTableId());
+        Table table = db.getTableOrDdlException(category.getTableId());
 
         Map<String, String> params = Maps.newHashMap();
         params.put("database", db.getFullName());

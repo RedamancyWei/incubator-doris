@@ -1,0 +1,277 @@
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+package org.apache.doris.statistics.util;
+
+import org.apache.doris.common.InvalidFormatException;
+
+import com.google.common.collect.Sets;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class SqlFactory {
+    /** -------------------------- for statistics begin -------------------------- */
+    public static final String MIN_VALUE_SQL = "SELECT MIN(${column}) AS min_value FROM ${table};";
+    public static final String PARTITION_MIN_VALUE_SQL = "SELECT MIN(${column}) AS min_value"
+            + " FROM ${table} PARTITION (${partition});";
+
+    public static final String MAX_VALUE_SQL = "SELECT MAX(${column}) AS max_value FROM ${table};";
+    public static final String PARTITION_MAX_VALUE_SQL = "SELECT MAX(${column}) AS max_value FROM"
+            + " ${table} PARTITION (${partition});";
+
+    public static final String NDV_VALUE_SQL = "SELECT NDV(${column}) AS ndv_value FROM ${table};";
+    public static final String PARTITION_NDV_VALUE_SQL = "SELECT NDV(${column}) AS ndv_value FROM"
+            + " ${table} PARTITION (${partition});";
+
+    public static final String MIN_MAX_NDV_VALUE_SQL = "SELECT MIN(${column}) AS min_value, MAX(${column})"
+            + " AS max_value, NDV(${column}) AS ndv_value FROM ${table} PARTITION (${partition});";
+    public static final String PARTITION_MIN_MAX_NDV_VALUE_SQL = "SELECT MIN(${column}) AS min_value,"
+            + " MAX(${column}) AS max_value, NDV(${column}) AS ndv_value FROM ${table} PARTITION (${partition});";
+
+    public static final String ROW_COUNT_SQL = "SELECT COUNT(1) AS cnt FROM ${table};";
+    public static final String PARTITION_ROW_COUNT_SQL = "SELECT COUNT(1) AS cnt FROM ${table} PARTITION"
+            + " (${partition});";
+
+    public static final String MAX_COL_LENS_SQL = "SELECT MAX(LENGTH(${column})) AS max_col_lens FROM ${table};";
+    public static final String PARTITION_MAX_COL_LENS_SQL = "SELECT MAX(LENGTH(${column})) AS max_col_lens FROM"
+            + " ${table} PARTITION (${partition});";
+
+    public static final String AVG_COL_LENS_SQL = "SELECT AVG(LENGTH(${column})) AS avg_col_lens FROM ${table};";
+    public static final String PARTITION_AVG_COL_LENS_SQL = "SELECT AVG(LENGTH(${column})) AS avg_col_lens"
+            + " FROM ${table} PARTITION (${partition});";
+
+    public static final String MAX_AVG_COL_LENS_SQL = "SELECT MAX(LENGTH(${column})) AS max_col_lens,"
+            + " AVG(LENGTH(${column})) AS avg_col_lens FROM ${table};";
+    public static final String PARTITION_MAX_AVG_COL_LENS_SQL = "SELECT MAX(LENGTH(${column}))"
+            + " AS max_col_lens, AVG(LENGTH(${column})) AS avg_col_lens FROM ${table} PARTITION (${partition});";
+
+    public static final String NUM_NULLS_SQL = "SELECT COUNT(${column}) AS null_nums FROM ${table}"
+            + " WHERE ${column} IS NULL;";
+    public static final String PARTITION_NUM_NULLS_SQL = "SELECT COUNT(${column}) AS null_nums FROM"
+            + " ${table} PARTITION (${partition}) WHERE ${column} IS NULL;";
+    /** ---------------------------- for statistics end ---------------------------- */
+
+    private static final Logger LOG = LogManager.getLogger(SqlFactory.class);
+
+    private static final Pattern PATTERN = Pattern.compile("\\$\\{\\w+\\}");
+
+    /**
+     * Concatenate SQL statements based on templates and parameters. e.g.:
+     * template and parameters:
+     *  'SELECT ${col} FROM ${table} WHERE id = ${id};',
+     *   parameters: {col=colName, table=tableName, id=1}
+     *   result sql: 'SELECT colName FROM tableName WHERE id = 1;
+     * <p>
+     *
+     * @param template sql template
+     * @param params   k,v parameter
+     * @return SQL statement with parameters concatenated
+     */
+    public static String processTemplate(String template, Map<String, String> params) {
+        Matcher matcher = PATTERN.matcher(template);
+        StringBuffer sb = new StringBuffer();
+
+        while (matcher.find()) {
+            String param = matcher.group();
+            String value = params.get(param.substring(2, param.length() - 1));
+            matcher.appendReplacement(sb, value == null ? "" : value);
+        }
+
+        matcher.appendTail(sb);
+        LOG.debug("Template:{}, params: {}, SQL: {}", template, params, sb.toString());
+
+        return sb.toString();
+    }
+
+    public static String buildMinValueSql(Map<String, String> params) throws InvalidFormatException {
+        Set<String> requiredParams = Sets.newHashSet("table", "column");
+        if (checkParams(requiredParams, params)) {
+            return processTemplate(MIN_VALUE_SQL, params);
+        } else {
+            throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
+        }
+    }
+
+    public static String buildPartitionMinValueSql(Map<String, String> params) throws InvalidFormatException {
+        Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
+        if (checkParams(requiredParams, params)) {
+            return processTemplate(PARTITION_MIN_VALUE_SQL, params);
+        } else {
+            throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
+        }
+    }
+
+    public static String buildMaxValueSql(Map<String, String> params) throws InvalidFormatException {
+        Set<String> requiredParams = Sets.newHashSet("table", "column");
+        if (checkParams(requiredParams, params)) {
+            return processTemplate(MAX_VALUE_SQL, params);
+        } else {
+            throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
+        }
+    }
+
+    public static String buildPartitionMaxValueSql(Map<String, String> params) throws InvalidFormatException {
+        Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
+        if (checkParams(requiredParams, params)) {
+            return processTemplate(PARTITION_MAX_VALUE_SQL, params);
+        } else {
+            throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
+        }
+    }
+
+    public static String buildNdvValueSql(Map<String, String> params) throws InvalidFormatException {
+        Set<String> requiredParams = Sets.newHashSet("table", "column");
+        if (checkParams(requiredParams, params)) {
+            return processTemplate(NDV_VALUE_SQL, params);
+        } else {
+            throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
+        }
+    }
+
+    public static String buildPartitionNdvValueSql(Map<String, String> params) throws InvalidFormatException {
+        Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
+        if (checkParams(requiredParams, params)) {
+            return processTemplate(PARTITION_NDV_VALUE_SQL, params);
+        } else {
+            throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
+        }
+    }
+
+    public static String buildMinMaxNdvValueSql(Map<String, String> params) throws InvalidFormatException {
+        Set<String> requiredParams = Sets.newHashSet("table", "column");
+        if (checkParams(requiredParams, params)) {
+            return processTemplate(MIN_MAX_NDV_VALUE_SQL, params);
+        } else {
+            throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
+        }
+    }
+
+    public static String buildPartitionMinMaxNdvValueSql(Map<String, String> params) throws InvalidFormatException {
+        Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
+        if (checkParams(requiredParams, params)) {
+            return processTemplate(PARTITION_MIN_MAX_NDV_VALUE_SQL, params);
+        } else {
+            throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
+        }
+    }
+
+    public static String buildRowCountSql(Map<String, String> params) throws InvalidFormatException {
+        Set<String> requiredParams = Sets.newHashSet("table");
+        if (checkParams(requiredParams, params)) {
+            return processTemplate(ROW_COUNT_SQL, params);
+        } else {
+            throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
+        }
+    }
+
+    public static String buildPartitionRowCountSql(Map<String, String> params) throws InvalidFormatException {
+        Set<String> requiredParams = Sets.newHashSet("table", "partition");
+        if (!checkParams(requiredParams, params)) {
+            return processTemplate(PARTITION_ROW_COUNT_SQL, params);
+        } else {
+            throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
+        }
+    }
+
+    public static String buildMaxColLensSql(Map<String, String> params) throws InvalidFormatException {
+        Set<String> requiredParams = Sets.newHashSet("table", "column");
+        if (checkParams(requiredParams, params)) {
+            return processTemplate(MAX_COL_LENS_SQL, params);
+        } else {
+            throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
+        }
+    }
+
+    public static String buildPartitionMaxColLensSql(Map<String, String> params) throws InvalidFormatException {
+        Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
+        if (checkParams(requiredParams, params)) {
+            return processTemplate(PARTITION_MAX_COL_LENS_SQL, params);
+        } else {
+            throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
+        }
+    }
+
+    public static String buildAvgColLensSql(Map<String, String> params) throws InvalidFormatException {
+        Set<String> requiredParams = Sets.newHashSet("table", "column");
+        if (checkParams(requiredParams, params)) {
+            return processTemplate(AVG_COL_LENS_SQL, params);
+        } else {
+            throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
+        }
+    }
+
+    public static String buildPartitionAvgColLensSql(Map<String, String> params) throws InvalidFormatException {
+        Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
+        if (checkParams(requiredParams, params)) {
+            return processTemplate(PARTITION_AVG_COL_LENS_SQL, params);
+        } else {
+            throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
+        }
+    }
+
+    public static String buildMaxAvgColLensSql(Map<String, String> params) throws InvalidFormatException {
+        Set<String> requiredParams = Sets.newHashSet("table", "column");
+        if (checkParams(requiredParams, params)) {
+            return processTemplate(MAX_AVG_COL_LENS_SQL, params);
+        } else {
+            throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
+        }
+    }
+
+
+    public static String buildPartitionMaxAvgColLensSql(Map<String, String> params) throws InvalidFormatException {
+        Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
+        if (checkParams(requiredParams, params)) {
+            return processTemplate(PARTITION_MAX_AVG_COL_LENS_SQL, params);
+        } else {
+            throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
+        }
+    }
+
+    public static String buildNumNullsSql(Map<String, String> params) throws InvalidFormatException {
+        Set<String> requiredParams = Sets.newHashSet("table", "column");
+        if (checkParams(requiredParams, params)) {
+            return processTemplate(NUM_NULLS_SQL, params);
+        } else {
+            throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
+        }
+    }
+
+    public static String buildPartitionNumNullsSql(Map<String, String> params) throws InvalidFormatException {
+        Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
+        if (checkParams(requiredParams, params)) {
+            return processTemplate(PARTITION_NUM_NULLS_SQL, params);
+        } else {
+            throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
+        }
+    }
+
+    private static boolean checkParams(Set<String> requiredParams, Map<String, String> params) {
+        if (params != null) {
+            Set<String> paramsSet = params.keySet();
+            return paramsSet.containsAll(requiredParams);
+        } else {
+            return requiredParams == null;
+        }
+    }
+}
