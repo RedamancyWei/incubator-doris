@@ -66,8 +66,9 @@ public class SQLStatisticsTask extends StatisticsTask {
         Map<String, String> params = getQueryParams(statsDesc);
         List<StatsType> statsTypes = statsDesc.getStatsTypes();
         String partitionName = statsDesc.getCategory().getPartitionName();
+        StatsType type = statsTypes.get(0);
 
-        switch (statsTypes.get(0)) {
+        switch (type) {
             case ROW_COUNT:
                 if (Strings.isNullOrEmpty(partitionName)) {
                     return SqlFactory.buildRowCountSql(params);
@@ -93,7 +94,7 @@ public class SQLStatisticsTask extends StatisticsTask {
                 return SqlFactory.buildPartitionMinMaxNdvValueSql(params);
             case DATA_SIZE:
             default:
-                throw new DdlException("Unsupported statistics type(" + statsTypes.get(0) + ").");
+                throw new DdlException("Unsupported statistics type(" + type + ").");
         }
     }
 
@@ -105,10 +106,12 @@ public class SQLStatisticsTask extends StatisticsTask {
 
         String dbName = Catalog.getCurrentCatalog()
                 .getDbOrDdlException(category.getDbId()).getFullName().split(":")[1];
-        SqlClient sqlClient = new SqlClient(dbName);
-        // TODO
-        sqlClient.init();
-        QueryResultSet query = sqlClient.query(this.query);
+        QueryResultSet query;
+        try (SqlClient sqlClient = new SqlClient(dbName)) {
+            // TODO
+            sqlClient.init();
+            query = sqlClient.query(this.query);
+        }
         List<List<Object>> rows = query.getRows();
 
         if (rows.size() == 1) {
