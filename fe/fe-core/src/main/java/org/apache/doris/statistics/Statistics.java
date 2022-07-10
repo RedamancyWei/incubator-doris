@@ -171,7 +171,8 @@ public class Statistics {
         }
 
         if (tableStats.getRowCount() != rowCount) {
-            tableStats.setRowCount(rowCount);
+            // TODO
+            // tableStats.setRowCount(rowCount);
         }
     }
 }

@@ -26,6 +26,7 @@ import org.apache.doris.common.ThreadPoolManager;
 import org.apache.doris.common.util.MasterDaemon;
 import org.apache.doris.statistics.StatisticsJob.JobState;
 import org.apache.doris.statistics.StatisticsTask.TaskState;
+import org.apache.doris.statistics.util.SqlClient;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -48,11 +49,71 @@ Schedule statistics task
  */
 public class StatisticsTaskScheduler extends MasterDaemon {
     private static final Logger LOG = LogManager.getLogger(StatisticsTaskScheduler.class);
+    /**
+     * the maximum number of connections per database.
+     * each database can only be connected to CAPACITY.
+     */
+    private static final int CAPACITY = 10;
+    private final Map<String, ConnectionPool> dbToConnections = Maps.newHashMap();
 
     private final Queue<StatisticsTask> queue = Queues.newLinkedBlockingQueue();
 
+    static class ConnectionPool {
+        private int size = 0;
+        private final String database;
+        private final List<SqlClient> sqlClients = Lists.newArrayList();
+
+        public ConnectionPool(String database) {
+            this.database = database;
+            SqlClient sqlClient = new SqlClient(database);
+            sqlClients.add(sqlClient);
+            size++;
+        }
+
+        public synchronized SqlClient getConnection(long timeoutSec) throws InterruptedException, TimeoutException {
+            int clientNums = sqlClients.size();
+            if (clientNums > 0) {
+                SqlClient sqlClient = sqlClients.get(clientNums - 1);
+                sqlClients.remove(clientNums - 1);
+                return sqlClient;
+            } else {
+                if (size < CAPACITY) {
+                    SqlClient sqlClient = new SqlClient(database);
+                    size++;
+                    return sqlClient;
+                } else {
+                    long currentTime = System.currentTimeMillis();
+                    while (true) {
+                        TimeUnit.SECONDS.sleep(1);
+                        if (System.currentTimeMillis() - currentTime > timeoutSec * 1000) {
+                            throw new TimeoutException("Get client connection timeout.");
+                        } else if (sqlClients.size() > 0) {
+                            return sqlClients.get(sqlClients.size() - 1);
+                        }
+                    }
+                }
+            }
+        }
+
+        public synchronized void close(SqlClient sqlClient) {
+            System.out.println(sqlClients.size());
+            sqlClients.add(sqlClient);
+        }
+    }
+
     public StatisticsTaskScheduler() {
         super("Statistics task scheduler", 0);
+    }
+
+    public synchronized ConnectionPool getConnectionPool(String database) {
+        ConnectionPool connectionPool;
+        if (dbToConnections.containsKey(database)) {
+            connectionPool = dbToConnections.get(database);
+        } else {
+            connectionPool = new ConnectionPool(database);
+            dbToConnections.put(database, connectionPool);
+        }
+        return connectionPool;
     }
 
     @Override
@@ -61,8 +122,8 @@ public class StatisticsTaskScheduler extends MasterDaemon {
         List<StatisticsTask> tasks = peek();
 
         if (!tasks.isEmpty()) {
-            ThreadPoolExecutor executor = ThreadPoolManager.newDaemonCacheThreadPool(tasks.size(),
-                    "statistic-pool", false);
+            ThreadPoolExecutor executor = ThreadPoolManager.newDaemonCacheThreadPool(tasks.size(), "statistic-pool",
+                    false);
             StatisticsJobManager jobManager = Catalog.getCurrentCatalog().getStatisticsJobManager();
             Map<Long, StatisticsJob> statisticsJobs = jobManager.getIdToStatisticsJob();
             Map<Long, List<Map<Long, Future<StatisticsTaskResult>>>> resultMap = Maps.newLinkedHashMap();
@@ -79,8 +140,8 @@ public class StatisticsTaskScheduler extends MasterDaemon {
                     if (updateTaskAndJobState(task, statisticsJob)) {
                         Map<Long, Future<StatisticsTaskResult>> taskInfo = Maps.newHashMap();
                         taskInfo.put(task.getId(), future);
-                        List<Map<Long, Future<StatisticsTaskResult>>> jobInfo = resultMap
-                                .getOrDefault(jobId, Lists.newArrayList());
+                        List<Map<Long, Future<StatisticsTaskResult>>> jobInfo = resultMap.getOrDefault(jobId,
+                                Lists.newArrayList());
                         jobInfo.add(taskInfo);
                         resultMap.put(jobId, jobInfo);
                     }
@@ -114,7 +175,7 @@ public class StatisticsTaskScheduler extends MasterDaemon {
      * Update task and job state
      *
      * @param task statistics task
-     * @param job  statistics job
+     * @param job statistics job
      * @return true if update task and job state successfully.
      */
     private boolean updateTaskAndJobState(StatisticsTask task, StatisticsJob job) {
@@ -163,8 +224,7 @@ public class StatisticsTaskScheduler extends MasterDaemon {
                         try {
                             StatisticsTaskResult taskResult = future.get(timeout, TimeUnit.SECONDS);
                             taskResults.add(taskResult);
-                        } catch (TimeoutException | ExecutionException | InterruptedException
-                                | CancellationException e) {
+                        } catch (TimeoutException | ExecutionException | InterruptedException | CancellationException e) {
                             errorMsg = e.getMessage();
                             LOG.info("Failed to get statistics. jobId: {}, taskId: {}, e: {}", jobId, taskId, e);
                         }

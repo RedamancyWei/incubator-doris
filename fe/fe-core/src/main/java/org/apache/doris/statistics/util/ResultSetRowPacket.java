@@ -58,7 +58,6 @@ public class ResultSetRowPacket extends Packet {
         super.write(buffer);
     }
 
-
     @Override
     public int calcPacketSize() {
         return 0;

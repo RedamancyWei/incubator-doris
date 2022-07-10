@@ -49,8 +49,8 @@ public class MetaStatisticsTask extends StatisticsTask {
         List<TaskResult> taskResults = Lists.newArrayList();
 
         for (StatisticsDesc statsDesc : statsDescs) {
-            StatsCategory category = statsDesc.getCategory();
-            StatsGranularity granularity = statsDesc.getGranularity();
+            StatsCategory category = statsDesc.getStatsCategory();
+            StatsGranularity granularity = statsDesc.getStatsGranularity();
             TaskResult result = createNewTaskResult(category, granularity);
             List<StatsType> statsTypes = statsDesc.getStatsTypes();
 

@@ -59,6 +59,8 @@ public class SqlClient implements AutoCloseable {
 
     private HandshakePacket handshakePacket;
 
+    private Boolean initialized = false;
+
     public SqlClient() {
     }
 
@@ -83,22 +85,6 @@ public class SqlClient implements AutoCloseable {
         this.username = username;
         this.password = password;
         this.database = database;
-    }
-
-    public static int getClientCapabilities() {
-        int flag = 0;
-        flag |= MysqlCapability.Flag.CLIENT_LONG_PASSWORD.getFlagBit();
-        flag |= MysqlCapability.Flag.CLIENT_FOUND_ROWS.getFlagBit();
-        flag |= MysqlCapability.Flag.CLIENT_LONG_FLAG.getFlagBit();
-        flag |= MysqlCapability.Flag.CLIENT_CONNECT_WITH_DB.getFlagBit();
-        flag |= MysqlCapability.Flag.CLIENT_ODBC.getFlagBit();
-        flag |= MysqlCapability.Flag.CLIENT_IGNORE_SPACE.getFlagBit();
-        flag |= MysqlCapability.Flag.CLIENT_PROTOCOL_41.getFlagBit();
-        flag |= MysqlCapability.Flag.CLIENT_INTERACTIVE.getFlagBit();
-        flag |= MysqlCapability.Flag.CLIENT_IGNORE_SIGPIPE.getFlagBit();
-        flag |= MysqlCapability.Flag.CLIENT_TRANSACTIONS.getFlagBit();
-        flag |= MysqlCapability.Flag.CLIENT_SECURE_CONNECTION.getFlagBit();
-        return flag;
     }
 
     public String getHost() {
@@ -141,44 +127,72 @@ public class SqlClient implements AutoCloseable {
         this.database = database;
     }
 
+    public Boolean getInitialized() {
+        return initialized;
+    }
+
+    public void setInitialized(Boolean initialized) {
+        this.initialized = initialized;
+    }
+
+    public static int getClientCapabilities() {
+        int flag = 0;
+        flag |= MysqlCapability.Flag.CLIENT_LONG_PASSWORD.getFlagBit();
+        flag |= MysqlCapability.Flag.CLIENT_FOUND_ROWS.getFlagBit();
+        flag |= MysqlCapability.Flag.CLIENT_LONG_FLAG.getFlagBit();
+        flag |= MysqlCapability.Flag.CLIENT_CONNECT_WITH_DB.getFlagBit();
+        flag |= MysqlCapability.Flag.CLIENT_ODBC.getFlagBit();
+        flag |= MysqlCapability.Flag.CLIENT_IGNORE_SPACE.getFlagBit();
+        flag |= MysqlCapability.Flag.CLIENT_PROTOCOL_41.getFlagBit();
+        flag |= MysqlCapability.Flag.CLIENT_INTERACTIVE.getFlagBit();
+        flag |= MysqlCapability.Flag.CLIENT_IGNORE_SIGPIPE.getFlagBit();
+        flag |= MysqlCapability.Flag.CLIENT_TRANSACTIONS.getFlagBit();
+        flag |= MysqlCapability.Flag.CLIENT_SECURE_CONNECTION.getFlagBit();
+        return flag;
+    }
+
     /**
      * Connection is done by many exchanges:
      * (Create socket)
      * 1. Server sends Initial handshake packet
-     *     - If SSL/TLS connection
-     *         - Client sends SSLRequest packet and switches to SSL mode for sending and receiving the following messages:
+     * - If SSL/TLS connection
+     * - Client sends SSLRequest packet and switches to SSL mode for sending and receiving the following messages:
      * 2. Client sends Handshake response packet
      * 3. Server sends either:
-     *     - An OK packet in case of success OkPacket
-     *     - An error packet in case of error ErrPacket
-     *     - Authentication switch
-     *         - If the client or server doesn't have PLUGIN_AUTH capability:
-     *             - Server sends 0xFE byte
-     *             - Client sends old_password
-     *         - else
-     *             - Server sends Authentication switch request
-     *             - Client may have many exchange with the server according to the Plugin.
+     * - An OK packet in case of success OkPacket
+     * - An error packet in case of error ErrPacket
+     * - Authentication switch
+     * - If the client or server doesn't have PLUGIN_AUTH capability:
+     * - Server sends 0xFE byte
+     * - Client sends old_password
+     * - else
+     * - Server sends Authentication switch request
+     * - Client may have many exchange with the server according to the Plugin.
      * 4. Authentication switch ends with server sending either OkPacket or ErrPacket
      */
     public void init() throws IOException, NoSuchAlgorithmException {
-        InetSocketAddress address = new InetSocketAddress(host, port);
-        socket = new Socket();
-        socket.connect(address);
+        if (!initialized) {
+            InetSocketAddress address = new InetSocketAddress(host, port);
+            socket = new Socket();
+            socket.connect(address);
+            in = socket.getInputStream();
+            out = socket.getOutputStream();
 
-        in = socket.getInputStream();
-        out = socket.getOutputStream();
+            hpBuffer = ByteBuffer.allocate(BUFFER_SIZE);
+            buffer = ByteBuffer.allocate(BUFFER_SIZE);
 
-        hpBuffer = ByteBuffer.allocate(BUFFER_SIZE);
-        buffer = ByteBuffer.allocate(BUFFER_SIZE);
+            // get handshake packet from server
+            getHandshakePacket();
 
-        // get handshake packet from server
-        getHandshakePacket();
+            // send handshake packet
+            sendAuthPacket();
 
-        // send handshake packet
-        sendAuthPacket();
+            // handle response packet
+            handleResponsePacket();
 
-        // handle response packet
-        handleResponsePacket();
+            // Already initialized
+            initialized = true;
+        }
     }
 
     /**
@@ -189,17 +203,37 @@ public class SqlClient implements AutoCloseable {
     @Override
     public void close() throws IOException {
         if (socket != null) {
-            socket.close();
+            if (socket.isInputShutdown()) {
+                socket.shutdownInput();
+            }
+            if (socket.isOutputShutdown()) {
+                socket.shutdownOutput();
+            }
+            if (socket.isClosed()) {
+                socket.close();
+            }
         }
+
         if (in != null) {
             in.close();
+            in = null;
         }
+
         if (out != null) {
             out.close();
+            out = null;
         }
+
+        initialized = false;
     }
 
-    public void execute(String sql) throws IOException {
+    /**
+     * Used to execute statements that do not return.
+     */
+    public void execute(String sql) throws IOException, NoSuchAlgorithmException {
+        // init client
+        init();
+
         // send sql to server
         sendStatement(sql);
 
@@ -209,7 +243,13 @@ public class SqlClient implements AutoCloseable {
         LOG.info("FE queries BE information: {}", sb);
     }
 
-    public QueryResultSet query(String sql) throws IOException {
+    /**
+     * Used to execute statements with returns.
+     */
+    public QueryResultSet query(String sql) throws IOException, NoSuchAlgorithmException {
+        // init client
+        init();
+
         // send sql to server
         sendStatement(sql);
 

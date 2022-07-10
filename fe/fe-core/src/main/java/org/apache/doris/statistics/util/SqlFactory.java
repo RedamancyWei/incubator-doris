@@ -39,35 +39,35 @@ public class SqlFactory {
     public static final String PARTITION_MAX_VALUE_SQL = "SELECT MAX(${column}) AS max_value FROM"
             + " ${table} PARTITION (${partition});";
 
-    public static final String NDV_VALUE_SQL = "SELECT NDV(${column}) AS ndv_value FROM ${table};";
-    public static final String PARTITION_NDV_VALUE_SQL = "SELECT NDV(${column}) AS ndv_value FROM"
+    public static final String NDV_VALUE_SQL = "SELECT NDV(${column}) AS ndv FROM ${table};";
+    public static final String PARTITION_NDV_VALUE_SQL = "SELECT NDV(${column}) AS ndv FROM"
             + " ${table} PARTITION (${partition});";
 
     public static final String MIN_MAX_NDV_VALUE_SQL = "SELECT MIN(${column}) AS min_value, MAX(${column})"
-            + " AS max_value, NDV(${column}) AS ndv_value FROM ${table} PARTITION (${partition});";
+            + " AS max_value, NDV(${column}) AS ndv FROM ${table};";
     public static final String PARTITION_MIN_MAX_NDV_VALUE_SQL = "SELECT MIN(${column}) AS min_value,"
-            + " MAX(${column}) AS max_value, NDV(${column}) AS ndv_value FROM ${table} PARTITION (${partition});";
+            + " MAX(${column}) AS max_value, NDV(${column}) AS ndv FROM ${table} PARTITION (${partition});";
 
-    public static final String ROW_COUNT_SQL = "SELECT COUNT(1) AS cnt FROM ${table};";
-    public static final String PARTITION_ROW_COUNT_SQL = "SELECT COUNT(1) AS cnt FROM ${table} PARTITION"
+    public static final String ROW_COUNT_SQL = "SELECT COUNT(1) AS row_count FROM ${table};";
+    public static final String PARTITION_ROW_COUNT_SQL = "SELECT COUNT(1) AS row_count FROM ${table} PARTITION"
             + " (${partition});";
 
-    public static final String MAX_COL_LENS_SQL = "SELECT MAX(LENGTH(${column})) AS max_col_lens FROM ${table};";
-    public static final String PARTITION_MAX_COL_LENS_SQL = "SELECT MAX(LENGTH(${column})) AS max_col_lens FROM"
+    public static final String MAX_SIZE_SQL = "SELECT MAX(LENGTH(${column})) AS max_size FROM ${table};";
+    public static final String PARTITION_MAX_SIZE_SQL = "SELECT MAX(LENGTH(${column})) AS max_size FROM"
             + " ${table} PARTITION (${partition});";
 
-    public static final String AVG_COL_LENS_SQL = "SELECT AVG(LENGTH(${column})) AS avg_col_lens FROM ${table};";
-    public static final String PARTITION_AVG_COL_LENS_SQL = "SELECT AVG(LENGTH(${column})) AS avg_col_lens"
+    public static final String AVG_SIZE_SQL = "SELECT AVG(LENGTH(${column})) AS avg_size FROM ${table};";
+    public static final String PARTITION_AVG_SIZE_SQL = "SELECT AVG(LENGTH(${column})) AS avg_size"
             + " FROM ${table} PARTITION (${partition});";
 
-    public static final String MAX_AVG_COL_LENS_SQL = "SELECT MAX(LENGTH(${column})) AS max_col_lens,"
-            + " AVG(LENGTH(${column})) AS avg_col_lens FROM ${table};";
-    public static final String PARTITION_MAX_AVG_COL_LENS_SQL = "SELECT MAX(LENGTH(${column}))"
-            + " AS max_col_lens, AVG(LENGTH(${column})) AS avg_col_lens FROM ${table} PARTITION (${partition});";
+    public static final String MAX_AVG_SIZE_SQL = "SELECT MAX(LENGTH(${column})) AS max_size,"
+            + " AVG(LENGTH(${column})) AS avg_size FROM ${table};";
+    public static final String PARTITION_MAX_AVG_SIZE_SQL = "SELECT MAX(LENGTH(${column}))"
+            + " AS max_size, AVG(LENGTH(${column})) AS avg_size FROM ${table} PARTITION (${partition});";
 
-    public static final String NUM_NULLS_SQL = "SELECT COUNT(${column}) AS null_nums FROM ${table}"
+    public static final String NUM_NULLS_SQL = "SELECT COUNT(1) AS num_nulls FROM ${table}"
             + " WHERE ${column} IS NULL;";
-    public static final String PARTITION_NUM_NULLS_SQL = "SELECT COUNT(${column}) AS null_nums FROM"
+    public static final String PARTITION_NUM_NULLS_SQL = "SELECT COUNT(1) AS num_nulls FROM"
             + " ${table} PARTITION (${partition}) WHERE ${column} IS NULL;";
     /** ---------------------------- for statistics end ---------------------------- */
 
@@ -193,56 +193,56 @@ public class SqlFactory {
         }
     }
 
-    public static String buildMaxColLensSql(Map<String, String> params) throws InvalidFormatException {
+    public static String buildMaxSizeSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table", "column");
         if (checkParams(requiredParams, params)) {
-            return processTemplate(MAX_COL_LENS_SQL, params);
+            return processTemplate(MAX_SIZE_SQL, params);
         } else {
             throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
         }
     }
 
-    public static String buildPartitionMaxColLensSql(Map<String, String> params) throws InvalidFormatException {
+    public static String buildPartitionMaxSizeSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
         if (checkParams(requiredParams, params)) {
-            return processTemplate(PARTITION_MAX_COL_LENS_SQL, params);
+            return processTemplate(PARTITION_MAX_SIZE_SQL, params);
         } else {
             throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
         }
     }
 
-    public static String buildAvgColLensSql(Map<String, String> params) throws InvalidFormatException {
+    public static String buildAvgSizeSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table", "column");
         if (checkParams(requiredParams, params)) {
-            return processTemplate(AVG_COL_LENS_SQL, params);
+            return processTemplate(AVG_SIZE_SQL, params);
         } else {
             throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
         }
     }
 
-    public static String buildPartitionAvgColLensSql(Map<String, String> params) throws InvalidFormatException {
+    public static String buildPartitionAvgSizeSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
         if (checkParams(requiredParams, params)) {
-            return processTemplate(PARTITION_AVG_COL_LENS_SQL, params);
+            return processTemplate(PARTITION_AVG_SIZE_SQL, params);
         } else {
             throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
         }
     }
 
-    public static String buildMaxAvgColLensSql(Map<String, String> params) throws InvalidFormatException {
+    public static String buildMaxAvgSizeSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table", "column");
         if (checkParams(requiredParams, params)) {
-            return processTemplate(MAX_AVG_COL_LENS_SQL, params);
+            return processTemplate(MAX_AVG_SIZE_SQL, params);
         } else {
             throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
         }
     }
 
 
-    public static String buildPartitionMaxAvgColLensSql(Map<String, String> params) throws InvalidFormatException {
+    public static String buildPartitionMaxAvgSizeSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
         if (checkParams(requiredParams, params)) {
-            return processTemplate(PARTITION_MAX_AVG_COL_LENS_SQL, params);
+            return processTemplate(PARTITION_MAX_AVG_SIZE_SQL, params);
         } else {
             throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
         }

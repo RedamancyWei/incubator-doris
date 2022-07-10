@@ -145,16 +145,16 @@ public abstract class StatisticsTask implements Callable<StatisticsTaskResult> {
                 throw new DdlException("StatisticsDesc is null.");
             }
 
-            if (statsDesc.getCategory() == null) {
+            if (statsDesc.getStatsCategory() == null) {
                 throw new DdlException("Category is null.");
             }
 
-            if (statsDesc.getGranularity() == null) {
+            if (statsDesc.getStatsGranularity() == null) {
                 throw new DdlException("Granularity is null.");
             }
 
-            Preconditions.checkState(statsDesc.getCategory().getDbId() > 0L);
-            Preconditions.checkState(statsDesc.getCategory().getTableId() > 0L);
+            Preconditions.checkState(statsDesc.getStatsCategory().getDbId() > 0L);
+            Preconditions.checkState(statsDesc.getStatsCategory().getTableId() > 0L);
         }
     }
 

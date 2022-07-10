@@ -20,34 +20,34 @@ package org.apache.doris.statistics;
 import java.util.List;
 
 public class StatisticsDesc {
-    private StatsCategory category;
+    private StatsCategory statsCategory;
 
-    private StatsGranularity granularity;
+    private StatsGranularity statsGranularity;
 
     private List<StatsType> statsTypes;
 
-    public StatisticsDesc(StatsCategory category,
-                          StatsGranularity granularity,
+    public StatisticsDesc(StatsCategory statsCategory,
+                          StatsGranularity statsGranularity,
                           List<StatsType> statsTypes) {
-        this.category = category;
-        this.granularity = granularity;
+        this.statsCategory = statsCategory;
+        this.statsGranularity = statsGranularity;
         this.statsTypes = statsTypes;
     }
 
-    public StatsCategory getCategory() {
-        return category;
+    public StatsCategory getStatsCategory() {
+        return statsCategory;
     }
 
-    public void setCategory(StatsCategory category) {
-        this.category = category;
+    public void setStatsCategory(StatsCategory statsCategory) {
+        this.statsCategory = statsCategory;
     }
 
-    public StatsGranularity getGranularity() {
-        return granularity;
+    public StatsGranularity getStatsGranularity() {
+        return statsGranularity;
     }
 
-    public void setGranularity(StatsGranularity granularity) {
-        this.granularity = granularity;
+    public void setStatsGranularity(StatsGranularity statsGranularity) {
+        this.statsGranularity = statsGranularity;
     }
 
     public List<StatsType> getStatsTypes() {
