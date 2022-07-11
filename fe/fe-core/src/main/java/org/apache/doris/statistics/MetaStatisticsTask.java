@@ -57,7 +57,7 @@ public class MetaStatisticsTask extends StatisticsTask {
                 switch (statsType) {
                     case MAX_SIZE:
                     case AVG_SIZE:
-                        getColSize(category, statsType, granularity, result);
+                        getColSize(category, statsType, result);
                         break;
                     case ROW_COUNT:
                         getRowCount(category.getDbId(), category.getTableId(), granularity, result);
@@ -76,7 +76,7 @@ public class MetaStatisticsTask extends StatisticsTask {
         return new StatisticsTaskResult(taskResults);
     }
 
-    private void getColSize(StatsCategory category, StatsType statsType, StatsGranularity granularity,
+    private void getColSize(StatsCategory category, StatsType statsType,
                             TaskResult result) throws DdlException {
         OlapTable table = getNotNullOlapTable(category.getDbId(), category.getTableId());
         Column column = getNotNullColumn(table, category.getColumnName());

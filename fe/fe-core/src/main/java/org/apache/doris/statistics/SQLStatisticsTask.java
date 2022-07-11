@@ -39,9 +39,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
 
-/*
-A statistics task that collects statistics by executing query.
-The results of the query will be returned as @StatisticsTaskResult.
+/**
+ * A statistics task that collects statistics by executing query.
+ * The results of the query will be returned as @StatisticsTaskResult.
  */
 public class SQLStatisticsTask extends StatisticsTask {
     private String statement;

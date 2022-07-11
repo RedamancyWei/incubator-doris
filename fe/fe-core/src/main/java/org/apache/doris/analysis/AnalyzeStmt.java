@@ -61,7 +61,7 @@ import java.util.stream.Collectors;
  *      properties: properties of statistics jobs
  */
 public class AnalyzeStmt extends DdlStmt {
-    /** time to wait for collect  statistics */
+    // time to wait for collect  statistics
     public static final String CBO_STATISTICS_TASK_TIMEOUT_SEC = "cbo_statistics_task_timeout_sec";
 
     private static final ImmutableSet<String> PROPERTIES_SET = new ImmutableSet.Builder<String>()
@@ -192,9 +192,11 @@ public class AnalyzeStmt extends DdlStmt {
         // step1: analyze db, table and column
         if (dbTableName != null) {
             dbTableName.analyze(analyzer);
+
             // disallow external catalog
             Util.prohibitExternalCatalog(dbTableName.getCtl(),
                     this.getClass().getSimpleName());
+
             String dbName = dbTableName.getDb();
             String tblName = dbTableName.getTbl();
             checkAnalyzePriv(dbName, tblName);
