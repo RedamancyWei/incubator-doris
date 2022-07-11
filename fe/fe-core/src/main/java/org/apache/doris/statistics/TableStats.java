@@ -87,7 +87,7 @@ public class TableStats {
 
     public Map<String, ColumnStats> getNameToColumnStats() {
         if (nameToColumnStats.isEmpty()) {
-            nameToPartitionStats.values().forEach(this::updateTableColStats);
+            return getAggPartitionColStats();
         }
         return nameToColumnStats;
     }
@@ -162,15 +162,20 @@ public class TableStats {
         return partitionStats.getShowInfo();
     }
 
-    private void updateTableColStats(PartitionStats partitionStats) {
-        partitionStats.getNameToColumnStats().forEach((colName, columnStats) -> {
-            if (!nameToColumnStats.containsKey(colName)) {
-                nameToColumnStats.put(colName, columnStats);
-            } else {
-                ColumnStats tblColStats = nameToColumnStats.get(colName);
-                aggPartitionColumnStats(tblColStats, columnStats);
-            }
-        });
+    private Map<String, ColumnStats> getAggPartitionColStats() {
+        Map<String, ColumnStats> aggColumnStats = Maps.newConcurrentMap();
+        for (PartitionStats partitionStats : nameToPartitionStats.values()) {
+            partitionStats.getNameToColumnStats().forEach((colName, columnStats) -> {
+                if (!aggColumnStats.containsKey(colName)) {
+                    aggColumnStats.put(colName, columnStats);
+                } else {
+                    ColumnStats tblColStats = aggColumnStats.get(colName);
+                    aggPartitionColumnStats(tblColStats, columnStats);
+                }
+            });
+        }
+
+        return aggColumnStats;
     }
 
     private void aggPartitionColumnStats(ColumnStats leftStats, ColumnStats rightStats) {

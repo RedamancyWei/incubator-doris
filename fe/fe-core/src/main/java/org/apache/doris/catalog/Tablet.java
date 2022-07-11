@@ -395,18 +395,6 @@ public class Tablet extends MetaObject implements Writable {
     }
 
     /**
-     * Get the tablet row count.
-     *
-     * @param singleReplica whether to return the row count of all replicas
-     * @return the row count of tablet
-     */
-    public long getRowCount(boolean singleReplica) {
-        LongStream s = replicas.stream().filter(r -> r.getState() == Replica.ReplicaState.NORMAL)
-                .mapToLong(Replica::getRowCount);
-        return singleReplica ? Double.valueOf(s.average().orElse(0)).longValue() : s.sum();
-    }
-
-    /**
      * A replica is healthy only if
      * 1. the backend is available
      * 2. replica version is caught up, and last failed version is -1

@@ -39,6 +39,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import org.apache.commons.lang.StringUtils;
 
 import java.util.List;
 import java.util.Map;
@@ -103,7 +104,7 @@ public class AnalyzeStmt extends DdlStmt {
     public Database getDb() throws AnalysisException {
         Preconditions.checkArgument(isAnalyzed(),
                 "The db must be obtained after the parsing is complete");
-        return analyzer.getCatalog().getDbOrAnalysisException(dbId);
+        return analyzer.getCatalog().getInternalDataSource().getDbOrAnalysisException(dbId);
     }
 
     public List<Table> getTables() throws AnalysisException {
@@ -192,12 +193,14 @@ public class AnalyzeStmt extends DdlStmt {
         if (dbTableName != null) {
             dbTableName.analyze(analyzer);
             // disallow external catalog
-            Util.prohibitExternalCatalog(dbTableName.getCtl(), this.getClass().getSimpleName());
+            Util.prohibitExternalCatalog(dbTableName.getCtl(),
+                    this.getClass().getSimpleName());
             String dbName = dbTableName.getDb();
             String tblName = dbTableName.getTbl();
             checkAnalyzePriv(dbName, tblName);
 
-            Database db = analyzer.getCatalog().getInternalDataSource().getDbOrAnalysisException(dbName);
+            Database db = analyzer.getCatalog().getInternalDataSource()
+                    .getDbOrAnalysisException(dbName);
             Table table = db.getTableOrAnalysisException(tblName);
 
             if (columnNames != null && !columnNames.isEmpty()) {
@@ -224,7 +227,8 @@ public class AnalyzeStmt extends DdlStmt {
             if (Strings.isNullOrEmpty(dbName)) {
                 ErrorReport.reportAnalysisException(ErrorCode.ERR_NO_DB_ERROR);
             }
-            Database db = analyzer.getCatalog().getInternalDataSource().getDbOrAnalysisException(dbName);
+            Database db = analyzer.getCatalog().getInternalDataSource()
+                    .getDbOrAnalysisException(dbName);
 
             db.readLock();
             try {
@@ -290,6 +294,12 @@ public class AnalyzeStmt extends DdlStmt {
         if (dbTableName != null) {
             sb.append(" ");
             sb.append(dbTableName.toSql());
+        }
+
+        if  (columnNames != null) {
+            sb.append("(");
+            sb.append(StringUtils.join(columnNames, ","));
+            sb.append(")");
         }
 
         if (partitionNames != null) {

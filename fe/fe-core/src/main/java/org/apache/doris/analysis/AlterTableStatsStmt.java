@@ -47,7 +47,7 @@ public class AlterTableStatsStmt extends DdlStmt {
     private final PartitionNames partitionNames;
     private final Map<String, String> properties;
 
-    public final Map<StatsType, String> statsTypeToValue = Maps.newHashMap();
+    private final Map<StatsType, String> statsTypeToValue = Maps.newHashMap();
 
     public AlterTableStatsStmt(TableName tableName, PartitionNames partitionNames, Map<String, String> properties) {
         this.tableName = tableName;

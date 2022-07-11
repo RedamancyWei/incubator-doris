@@ -141,7 +141,7 @@ public class StatisticsJobScheduler extends MasterDaemon {
      * @see SQLStatisticsTask
      */
     private void divide(StatisticsJob job) throws DdlException {
-        Database db = Catalog.getCurrentCatalog().getDbOrDdlException(job.getDbId());
+        Database db = Catalog.getCurrentInternalCatalog().getDbOrDdlException(job.getDbId());
         Set<Long> tblIds = job.getTblIds();
 
         for (Long tblId : tblIds) {
@@ -167,7 +167,7 @@ public class StatisticsJobScheduler extends MasterDaemon {
      * @throws DdlException exception
      */
     private void getStatsTaskByTable(StatisticsJob job, long tableId) throws DdlException {
-        Database db = Catalog.getCurrentCatalog().getDbOrDdlException(job.getDbId());
+        Database db = Catalog.getCurrentInternalCatalog().getDbOrDdlException(job.getDbId());
         OlapTable table = (OlapTable) db.getTableOrDdlException(tableId);
 
         Map<Long, List<String>> tblIdToColName = job.getTableIdToColumnName();
@@ -223,7 +223,7 @@ public class StatisticsJobScheduler extends MasterDaemon {
         long rowCount = table.getRowCount();
 
         // step2: collect statistics by sql
-        // partition row count (table model is AGGREGATE or UNIQUE)
+        // table row count (table model is AGGREGATE or UNIQUE)
         if (table.getKeysType() != KeysType.DUP_KEYS) {
             if (rowCount < backendIds.size() * COUNT_MAX_SCAN_PER_TASK) {
                 StatsCategory rcCategory = getTableStatsCategory(job.getDbId(), tableId);
@@ -307,7 +307,7 @@ public class StatisticsJobScheduler extends MasterDaemon {
      * @throws DdlException exception
      */
     private void getStatsTaskByPartition(StatisticsJob job, long tableId) throws DdlException {
-        Database db = Catalog.getCurrentCatalog().getDbOrDdlException(job.getDbId());
+        Database db = Catalog.getCurrentInternalCatalog().getDbOrDdlException(job.getDbId());
         OlapTable table = (OlapTable) db.getTableOrDdlException(tableId);
 
         Map<Long, List<String>> tblIdToColName = job.getTableIdToColumnName();

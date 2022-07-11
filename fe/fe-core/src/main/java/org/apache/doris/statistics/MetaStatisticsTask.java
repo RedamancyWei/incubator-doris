@@ -23,7 +23,6 @@ import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.OlapTable;
 import org.apache.doris.catalog.Partition;
 import org.apache.doris.catalog.Table;
-import org.apache.doris.catalog.Tablet;
 import org.apache.doris.common.DdlException;
 import org.apache.doris.statistics.StatisticsTaskResult.TaskResult;
 
@@ -100,11 +99,6 @@ public class MetaStatisticsTask extends StatisticsTask {
                 result.getStatsTypeToValue().put(StatsType.ROW_COUNT, String.valueOf(ptRowCount));
                 break;
             case TABLET:
-                Partition tabletPartition = getNotNullPartition(granularity, table);
-                Tablet tablet = getNotNullTablet(granularity, tabletPartition);
-                long tabletRowCount = tablet.getRowCount(true);
-                result.getStatsTypeToValue().put(StatsType.ROW_COUNT, String.valueOf(tabletRowCount));
-                break;
             default:
                 throw new DdlException("Unsupported granularity(" + granularity + ").");
         }
@@ -125,18 +119,13 @@ public class MetaStatisticsTask extends StatisticsTask {
                 result.getStatsTypeToValue().put(StatsType.DATA_SIZE, String.valueOf(partitionSize));
                 break;
             case TABLET:
-                Partition tabletPartition = getNotNullPartition(granularity, table);
-                Tablet tablet = getNotNullTablet(granularity, tabletPartition);
-                long tabletSize = tablet.getDataSize(false);
-                result.getStatsTypeToValue().put(StatsType.DATA_SIZE, String.valueOf(tabletSize));
-                break;
             default:
                 throw new DdlException("Unsupported granularity(" + granularity + ").");
         }
     }
 
     private OlapTable getNotNullOlapTable(long dbId, long tableId) throws DdlException {
-        Database db = Catalog.getCurrentCatalog().getDbOrDdlException(dbId);
+        Database db = Catalog.getCurrentInternalCatalog().getDbOrDdlException(dbId);
         return (OlapTable) db.getTableOrDdlException(tableId);
     }
 
@@ -146,14 +135,6 @@ public class MetaStatisticsTask extends StatisticsTask {
             throw new DdlException("Partition(" + granularity.getPartitionId() + ") not found.");
         }
         return partition;
-    }
-
-    private Tablet getNotNullTablet(StatsGranularity granularity, Partition partition) throws DdlException {
-        Tablet tablet = partition.getBaseIndex().getTablet(granularity.getTabletId());
-        if (tablet == null) {
-            throw new DdlException("Tablet(" + granularity.getTabletId() + ") not found.");
-        }
-        return tablet;
     }
 
     private Column getNotNullColumn(Table table, String colName) throws DdlException {

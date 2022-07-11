@@ -175,7 +175,7 @@ public class StatisticsManager {
         String partitionName = result.getPartitionName();
         String colName = result.getColumnName();
 
-        Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(dbId);
+        Database db = Catalog.getCurrentInternalCatalog().getDbOrAnalysisException(dbId);
         OlapTable table = (OlapTable) db.getTableOrAnalysisException(tblId);
         Column column = table.getColumn(colName);
         Type colType = column.getType();
@@ -232,7 +232,7 @@ public class StatisticsManager {
      */
     public List<List<String>> showTableStatsList(ShowTableStatsStmt stmt) throws AnalysisException {
         String dbName = stmt.getDbName();
-        Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(dbName);
+        Database db = Catalog.getCurrentInternalCatalog().getDbOrAnalysisException(dbName);
         String tableName = stmt.getTableName();
         List<List<String>> result = Lists.newArrayList();
 
@@ -418,7 +418,7 @@ public class StatisticsManager {
     private Table validateTableName(TableName dbTableName) throws AnalysisException {
         String dbName = dbTableName.getDb();
         String tableName = dbTableName.getTbl();
-        Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(dbName);
+        Database db = Catalog.getCurrentInternalCatalog().getDbOrAnalysisException(dbName);
         return db.getTableOrAnalysisException(tableName);
     }
 
@@ -450,7 +450,7 @@ public class StatisticsManager {
     }
 
     private void validateResult(TaskResult result) throws AnalysisException {
-        Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(result.getDbId());
+        Database db = Catalog.getCurrentInternalCatalog().getDbOrAnalysisException(result.getDbId());
         Table table = db.getTableOrAnalysisException(result.getTableId());
 
         if (!Strings.isNullOrEmpty(result.getPartitionName())) {
@@ -476,7 +476,7 @@ public class StatisticsManager {
     }
 
     private Column getNotNullColumn(TaskResult result) throws AnalysisException {
-        Database db = Catalog.getCurrentCatalog().getDbOrAnalysisException(result.getDbId());
+        Database db = Catalog.getCurrentInternalCatalog().getDbOrAnalysisException(result.getDbId());
         Table table = db.getTableOrAnalysisException(result.getTableId());
         Column column = table.getColumn(result.getColumnName());
         if (column == null) {

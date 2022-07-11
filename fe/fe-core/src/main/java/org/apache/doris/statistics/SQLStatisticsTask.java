@@ -101,8 +101,8 @@ public class SQLStatisticsTask extends StatisticsTask {
         List<StatsType> statsTypes = statsDesc.getStatsTypes();
         StatsCategory category = statsDesc.getStatsCategory();
 
-        String dbName = Catalog.getCurrentCatalog()
-                .getDbOrDdlException(category.getDbId()).getFullName().split(":")[1];
+        String dbName = Catalog.getCurrentInternalCatalog().getDbOrDdlException(category.getDbId())
+                .getFullName().split(":")[1];
         ConnectionPool connectionPool = Catalog.getCurrentCatalog().getStatisticsTaskScheduler()
                 .getConnectionPool(dbName);
         if (connectionPool == null) {
@@ -143,7 +143,7 @@ public class SQLStatisticsTask extends StatisticsTask {
 
     private Map<String, String> getQueryParams(StatisticsDesc statsDesc) throws DdlException {
         StatsCategory category = statsDesc.getStatsCategory();
-        Database db = Catalog.getCurrentCatalog().getDbOrDdlException(category.getDbId());
+        Database db = Catalog.getCurrentInternalCatalog().getDbOrDdlException(category.getDbId());
         Table table = db.getTableOrDdlException(category.getTableId());
 
         Map<String, String> params = Maps.newHashMap();
