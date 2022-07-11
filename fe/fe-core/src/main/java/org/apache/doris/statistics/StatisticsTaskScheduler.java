@@ -44,8 +44,8 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-/*
-Schedule statistics task
+/**
+ * Schedule statistics task
  */
 public class StatisticsTaskScheduler extends MasterDaemon {
     private static final Logger LOG = LogManager.getLogger(StatisticsTaskScheduler.class);
@@ -122,8 +122,8 @@ public class StatisticsTaskScheduler extends MasterDaemon {
         List<StatisticsTask> tasks = peek();
 
         if (!tasks.isEmpty()) {
-            ThreadPoolExecutor executor = ThreadPoolManager.newDaemonCacheThreadPool(tasks.size(), "statistic-pool",
-                    false);
+            ThreadPoolExecutor executor = ThreadPoolManager.newDaemonCacheThreadPool(tasks.size(),
+                    "statistic-pool", false);
             StatisticsJobManager jobManager = Catalog.getCurrentCatalog().getStatisticsJobManager();
             Map<Long, StatisticsJob> statisticsJobs = jobManager.getIdToStatisticsJob();
             Map<Long, List<Map<Long, Future<StatisticsTaskResult>>>> resultMap = Maps.newLinkedHashMap();
@@ -140,8 +140,8 @@ public class StatisticsTaskScheduler extends MasterDaemon {
                     if (updateTaskAndJobState(task, statisticsJob)) {
                         Map<Long, Future<StatisticsTaskResult>> taskInfo = Maps.newHashMap();
                         taskInfo.put(task.getId(), future);
-                        List<Map<Long, Future<StatisticsTaskResult>>> jobInfo = resultMap.getOrDefault(jobId,
-                                Lists.newArrayList());
+                        List<Map<Long, Future<StatisticsTaskResult>>> jobInfo = resultMap
+                                .getOrDefault(jobId, Lists.newArrayList());
                         jobInfo.add(taskInfo);
                         resultMap.put(jobId, jobInfo);
                     }
