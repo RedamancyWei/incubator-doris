@@ -27,7 +27,7 @@ import org.apache.doris.statistics.StatisticsTaskResult.TaskResult;
 import org.apache.doris.statistics.StatisticsTaskScheduler.ConnectionPool;
 import org.apache.doris.statistics.StatsGranularity.Granularity;
 import org.apache.doris.statistics.util.QueryResultSet;
-import org.apache.doris.statistics.util.SqlClient;
+import org.apache.doris.statistics.util.Connection;
 import org.apache.doris.statistics.util.SqlFactory;
 
 import com.google.common.collect.Lists;
@@ -111,11 +111,11 @@ public class SQLStatisticsTask extends StatisticsTask {
 
         QueryResultSet query;
         List<List<Object>> rows;
-        SqlClient sqlClient = null;
+        Connection connection = null;
 
         try {
-            sqlClient = connectionPool.getConnection(Config.max_cbo_statistics_task_timeout_sec);
-            query = sqlClient.query(statement);
+            connection = connectionPool.getConnection(Config.max_cbo_statistics_task_timeout_sec);
+            query = connection.query(statement);
             rows = query.getRows();
 
             if (rows.size() == 1) {
@@ -135,8 +135,8 @@ public class SQLStatisticsTask extends StatisticsTask {
             // Statistics statements are executed singly and return only one row data
             throw new DdlException("Statistics query result is incorrect, " + rows);
         } finally {
-            if (sqlClient != null) {
-                connectionPool.close(sqlClient);
+            if (connection != null) {
+                connectionPool.close(connection);
             }
         }
     }

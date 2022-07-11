@@ -34,8 +34,8 @@ import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
-public class SqlClient implements AutoCloseable {
-    private static final Logger LOG = LogManager.getLogger(SqlClient.class);
+public class Connection implements AutoCloseable {
+    private static final Logger LOG = LogManager.getLogger(Connection.class);
 
     private static final int BUFFER_SIZE = 1024;
     private static final int ERROR_STATUS = 0xff;
@@ -61,7 +61,7 @@ public class SqlClient implements AutoCloseable {
 
     private Boolean initialized = false;
 
-    public SqlClient() {
+    public Connection() {
     }
 
     /**
@@ -71,7 +71,7 @@ public class SqlClient implements AutoCloseable {
      * @param database database name
      * @see PaloAuth
      */
-    public SqlClient(String database) {
+    public Connection(String database) {
         host = "127.0.0.1";
         port = Config.query_port;
         username = PaloAuth.ROOT_USER;
@@ -79,7 +79,7 @@ public class SqlClient implements AutoCloseable {
         this.database = database;
     }
 
-    public SqlClient(String host, int port, String username, String password, String database) {
+    public Connection(String host, int port, String username, String password, String database) {
         this.host = host;
         this.port = port;
         this.username = username;

@@ -75,7 +75,7 @@ public class ErrPacket extends Packet {
 
     @Override
     public String getPacketInfo() {
-        return "MySQL Error Packet";
+        return "SQL Error Packet";
     }
 
     @Override
