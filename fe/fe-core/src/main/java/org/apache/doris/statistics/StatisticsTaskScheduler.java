@@ -96,7 +96,6 @@ public class StatisticsTaskScheduler extends MasterDaemon {
         }
 
         public synchronized void close(SqlClient sqlClient) {
-            System.out.println(sqlClients.size());
             sqlClients.add(sqlClient);
         }
     }
