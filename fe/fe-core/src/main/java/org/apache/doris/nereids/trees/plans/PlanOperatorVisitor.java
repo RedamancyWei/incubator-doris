@@ -20,12 +20,12 @@ package org.apache.doris.nereids.trees.plans;
 import org.apache.doris.nereids.operators.plans.logical.LogicalFilter;
 import org.apache.doris.nereids.operators.plans.logical.LogicalJoin;
 import org.apache.doris.nereids.operators.plans.logical.LogicalRelation;
-import org.apache.doris.nereids.operators.plans.physical.PhysicalAggregation;
+import org.apache.doris.nereids.operators.plans.physical.PhysicalAggregate;
 import org.apache.doris.nereids.operators.plans.physical.PhysicalFilter;
 import org.apache.doris.nereids.operators.plans.physical.PhysicalHashJoin;
+import org.apache.doris.nereids.operators.plans.physical.PhysicalHeapSort;
 import org.apache.doris.nereids.operators.plans.physical.PhysicalOlapScan;
 import org.apache.doris.nereids.operators.plans.physical.PhysicalProject;
-import org.apache.doris.nereids.operators.plans.physical.PhysicalSort;
 import org.apache.doris.nereids.trees.plans.logical.LogicalBinaryPlan;
 import org.apache.doris.nereids.trees.plans.logical.LogicalLeafPlan;
 import org.apache.doris.nereids.trees.plans.logical.LogicalUnaryPlan;
@@ -39,7 +39,6 @@ import org.apache.doris.nereids.trees.plans.physical.PhysicalUnaryPlan;
  * @param <R> Return type of each visit method.
  * @param <C> Context type.
  */
-@SuppressWarnings("rawtypes")
 public abstract class PlanOperatorVisitor<R, C> {
 
     public abstract R visit(Plan plan, C context);
@@ -68,7 +67,7 @@ public abstract class PlanOperatorVisitor<R, C> {
     // Physical plans
     // *******************************
 
-    public R visitPhysicalAggregation(PhysicalUnaryPlan<PhysicalAggregation, Plan> agg, C context) {
+    public R visitPhysicalAggregate(PhysicalUnaryPlan<PhysicalAggregate, Plan> agg, C context) {
         return visit(agg, context);
     }
 
@@ -76,7 +75,7 @@ public abstract class PlanOperatorVisitor<R, C> {
         return visit(olapScan, context);
     }
 
-    public R visitPhysicalSort(PhysicalUnaryPlan<PhysicalSort, Plan> sort, C context) {
+    public R visitPhysicalHeapSort(PhysicalUnaryPlan<PhysicalHeapSort, Plan> sort, C context) {
         return visit(sort, context);
     }
 

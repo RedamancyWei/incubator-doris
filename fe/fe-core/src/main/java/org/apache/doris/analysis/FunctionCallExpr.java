@@ -25,6 +25,7 @@ import org.apache.doris.catalog.AliasFunction;
 import org.apache.doris.catalog.ArrayType;
 import org.apache.doris.catalog.Catalog;
 import org.apache.doris.catalog.Database;
+import org.apache.doris.catalog.DatabaseIf;
 import org.apache.doris.catalog.Function;
 import org.apache.doris.catalog.FunctionSet;
 import org.apache.doris.catalog.ScalarFunction;
@@ -36,7 +37,6 @@ import org.apache.doris.common.ErrorReport;
 import org.apache.doris.common.util.VectorizedUtil;
 import org.apache.doris.mysql.privilege.PrivPredicate;
 import org.apache.doris.qe.ConnectContext;
-import org.apache.doris.thrift.TAggregateExpr;
 import org.apache.doris.thrift.TExprNode;
 import org.apache.doris.thrift.TExprNodeType;
 
@@ -68,6 +68,9 @@ public class FunctionCallExpr extends Expr {
     // private BuiltinAggregateFunction.Operator aggOp;
     private FunctionParams fnParams;
 
+    // represent original parament from aggregate function
+    private FunctionParams aggFnParams;
+
     // check analytic function
     private boolean isAnalyticFnCall = false;
     // check table function
@@ -90,6 +93,10 @@ public class FunctionCallExpr extends Expr {
     private Expr originStmtFnExpr;
 
     private boolean isRewrote = false;
+
+    public void setAggFnParams(FunctionParams aggFnParams) {
+        this.aggFnParams = aggFnParams;
+    }
 
     public void setIsAnalyticFnCall(boolean v) {
         isAnalyticFnCall = v;
@@ -152,6 +159,7 @@ public class FunctionCallExpr extends Expr {
         // aggOp = e.aggOp;
         isAnalyticFnCall = e.isAnalyticFnCall;
         fnParams = params;
+        aggFnParams = e.aggFnParams;
         // Just inherit the function object from 'e'.
         fn = e.fn;
         this.isMergeAggFn = e.isMergeAggFn;
@@ -174,6 +182,7 @@ public class FunctionCallExpr extends Expr {
         } else {
             fnParams = new FunctionParams(other.fnParams.isDistinct(), children);
         }
+        aggFnParams = other.aggFnParams;
         this.isMergeAggFn = other.isMergeAggFn;
         fn = other.fn;
         this.isTableFnCall = other.isTableFnCall;
@@ -427,9 +436,10 @@ public class FunctionCallExpr extends Expr {
         // except in test cases that do it explicitly.
         if (isAggregate() || isAnalyticFnCall) {
             msg.node_type = TExprNodeType.AGG_EXPR;
-            if (!isAnalyticFnCall) {
-                msg.setAggExpr(new TAggregateExpr(isMergeAggFn));
+            if (aggFnParams == null) {
+                aggFnParams = fnParams;
             }
+            msg.setAggExpr(aggFnParams.createTAggregateExpr(isMergeAggFn));
         } else {
             msg.node_type = TExprNodeType.FUNCTION_CALL;
         }
@@ -792,15 +802,13 @@ public class FunctionCallExpr extends Expr {
      * @throws AnalysisException
      */
     public void analyzeImplForDefaultValue() throws AnalysisException {
-        fn = getBuiltinFunction(null, fnName.getFunction(), new Type[0],
-                Function.CompareMode.IS_NONSTRICT_SUPERTYPE_OF);
+        fn = getBuiltinFunction(fnName.getFunction(), new Type[0], Function.CompareMode.IS_NONSTRICT_SUPERTYPE_OF);
         type = fn.getReturnType();
         for (int i = 0; i < children.size(); ++i) {
             if (getChild(i).getType().isNull()) {
                 uncheckedCastChild(Type.BOOLEAN, i);
             }
         }
-        return;
     }
 
     @Override
@@ -824,8 +832,7 @@ public class FunctionCallExpr extends Expr {
             // There is no version of COUNT() that takes more than 1 argument but after
             // the equal, we only need count(*).
             // TODO: fix how we equal count distinct.
-            fn = getBuiltinFunction(analyzer, fnName.getFunction(), new Type[0],
-                    Function.CompareMode.IS_NONSTRICT_SUPERTYPE_OF);
+            fn = getBuiltinFunction(fnName.getFunction(), new Type[0], Function.CompareMode.IS_NONSTRICT_SUPERTYPE_OF);
             type = fn.getReturnType();
 
             // Make sure BE doesn't see any TYPE_NULL exprs
@@ -853,7 +860,7 @@ public class FunctionCallExpr extends Expr {
             if (!VectorizedUtil.isVectorized()) {
                 type = getChild(0).type.getMaxResolutionType();
             }
-            fn = getBuiltinFunction(analyzer, fnName.getFunction(), new Type[]{type},
+            fn = getBuiltinFunction(fnName.getFunction(), new Type[]{type},
                     Function.CompareMode.IS_NONSTRICT_SUPERTYPE_OF);
         } else if (fnName.getFunction().equalsIgnoreCase("count_distinct")) {
             Type compatibleType = this.children.get(0).getType();
@@ -866,7 +873,7 @@ public class FunctionCallExpr extends Expr {
                 }
             }
 
-            fn = getBuiltinFunction(analyzer, fnName.getFunction(), new Type[]{compatibleType},
+            fn = getBuiltinFunction(fnName.getFunction(), new Type[]{compatibleType},
                     Function.CompareMode.IS_NONSTRICT_SUPERTYPE_OF);
         } else if (fnName.getFunction().equalsIgnoreCase(FunctionSet.WINDOW_FUNNEL)) {
             if (fnParams.exprs() == null || fnParams.exprs().size() < 4) {
@@ -894,14 +901,14 @@ public class FunctionCallExpr extends Expr {
                 }
                 childTypes[i] = children.get(i).type;
             }
-            fn = getBuiltinFunction(analyzer, fnName.getFunction(), childTypes,
+            fn = getBuiltinFunction(fnName.getFunction(), childTypes,
                     Function.CompareMode.IS_NONSTRICT_SUPERTYPE_OF);
         } else if (fnName.getFunction().equalsIgnoreCase("if")) {
             Type[] childTypes = collectChildReturnTypes();
             Type assignmentCompatibleType = ScalarType.getAssignmentCompatibleType(childTypes[1], childTypes[2], true);
             childTypes[1] = assignmentCompatibleType;
             childTypes[2] = assignmentCompatibleType;
-            fn = getBuiltinFunction(analyzer, fnName.getFunction(), childTypes,
+            fn = getBuiltinFunction(fnName.getFunction(), childTypes,
                     Function.CompareMode.IS_NONSTRICT_SUPERTYPE_OF);
         } else {
             // now first find table function in table function sets
@@ -916,7 +923,7 @@ public class FunctionCallExpr extends Expr {
                 // now first find function in built-in functions
                 if (Strings.isNullOrEmpty(fnName.getDb())) {
                     Type[] childTypes = collectChildReturnTypes();
-                    fn = getBuiltinFunction(analyzer, fnName.getFunction(), childTypes,
+                    fn = getBuiltinFunction(fnName.getFunction(), childTypes,
                             Function.CompareMode.IS_NONSTRICT_SUPERTYPE_OF);
                 }
 
@@ -931,15 +938,17 @@ public class FunctionCallExpr extends Expr {
                     String dbName = fnName.analyzeDb(analyzer);
                     if (!Strings.isNullOrEmpty(dbName)) {
                         // check operation privilege
-                        if (!Catalog.getCurrentCatalog().getAuth().checkDbPriv(
-                                ConnectContext.get(), dbName, PrivPredicate.SELECT)) {
+                        if (!Catalog.getCurrentCatalog().getAuth()
+                                .checkDbPriv(ConnectContext.get(), dbName, PrivPredicate.SELECT)) {
                             ErrorReport.reportAnalysisException(ErrorCode.ERR_SPECIFIC_ACCESS_DENIED_ERROR, "SELECT");
                         }
-                        Database db = Catalog.getCurrentCatalog().getDbNullable(dbName);
-                        if (db != null) {
-                            Function searchDesc = new Function(
-                                    fnName, Arrays.asList(collectChildReturnTypes()), Type.INVALID, false);
-                            fn = db.getFunction(searchDesc, Function.CompareMode.IS_NONSTRICT_SUPERTYPE_OF);
+                        // TODO(gaoxin): ExternalDatabase not implement udf yet.
+                        DatabaseIf db = Catalog.getCurrentCatalog().getInternalDataSource().getDbNullable(dbName);
+                        if (db != null && (db instanceof Database)) {
+                            Function searchDesc =
+                                    new Function(fnName, Arrays.asList(collectChildReturnTypes()), Type.INVALID, false);
+                            fn = ((Database) db).getFunction(searchDesc,
+                                    Function.CompareMode.IS_NONSTRICT_SUPERTYPE_OF);
                         }
                     }
                 }
@@ -1040,12 +1049,12 @@ public class FunctionCallExpr extends Expr {
             Expr child1Result = getChild(1).getResultValue();
             if (child1Result instanceof StringLiteral) {
                 if (DateLiteral.hasTimePart(((StringLiteral) child1Result).getStringValue())) {
-                    this.type = Type.DATETIME;
+                    this.type = DateLiteral.getDefaultDateType(Type.DATETIME);
                 } else {
-                    this.type = Type.DATE;
+                    this.type = DateLiteral.getDefaultDateType(Type.DATE);
                 }
             } else {
-                this.type = Type.DATETIME;
+                this.type = DateLiteral.getDefaultDateType(Type.DATETIME);
             }
         } else {
             this.type = fn.getReturnType();
@@ -1143,14 +1152,15 @@ public class FunctionCallExpr extends Expr {
     }
 
     public static FunctionCallExpr createMergeAggCall(
-            FunctionCallExpr agg, List<Expr> params) {
+            FunctionCallExpr agg, List<Expr> intermediateParams, List<Expr> realParams) {
         Preconditions.checkState(agg.isAnalyzed);
         Preconditions.checkState(agg.isAggregateFunction());
         FunctionCallExpr result = new FunctionCallExpr(
-                agg.fnName, new FunctionParams(false, params), true);
+                agg.fnName, new FunctionParams(false, intermediateParams), true);
         // Inherit the function object from 'agg'.
         result.fn = agg.fn;
         result.type = agg.type;
+        result.setAggFnParams(new FunctionParams(false, realParams));
         return result;
     }
 
@@ -1253,5 +1263,24 @@ public class FunctionCallExpr extends Expr {
             character = iterator.next();
         }
         return result.toString();
+    }
+
+    @Override
+    public void finalizeImplForNereids() throws AnalysisException {
+        // TODO: support other functions
+        if (fnName.getFunction().equalsIgnoreCase("sum")) {
+            // Prevent the cast type in vector exec engine
+            Type childType = getChild(0).type.getMaxResolutionType();
+            fn = getBuiltinFunction(fnName.getFunction(), new Type[]{childType},
+                    Function.CompareMode.IS_NONSTRICT_SUPERTYPE_OF);
+            type = fn.getReturnType();
+        }
+    }
+
+    /**
+     * NOTICE: This function only used for Nereids, should not call it if u don't know what it is mean.
+     */
+    public void setMergeForNereids(boolean isMergeAggFn) {
+        this.isMergeAggFn = isMergeAggFn;
     }
 }

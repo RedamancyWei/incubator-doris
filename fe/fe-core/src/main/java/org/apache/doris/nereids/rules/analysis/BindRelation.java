@@ -20,7 +20,7 @@ package org.apache.doris.nereids.rules.analysis;
 import org.apache.doris.catalog.Catalog;
 import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.Table;
-import org.apache.doris.nereids.operators.plans.logical.LogicalRelation;
+import org.apache.doris.nereids.operators.plans.logical.LogicalOlapScan;
 import org.apache.doris.nereids.rules.Rule;
 import org.apache.doris.nereids.rules.RuleType;
 import org.apache.doris.nereids.trees.plans.Plan;
@@ -45,13 +45,14 @@ public class BindRelation extends OneAnalysisRuleFactory {
                 case 1: {
                     List<String> qualifier = Lists.newArrayList(connectContext.getDatabase(), nameParts.get(0));
                     Table table = getTable(qualifier, connectContext.getCatalog());
-                    LogicalRelation relation = new LogicalRelation(table, qualifier);
-                    return new LogicalLeafPlan<>(relation);
+                    // TODO: should generate different Scan sub class according to table's type
+                    LogicalOlapScan olapScan = new LogicalOlapScan(table, qualifier);
+                    return new LogicalLeafPlan<>(olapScan);
                 }
                 case 2: {
                     Table table = getTable(nameParts, connectContext.getCatalog());
-                    LogicalRelation relation = new LogicalRelation(table, nameParts);
-                    return new LogicalLeafPlan<>(relation);
+                    LogicalOlapScan olapScan = new LogicalOlapScan(table, nameParts);
+                    return new LogicalLeafPlan<>(olapScan);
                 }
                 default:
                     throw new IllegalStateException("Table name ["
@@ -62,7 +63,7 @@ public class BindRelation extends OneAnalysisRuleFactory {
 
     private Table getTable(List<String> qualifier, Catalog catalog) {
         String dbName = qualifier.get(0);
-        Database db = catalog.getDb(dbName)
+        Database db = catalog.getInternalDataSource().getDb(dbName)
                 .orElseThrow(() -> new RuntimeException("Database [" + dbName + "] does not exist."));
         db.readLock();
         try {

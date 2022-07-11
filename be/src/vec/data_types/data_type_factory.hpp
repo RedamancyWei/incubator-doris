@@ -62,6 +62,7 @@ public:
                     {"Float32", std::make_shared<DataTypeFloat32>()},
                     {"Float64", std::make_shared<DataTypeFloat64>()},
                     {"Date", std::make_shared<DataTypeDate>()},
+                    {"DateV2", std::make_shared<DataTypeDateV2>()},
                     {"DateTime", std::make_shared<DataTypeDateTime>()},
                     {"String", std::make_shared<DataTypeString>()},
                     {"Decimal", std::make_shared<DataTypeDecimal<Decimal128>>(27, 9)},
@@ -100,6 +101,10 @@ public:
     DataTypePtr create_data_type(const PColumnMeta& pcolumn);
 
     DataTypePtr create_data_type(const arrow::DataType* type, bool is_nullable);
+
+    DataTypePtr create_data_type(const TTypeDesc& raw_type) {
+        return create_data_type(TypeDescriptor::from_thrift(raw_type), raw_type.is_nullable);
+    }
 
 private:
     DataTypePtr _create_primitive_data_type(const FieldType& type) const;

@@ -22,6 +22,7 @@ import org.apache.doris.catalog.ScalarType;
 import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.ErrorReport;
 import org.apache.doris.common.UserException;
+import org.apache.doris.common.util.Util;
 import org.apache.doris.qe.ShowResultSetMetaData;
 import org.apache.doris.statistics.TableStats;
 
@@ -94,6 +95,9 @@ public class ShowTableStatsStmt extends ShowStmt {
         if (partitionNames != null) {
             partitionNames.analyze(analyzer);
         }
+
+        // disallow external catalog
+        Util.prohibitExternalCatalog(tableName.getCtl(), this.getClass().getSimpleName());
     }
 
     @Override

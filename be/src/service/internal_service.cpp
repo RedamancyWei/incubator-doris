@@ -35,6 +35,8 @@
 #include "util/md5.h"
 #include "util/proto_util.h"
 #include "util/string_util.h"
+#include "util/telemetry/brpc_carrier.h"
+#include "util/telemetry/telemetry.h"
 #include "util/thrift_util.h"
 #include "util/uid_util.h"
 #include "vec/runtime/vdata_stream_mgr.h"
@@ -172,6 +174,8 @@ void PInternalServiceImpl::exec_plan_fragment(google::protobuf::RpcController* c
                                               const PExecPlanFragmentRequest* request,
                                               PExecPlanFragmentResult* response,
                                               google::protobuf::Closure* done) {
+    auto span = telemetry::start_rpc_server_span("exec_plan_fragment", cntl_base);
+    auto scope = OpentelemetryScope {span};
     SCOPED_SWITCH_BTHREAD();
     brpc::ClosureGuard closure_guard(done);
     auto st = Status::OK();
@@ -196,6 +200,8 @@ void PInternalServiceImpl::exec_plan_fragment_start(google::protobuf::RpcControl
                                                     const PExecPlanFragmentStartRequest* request,
                                                     PExecPlanFragmentResult* result,
                                                     google::protobuf::Closure* done) {
+    auto span = telemetry::start_rpc_server_span("exec_plan_fragment_start", controller);
+    auto scope = OpentelemetryScope {span};
     SCOPED_SWITCH_BTHREAD();
     brpc::ClosureGuard closure_guard(done);
     auto st = _exec_env->fragment_mgr()->start_query_execution(request);
@@ -206,6 +212,7 @@ void PInternalServiceImpl::tablet_writer_add_block(google::protobuf::RpcControll
                                                    const PTabletWriterAddBlockRequest* request,
                                                    PTabletWriterAddBlockResult* response,
                                                    google::protobuf::Closure* done) {
+    SCOPED_SWITCH_BTHREAD();
     // TODO(zxy) delete in 1.2 version
     brpc::Controller* cntl = static_cast<brpc::Controller*>(cntl_base);
     attachment_transfer_request_block<PTabletWriterAddBlockRequest>(request, cntl);
@@ -216,6 +223,7 @@ void PInternalServiceImpl::tablet_writer_add_block(google::protobuf::RpcControll
 void PInternalServiceImpl::tablet_writer_add_block_by_http(
         google::protobuf::RpcController* cntl_base, const ::doris::PEmptyRequest* request,
         PTabletWriterAddBlockResult* response, google::protobuf::Closure* done) {
+    SCOPED_SWITCH_BTHREAD();
     PTabletWriterAddBlockRequest* request_raw = new PTabletWriterAddBlockRequest();
     google::protobuf::Closure* done_raw =
             new NewHttpClosure<PTabletWriterAddBlockRequest>(request_raw, done);
@@ -243,8 +251,6 @@ void PInternalServiceImpl::_tablet_writer_add_block(google::protobuf::RpcControl
         int64_t execution_time_ns = 0;
         {
             SCOPED_RAW_TIMER(&execution_time_ns);
-            SCOPED_ATTACH_TASK_THREAD(ThreadContext::TaskType::LOAD,
-                                      _exec_env->load_channel_mgr()->mem_tracker());
 
             auto st = _exec_env->load_channel_mgr()->add_batch(*request, response);
             if (!st.ok()) {
@@ -264,12 +270,14 @@ void PInternalServiceImpl::tablet_writer_add_batch(google::protobuf::RpcControll
                                                    const PTabletWriterAddBatchRequest* request,
                                                    PTabletWriterAddBatchResult* response,
                                                    google::protobuf::Closure* done) {
+    SCOPED_SWITCH_BTHREAD();
     _tablet_writer_add_batch(cntl_base, request, response, done);
 }
 
 void PInternalServiceImpl::tablet_writer_add_batch_by_http(
         google::protobuf::RpcController* cntl_base, const ::doris::PEmptyRequest* request,
         PTabletWriterAddBatchResult* response, google::protobuf::Closure* done) {
+    SCOPED_SWITCH_BTHREAD();
     PTabletWriterAddBatchRequest* request_raw = new PTabletWriterAddBatchRequest();
     google::protobuf::Closure* done_raw =
             new NewHttpClosure<PTabletWriterAddBatchRequest>(request_raw, done);
@@ -300,8 +308,6 @@ void PInternalServiceImpl::_tablet_writer_add_batch(google::protobuf::RpcControl
         int64_t execution_time_ns = 0;
         {
             SCOPED_RAW_TIMER(&execution_time_ns);
-            SCOPED_ATTACH_TASK_THREAD(ThreadContext::TaskType::LOAD,
-                                      _exec_env->load_channel_mgr()->mem_tracker());
             // TODO(zxy) delete in 1.2 version
             brpc::Controller* cntl = static_cast<brpc::Controller*>(cntl_base);
             attachment_transfer_request_row_batch<PTabletWriterAddBatchRequest>(request, cntl);
@@ -368,6 +374,8 @@ void PInternalServiceImpl::cancel_plan_fragment(google::protobuf::RpcController*
                                                 const PCancelPlanFragmentRequest* request,
                                                 PCancelPlanFragmentResult* result,
                                                 google::protobuf::Closure* done) {
+    auto span = telemetry::start_rpc_server_span("exec_plan_fragment_start", cntl_base);
+    auto scope = OpentelemetryScope {span};
     SCOPED_SWITCH_BTHREAD();
     brpc::ClosureGuard closure_guard(done);
     TUniqueId tid;

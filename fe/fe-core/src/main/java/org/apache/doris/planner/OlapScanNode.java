@@ -358,6 +358,18 @@ public class OlapScanNode extends ScanNode {
     }
 
     /**
+     * Init OlapScanNode, ONLY used for Nereids. Should NOT use this function in anywhere else.
+     */
+    public void init() throws UserException {
+        selectedPartitionNum = selectedPartitionIds.size();
+        try {
+            getScanRangeLocations();
+        } catch (AnalysisException e) {
+            throw new UserException(e.getMessage());
+        }
+    }
+
+    /**
      * Remove the method after statistics collection is working properly
      */
     public void mockRowCountInStatistic() {
@@ -894,6 +906,7 @@ public class OlapScanNode extends ScanNode {
             SlotRef deleteSignSlot = new SlotRef(desc.getAliasAsName(), Column.DELETE_SIGN);
             deleteSignSlot.analyze(analyzer);
             deleteSignSlot.getDesc().setIsMaterialized(true);
+            deleteSignSlot.getDesc().setIsNullable(analyzer.isOuterMaterializedJoined(desc.getId()));
             Expr conjunct = new BinaryPredicate(BinaryPredicate.Operator.EQ, deleteSignSlot, new IntLiteral(0));
             conjunct.analyze(analyzer);
             conjuncts.add(conjunct);

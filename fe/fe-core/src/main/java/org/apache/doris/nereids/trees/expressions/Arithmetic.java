@@ -18,13 +18,19 @@
 package org.apache.doris.nereids.trees.expressions;
 
 
+import org.apache.doris.analysis.ArithmeticExpr;
+import org.apache.doris.analysis.ArithmeticExpr.Operator;
+import org.apache.doris.nereids.exceptions.UnboundException;
 import org.apache.doris.nereids.trees.NodeType;
-import org.apache.doris.thrift.TExprOpcode;
+import org.apache.doris.nereids.trees.expressions.visitor.ExpressionVisitor;
+import org.apache.doris.nereids.types.DataType;
+
+import java.util.Objects;
 
 /**
  * All arithmetic operator.
  */
-public class Arithmetic extends Expression {
+public abstract class Arithmetic extends Expression {
 
     enum OperatorPosition {
         BINARY_INFIX,
@@ -37,27 +43,39 @@ public class Arithmetic extends Expression {
      */
     @SuppressWarnings("checkstyle:RegexpSingleline")
     public enum ArithmeticOperator {
-        MULTIPLY("*", "multiply", Arithmetic.OperatorPosition.BINARY_INFIX, TExprOpcode.MULTIPLY),
-        DIVIDE("/", "divide", Arithmetic.OperatorPosition.BINARY_INFIX, TExprOpcode.DIVIDE),
-        MOD("%", "mod", Arithmetic.OperatorPosition.BINARY_INFIX, TExprOpcode.MOD),
-        ADD("+", "add", Arithmetic.OperatorPosition.BINARY_INFIX, TExprOpcode.ADD),
-        SUBTRACT("-", "subtract", Arithmetic.OperatorPosition.BINARY_INFIX, TExprOpcode.SUBTRACT),
+        MULTIPLY("*", "multiply",
+                Arithmetic.OperatorPosition.BINARY_INFIX, Operator.MULTIPLY),
+        DIVIDE("/", "divide",
+                Arithmetic.OperatorPosition.BINARY_INFIX, Operator.DIVIDE),
+        MOD("%", "mod",
+                Arithmetic.OperatorPosition.BINARY_INFIX, Operator.MOD),
+        ADD("+", "add",
+                Arithmetic.OperatorPosition.BINARY_INFIX, Operator.ADD),
+        SUBTRACT("-", "subtract",
+                Arithmetic.OperatorPosition.BINARY_INFIX, Operator.SUBTRACT),
         //TODO: The following functions will be added later.
-        BITAND("&", "bitand", Arithmetic.OperatorPosition.BINARY_INFIX, TExprOpcode.BITAND),
-        BITOR("|", "bitor", Arithmetic.OperatorPosition.BINARY_INFIX, TExprOpcode.BITOR),
-        BITXOR("^", "bitxor", Arithmetic.OperatorPosition.BINARY_INFIX, TExprOpcode.BITXOR),
-        BITNOT("~", "bitnot", Arithmetic.OperatorPosition.UNARY_PREFIX, TExprOpcode.BITNOT);
+        BITAND("&", "bitand",
+                Arithmetic.OperatorPosition.BINARY_INFIX, Operator.BITAND),
+        BITOR("|", "bitor",
+                Arithmetic.OperatorPosition.BINARY_INFIX, Operator.BITOR),
+        BITXOR("^", "bitxor",
+                Arithmetic.OperatorPosition.BINARY_INFIX, Operator.BITXOR),
+        BITNOT("~", "bitnot",
+                Arithmetic.OperatorPosition.UNARY_PREFIX, Operator.BITNOT);
 
         private final String description;
         private final String name;
         private final Arithmetic.OperatorPosition pos;
-        private final TExprOpcode opcode;
+        private final ArithmeticExpr.Operator staleOp;
 
-        ArithmeticOperator(String description, String name, Arithmetic.OperatorPosition pos, TExprOpcode opcode) {
+        ArithmeticOperator(String description,
+                String name,
+                Arithmetic.OperatorPosition pos,
+                ArithmeticExpr.Operator staleOp) {
             this.description = description;
             this.name = name;
             this.pos = pos;
-            this.opcode = opcode;
+            this.staleOp = staleOp;
         }
 
         @Override
@@ -73,8 +91,8 @@ public class Arithmetic extends Expression {
             return pos;
         }
 
-        public TExprOpcode getOpcode() {
-            return opcode;
+        public Operator getStaleOp() {
+            return staleOp;
         }
 
         public boolean isUnary() {
@@ -94,7 +112,7 @@ public class Arithmetic extends Expression {
         this.op = op;
     }
 
-    public ArithmeticOperator getArithOperator() {
+    public ArithmeticOperator getArithmeticOperator() {
         return op;
     }
 
@@ -123,12 +141,55 @@ public class Arithmetic extends Expression {
         }
     }
 
+    @Override
+    public DataType getDataType() {
+        // TODO: split Unary and Binary arithmetic
+        int arity = arity();
+        if (arity == 1) {
+            return child(0).getDataType();
+        } else if (arity == 2) {
+            // TODO: binary arithmetic
+            return child(0).getDataType();
+        } else {
+            return super.getDataType();
+        }
+    }
+
+    @Override
+    public boolean nullable() throws UnboundException {
+        if (op.isUnary()) {
+            return child(0).nullable();
+        } else {
+            return child(0).nullable() || child(1).nullable();
+        }
+    }
+
     public <R, C> R accept(ExpressionVisitor<R, C> visitor, C context) {
         return visitor.visitArithmetic(this, context);
     }
 
     @Override
-    public String sql() {
-        return null;
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        if (!super.equals(o)) {
+            return false;
+        }
+        Arithmetic that = (Arithmetic) o;
+        return op == that.op;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(op);
+    }
+
+    @Override
+    public String toString() {
+        return toSql();
     }
 }

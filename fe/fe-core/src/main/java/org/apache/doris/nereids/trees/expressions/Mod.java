@@ -17,6 +17,12 @@
 
 package org.apache.doris.nereids.trees.expressions;
 
+import org.apache.doris.nereids.trees.expressions.visitor.ExpressionVisitor;
+
+import com.google.common.base.Preconditions;
+
+import java.util.List;
+
 /**
  * Mod Expression.
  */
@@ -27,8 +33,19 @@ public class Mod<LEFT_CHILD_TYPE extends Expression, RIGHT_CHILD_TYPE extends Ex
     }
 
     @Override
-    public String sql() {
-        return left().sql() + ' ' + getArithOperator().toString()
-                + ' ' + right().sql();
+    public String toSql() {
+        return left().toSql() + ' ' + getArithmeticOperator().toString()
+                + ' ' + right().toSql();
+    }
+
+    @Override
+    public Expression withChildren(List<Expression> children) {
+        Preconditions.checkArgument(children.size() == 2);
+        return new Mod<>(children.get(0), children.get(1));
+    }
+
+    @Override
+    public <R, C> R accept(ExpressionVisitor<R, C> visitor, C context) {
+        return visitor.visitMod(this, context);
     }
 }

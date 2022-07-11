@@ -97,8 +97,10 @@ import org.apache.doris.catalog.RangePartitionItem;
 import org.apache.doris.catalog.Replica;
 import org.apache.doris.catalog.Replica.ReplicaState;
 import org.apache.doris.catalog.ReplicaAllocation;
+import org.apache.doris.catalog.ScalarType;
 import org.apache.doris.catalog.SinglePartitionInfo;
 import org.apache.doris.catalog.Table;
+import org.apache.doris.catalog.TableIf;
 import org.apache.doris.catalog.TableIf.TableType;
 import org.apache.doris.catalog.TableIndexes;
 import org.apache.doris.catalog.Tablet;
@@ -186,19 +188,17 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
 
 /**
  * The Internal data source will manage all self-managed meta object in a Doris cluster.
  * Such as Database, tables, etc.
  * There is only one internal data source in a cluster. And its id is always 0.
  */
-public class InternalDataSource implements DataSourceIf {
-    public static final String INTERNAL_DS_NAME = "__internal";
+public class InternalDataSource implements DataSourceIf<Database> {
+    public static final String INTERNAL_DS_NAME = "internal";
     public static final long INTERNAL_DS_ID = 0L;
 
     private static final Logger LOG = LogManager.getLogger(InternalDataSource.class);
@@ -217,7 +217,7 @@ public class InternalDataSource implements DataSourceIf {
 
     @Override
     public long getId() {
-        return 0;
+        return INTERNAL_DS_ID;
     }
 
     @Override
@@ -238,7 +238,7 @@ public class InternalDataSource implements DataSourceIf {
 
     @Nullable
     @Override
-    public DatabaseIf getDbNullable(String dbName) {
+    public Database getDbNullable(String dbName) {
         if (fullNameToDb.containsKey(dbName)) {
             return fullNameToDb.get(dbName);
         } else {
@@ -258,72 +258,8 @@ public class InternalDataSource implements DataSourceIf {
 
     @Nullable
     @Override
-    public DatabaseIf getDbNullable(long dbId) {
+    public Database getDbNullable(long dbId) {
         return idToDb.get(dbId);
-    }
-
-    @Override
-    public Optional<DatabaseIf> getDb(String dbName) {
-        return Optional.ofNullable(getDbNullable(dbName));
-    }
-
-    @Override
-    public Optional<DatabaseIf> getDb(long dbId) {
-        return Optional.ofNullable(getDbNullable(dbId));
-    }
-
-    @Override
-    public <E extends Exception> DatabaseIf getDbOrException(String dbName, Function<String, E> e) throws E {
-        DatabaseIf db = getDbNullable(dbName);
-        if (db == null) {
-            throw e.apply(dbName);
-        }
-        return db;
-    }
-
-    @Override
-    public <E extends Exception> DatabaseIf getDbOrException(long dbId, Function<Long, E> e) throws E {
-        DatabaseIf db = getDbNullable(dbId);
-        if (db == null) {
-            throw e.apply(dbId);
-        }
-        return db;
-    }
-
-    @Override
-    public DatabaseIf getDbOrMetaException(String dbName) throws MetaNotFoundException {
-        return getDbOrException(dbName,
-                s -> new MetaNotFoundException("unknown databases, dbName=" + s, ErrorCode.ERR_BAD_DB_ERROR));
-    }
-
-    @Override
-    public DatabaseIf getDbOrMetaException(long dbId) throws MetaNotFoundException {
-        return getDbOrException(dbId,
-                s -> new MetaNotFoundException("unknown databases, dbId=" + s, ErrorCode.ERR_BAD_DB_ERROR));
-    }
-
-    @Override
-    public DatabaseIf getDbOrDdlException(String dbName) throws DdlException {
-        return getDbOrException(dbName,
-                s -> new DdlException(ErrorCode.ERR_BAD_DB_ERROR.formatErrorMsg(s), ErrorCode.ERR_BAD_DB_ERROR));
-    }
-
-    @Override
-    public DatabaseIf getDbOrDdlException(long dbId) throws DdlException {
-        return getDbOrException(dbId,
-                s -> new DdlException(ErrorCode.ERR_BAD_DB_ERROR.formatErrorMsg(s), ErrorCode.ERR_BAD_DB_ERROR));
-    }
-
-    @Override
-    public DatabaseIf getDbOrAnalysisException(String dbName) throws AnalysisException {
-        return getDbOrException(dbName,
-                s -> new AnalysisException(ErrorCode.ERR_BAD_DB_ERROR.formatErrorMsg(s), ErrorCode.ERR_BAD_DB_ERROR));
-    }
-
-    @Override
-    public DatabaseIf getDbOrAnalysisException(long dbId) throws AnalysisException {
-        return getDbOrException(dbId,
-                s -> new AnalysisException(ErrorCode.ERR_BAD_DB_ERROR.formatErrorMsg(s), ErrorCode.ERR_BAD_DB_ERROR));
     }
 
     @Override
@@ -733,7 +669,7 @@ public class InternalDataSource implements DataSourceIf {
         String dbName = recoverStmt.getDbName();
         String tableName = recoverStmt.getTableName();
 
-        Database db = (Database) getDbOrDdlException(dbName);
+        Database db = getDbOrDdlException(dbName);
         OlapTable olapTable = db.getOlapTableOrDdlException(tableName);
         olapTable.writeLockOrDdlException();
         try {
@@ -1124,8 +1060,8 @@ public class InternalDataSource implements DataSourceIf {
 
     public void createTableLike(CreateTableLikeStmt stmt) throws DdlException {
         try {
-            Database db = Catalog.getCurrentCatalog().getDbOrDdlException(stmt.getExistedDbName());
-            Table table = db.getTableOrDdlException(stmt.getExistedTableName());
+            DatabaseIf db = getDbOrDdlException(stmt.getExistedDbName());
+            TableIf table = db.getTableOrDdlException(stmt.getExistedTableName());
 
             if (table.getType() == TableType.VIEW) {
                 throw new DdlException("Not support create table from a View");
@@ -1166,6 +1102,9 @@ public class InternalDataSource implements DataSourceIf {
         }
     }
 
+    /**
+     * Create table for select.
+     **/
     public void createTableAsSelect(CreateTableAsSelectStmt stmt) throws DdlException {
         try {
             List<String> columnNames = stmt.getColumnNames();
@@ -1191,8 +1130,11 @@ public class InternalDataSource implements DataSourceIf {
                 }
                 TypeDef typeDef;
                 Expr resultExpr = resultExprs.get(i);
-                if (resultExpr.getType().isStringType() && resultExpr.getType().getLength() < 0) {
+                Type resultType = resultExpr.getType();
+                if (resultType.isStringType() && resultType.getLength() < 0) {
                     typeDef = new TypeDef(Type.STRING);
+                } else if (resultType.isDecimalV2() && resultType.equals(ScalarType.DECIMALV2)) {
+                    typeDef = new TypeDef(ScalarType.createDecimalV2Type(27, 9));
                 } else {
                     typeDef = new TypeDef(resultExpr.getType());
                 }
@@ -2107,13 +2049,21 @@ public class InternalDataSource implements DataSourceIf {
     private Table createEsTable(Database db, CreateTableStmt stmt) throws DdlException {
         String tableName = stmt.getTableName();
 
+        // validate props to get column from es.
+        EsTable esTable = new EsTable(tableName, stmt.getProperties());
+
         // create columns
         List<Column> baseSchema = stmt.getColumns();
+
+        if (baseSchema.isEmpty()) {
+            baseSchema = esTable.genColumnsFromEs();
+        }
         validateColumns(baseSchema);
+        esTable.setNewFullSchema(baseSchema);
 
         // create partition info
         PartitionDesc partitionDesc = stmt.getPartitionDesc();
-        PartitionInfo partitionInfo = null;
+        PartitionInfo partitionInfo;
         Map<String, Long> partitionNameToId = Maps.newHashMap();
         if (partitionDesc != null) {
             partitionInfo = partitionDesc.toPartitionInfo(baseSchema, partitionNameToId, false);
@@ -2123,11 +2073,12 @@ public class InternalDataSource implements DataSourceIf {
             partitionNameToId.put(tableName, partitionId);
             partitionInfo = new SinglePartitionInfo();
         }
+        esTable.setPartitionInfo(partitionInfo);
 
         long tableId = Catalog.getCurrentCatalog().getNextId();
-        EsTable esTable = new EsTable(tableId, tableName, baseSchema, stmt.getProperties(), partitionInfo);
+        esTable.setId(tableId);
         esTable.setComment(stmt.getComment());
-
+        esTable.syncTableMetaData();
         if (!db.createTableWithLock(esTable, false, stmt.isSetIfNotExists()).first) {
             ErrorReport.reportDdlException(ErrorCode.ERR_TABLE_EXISTS_ERROR, tableName);
         }
@@ -3097,7 +3048,7 @@ public class InternalDataSource implements DataSourceIf {
             String dbName = InfoSchemaDb.getFullInfoSchemaDbName(cluster.getName());
             // Use real Catalog instance to avoid InfoSchemaDb id continuously increment
             // when checkpoint thread load image.
-            InfoSchemaDb db = (InfoSchemaDb) Catalog.getServingCatalog().getDbNullable(dbName);
+            InfoSchemaDb db = (InfoSchemaDb) Catalog.getServingCatalog().getInternalDataSource().getDbNullable(dbName);
             if (db == null) {
                 db = new InfoSchemaDb(cluster.getName());
                 db.setClusterName(cluster.getName());
