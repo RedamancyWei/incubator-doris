@@ -83,9 +83,4 @@ public class ShowColumnStatsStmt extends ShowStmt {
         }
         return builder.build();
     }
-
-    public List<String> getPartitionNames() {
-        // TODO(WZT): partition statistics
-        return Lists.newArrayList();
-    }
 }
