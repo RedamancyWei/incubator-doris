@@ -29,7 +29,6 @@ import org.apache.doris.nereids.properties.ChildrenOutputPropertyDeriver;
 import org.apache.doris.nereids.properties.EnforceMissingPropertiesHelper;
 import org.apache.doris.nereids.properties.ParentRequiredPropertyDeriver;
 import org.apache.doris.nereids.properties.PhysicalProperties;
-import org.apache.doris.nereids.trees.plans.Plan;
 
 import com.google.common.collect.Lists;
 
@@ -39,7 +38,7 @@ import java.util.Optional;
 /**
  * Job to compute cost and add enforcer.
  */
-public class CostAndEnforcerJob extends Job<Plan> {
+public class CostAndEnforcerJob extends Job {
     // GroupExpression to optimize
     private final GroupExpression groupExpression;
     // Current total cost
@@ -83,11 +82,11 @@ public class CostAndEnforcerJob extends Job<Plan> {
      * execute.
      */
     public void execute1() {
-        // Do init logic of root operator/groupExpr of `subplan`, only run once per task.
+        // Do init logic of root plan/groupExpr of `subplan`, only run once per task.
         if (curChildIndex != -1) {
             curTotalCost = 0;
 
-            // Get property from groupExpression operator (it's root of subplan).
+            // Get property from groupExpression plan (it's root of subplan).
             ParentRequiredPropertyDeriver parentRequiredPropertyDeriver = new ParentRequiredPropertyDeriver(context);
             propertiesListList = parentRequiredPropertyDeriver.getRequiredPropertyListList(groupExpression);
 

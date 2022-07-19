@@ -432,7 +432,6 @@ TEST_F(BetaRowsetTest, ReadTest) {
             std::make_shared<io::S3FileSystem>(properties, "bucket", "test prefix", resource_id);
     Aws::SDKOptions aws_options = Aws::SDKOptions {};
     Aws::InitAPI(aws_options);
-
     // failed to head object
     {
         Aws::Auth::AWSCredentials aws_cred("ak", "sk");

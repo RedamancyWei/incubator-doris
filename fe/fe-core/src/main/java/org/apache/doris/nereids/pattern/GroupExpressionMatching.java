@@ -35,11 +35,11 @@ import java.util.Optional;
  * Get all pattern matching subtree in query plan from a group expression.
  */
 public class GroupExpressionMatching implements Iterable<Plan> {
-    private final Pattern<Plan, Plan> pattern;
+    private final Pattern<Plan> pattern;
     private final GroupExpression groupExpression;
 
-    public GroupExpressionMatching(Pattern<? extends Plan, Plan> pattern, GroupExpression groupExpression) {
-        this.pattern = (Pattern<Plan, Plan>) Objects.requireNonNull(pattern, "pattern can not be null");
+    public GroupExpressionMatching(Pattern<? extends Plan> pattern, GroupExpression groupExpression) {
+        this.pattern = (Pattern<Plan>) Objects.requireNonNull(pattern, "pattern can not be null");
         this.groupExpression = Objects.requireNonNull(groupExpression, "groupExpression can not be null");
     }
 
@@ -61,8 +61,8 @@ public class GroupExpressionMatching implements Iterable<Plan> {
          * @param pattern pattern to match
          * @param groupExpression group expression to be matched
          */
-        public GroupExpressionIterator(Pattern<Plan, Plan> pattern, GroupExpression groupExpression) {
-            if (!pattern.matchOperator(groupExpression.getOperator())) {
+        public GroupExpressionIterator(Pattern<Plan> pattern, GroupExpression groupExpression) {
+            if (!pattern.matchRoot(groupExpression.getPlan())) {
                 return;
             }
 
@@ -86,8 +86,8 @@ public class GroupExpressionMatching implements Iterable<Plan> {
                 return;
             }
 
-            // toTreeNode will wrap operator to plan, and set GroupPlan as children placeholder
-            Plan root = groupExpression.getOperator().toTreeNode(groupExpression);
+            // getPlan return the plan with GroupPlan as children
+            Plan root = groupExpression.getPlan();
             // pattern.arity() == 0 equals to root.arity() == 0
             if (pattern.arity() == 0) {
                 if (pattern.matchPredicates(root)) {
@@ -114,11 +114,11 @@ public class GroupExpressionMatching implements Iterable<Plan> {
             }
         }
 
-        private List<Plan> matchingChildGroup(Pattern<? extends Plan, Plan> parentPattern,
+        private List<Plan> matchingChildGroup(Pattern<? extends Plan> parentPattern,
                                               Group childGroup, int childIndex) {
             boolean isLastPattern = childIndex + 1 >= parentPattern.arity();
             int patternChildIndex = isLastPattern ? parentPattern.arity() - 1 : childIndex;
-            Pattern<? extends Plan, Plan> childPattern = parentPattern.child(patternChildIndex);
+            Pattern<? extends Plan> childPattern = parentPattern.child(patternChildIndex);
 
             // translate MULTI and MULTI_GROUP to ANY and GROUP
             if (isLastPattern) {
@@ -134,7 +134,7 @@ public class GroupExpressionMatching implements Iterable<Plan> {
             return matchingChildren.build();
         }
 
-        private void assembleAllCombinationPlanTree(Plan root, Pattern<Plan, Plan> rootPattern,
+        private void assembleAllCombinationPlanTree(Plan root, Pattern<Plan> rootPattern,
                                                     GroupExpression groupExpression,
                                                     List<List<Plan>> childrenPlans) {
             int[] childrenPlanIndex = new int[childrenPlans.size()];
@@ -152,8 +152,8 @@ public class GroupExpressionMatching implements Iterable<Plan> {
                 // withChildren will erase groupExpression, so we must
                 // withGroupExpression too.
                 Plan rootWithChildren = root.withChildren(children)
-                        .withGroupExpression(root.getGroupExpression())
-                        .withLogicalProperties(Optional.of(logicalProperties));
+                        .withLogicalProperties(Optional.of(logicalProperties))
+                        .withGroupExpression(Optional.of(groupExpression));
                 if (rootPattern.matchPredicates(rootWithChildren)) {
                     results.add(rootWithChildren);
                 }
