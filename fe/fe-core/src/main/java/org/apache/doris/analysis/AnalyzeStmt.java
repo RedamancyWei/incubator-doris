@@ -296,6 +296,7 @@ public class AnalyzeStmt extends DdlStmt {
                 }
                 List<String> names = optPartitionNames.getPartitionNames();
                 Set<String> olapPartitionNames = olapTable.getPartitionNames();
+                // this is mainly to illustrate that temporary partitions are not supported
                 List<String> tempPartitionNames = olapTable.getTempPartitions().stream()
                         .map(Partition::getName).collect(Collectors.toList());
                 Optional<String> optional = names.stream()
