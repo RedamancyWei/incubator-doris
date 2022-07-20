@@ -46,20 +46,27 @@ import java.util.stream.IntStream;
 /**
  * ShowAnalyzeStmt is used to show statistics job info.
  * syntax:
- * SHOW ANALYZE
- * [TABLE | ID]
- * [
- * WHERE
- * [STATE = ["PENDING"|"SCHEDULING"|"RUNNING"|"FINISHED"|"FAILED"|"CANCELLED"]]
- * ]
- * [ORDER BY ...]
- * [LIMIT limit][OFFSET offset];
+ *    SHOW ANALYZE
+ *        [TABLE | ID]
+ *        [
+ *            WHERE
+ *            [STATE = ["PENDING"|"SCHEDULING"|"RUNNING"|"FINISHED"|"FAILED"|"CANCELLED"]]
+ *        ]
+ *        [ORDER BY ...]
+ *        [LIMIT limit][OFFSET offset];
  */
 public class ShowAnalyzeStmt extends ShowStmt {
     private static final String STATE_NAME = "state";
-    private static final ImmutableList<String> TITLE_NAMES = new ImmutableList.Builder<String>().add("id")
-            .add("create_time").add("start_time").add("finish_time").add("error_msg").add("scope").add("progress")
-            .add("state").build();
+    private static final ImmutableList<String> TITLE_NAMES = new ImmutableList.Builder<String>()
+            .add("id")
+            .add("create_time")
+            .add("start_time")
+            .add("finish_time")
+            .add("error_msg")
+            .add("scope")
+            .add("progress")
+            .add("state")
+            .build();
 
     private List<Long> jobIds;
     private TableName dbTableName;
@@ -81,8 +88,10 @@ public class ShowAnalyzeStmt extends ShowStmt {
         this.jobIds = jobIds;
     }
 
-    public ShowAnalyzeStmt(TableName dbTableName, Expr whereClause, List<OrderByElement> orderByElements,
-            LimitElement limitElement) {
+    public ShowAnalyzeStmt(TableName dbTableName,
+                           Expr whereClause,
+                           List<OrderByElement> orderByElements,
+                           LimitElement limitElement) {
         this.dbTableName = dbTableName;
         this.whereClause = whereClause;
         this.orderByElements = orderByElements;
@@ -94,22 +103,26 @@ public class ShowAnalyzeStmt extends ShowStmt {
     }
 
     public long getDbId() {
-        Preconditions.checkArgument(isAnalyzed(), "The dbId must be obtained after the parsing is complete");
+        Preconditions.checkArgument(isAnalyzed(),
+                "The dbId must be obtained after the parsing is complete");
         return dbId;
     }
 
     public Set<Long> getTblIds() {
-        Preconditions.checkArgument(isAnalyzed(), "The dbId must be obtained after the parsing is complete");
+        Preconditions.checkArgument(isAnalyzed(),
+                "The dbId must be obtained after the parsing is complete");
         return tblIds;
     }
 
     public String getStateValue() {
-        Preconditions.checkArgument(isAnalyzed(), "The tbl name must be obtained after the parsing is complete");
+        Preconditions.checkArgument(isAnalyzed(),
+                "The tbl name must be obtained after the parsing is complete");
         return stateValue;
     }
 
     public ArrayList<OrderByPair> getOrderByPairs() {
-        Preconditions.checkArgument(isAnalyzed(), "The tbl name must be obtained after the parsing is complete");
+        Preconditions.checkArgument(isAnalyzed(),
+                "The tbl name must be obtained after the parsing is complete");
         return orderByPairs;
     }
 
@@ -137,7 +150,8 @@ public class ShowAnalyzeStmt extends ShowStmt {
             String tblName = dbTableName.getTbl();
             checkShowAnalyzePriv(dbName, tblName);
 
-            Database db = analyzer.getCatalog().getInternalDataSource().getDbOrAnalysisException(dbName);
+            Database db = analyzer.getCatalog()
+                    .getInternalDataSource().getDbOrAnalysisException(dbName);
             Table table = db.getTableOrAnalysisException(tblName);
 
             dbId = db.getId();
@@ -149,7 +163,8 @@ public class ShowAnalyzeStmt extends ShowStmt {
                 ErrorReport.reportAnalysisException(ErrorCode.ERR_NO_DB_ERROR);
             }
 
-            Database db = analyzer.getCatalog().getInternalDataSource().getDbOrAnalysisException(dbName);
+            Database db = analyzer.getCatalog()
+                    .getInternalDataSource().getDbOrAnalysisException(dbName);
 
             db.readLock();
             try {
@@ -217,8 +232,11 @@ public class ShowAnalyzeStmt extends ShowStmt {
     private void checkShowAnalyzePriv(String dbName, String tblName) throws AnalysisException {
         PaloAuth auth = Catalog.getCurrentCatalog().getAuth();
         if (!auth.checkTblPriv(ConnectContext.get(), dbName, tblName, PrivPredicate.SHOW)) {
-            ErrorReport.reportAnalysisException(ErrorCode.ERR_TABLEACCESS_DENIED_ERROR, "SHOW ANALYZE",
-                    ConnectContext.get().getQualifiedUser(), ConnectContext.get().getRemoteIP(),
+            ErrorReport.reportAnalysisException(
+                    ErrorCode.ERR_TABLEACCESS_DENIED_ERROR,
+                    "SHOW ANALYZE",
+                    ConnectContext.get().getQualifiedUser(),
+                    ConnectContext.get().getRemoteIP(),
                     dbName + ": " + tblName);
         }
     }
@@ -231,7 +249,6 @@ public class ShowAnalyzeStmt extends ShowStmt {
         }
     }
 
-    @SuppressWarnings("checkstyle:Indentation")
     private void analyzeSubPredicate(Expr subExpr) throws AnalysisException {
         if (subExpr == null) {
             return;

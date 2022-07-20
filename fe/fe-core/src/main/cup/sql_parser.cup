@@ -2990,7 +2990,6 @@ show_param ::=
         RESULT = new ShowCreateMaterializedViewStmt(mvName, tableName);
     :}
     /* show analyze job */
-    /*
     | KW_ANALYZE integer_list:jobIds
     {:
         RESULT = new ShowAnalyzeStmt(jobIds);
@@ -2999,7 +2998,6 @@ show_param ::=
     {:
         RESULT = new ShowAnalyzeStmt(tbl, parser.where, orderByClause, limitClause);
     :}
-    */
     ;
 opt_tmp ::=
     /* empty */
