@@ -20,10 +20,12 @@ package org.apache.doris.analysis;
 import org.apache.doris.catalog.Catalog;
 import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.OlapTable;
+import org.apache.doris.catalog.Table;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.ErrorReport;
 import org.apache.doris.common.UserException;
+import org.apache.doris.common.util.PrintableMap;
 import org.apache.doris.common.util.Util;
 import org.apache.doris.mysql.privilege.PrivPredicate;
 import org.apache.doris.qe.ConnectContext;
@@ -41,7 +43,10 @@ import java.util.Set;
 
 /**
  * Manually inject statistics for tables or partitions.
- * e.g. ALTER TABLE table_name SET STATS ('k1' = 'v1', ...) [PARTITIONS(p_name1, p_name2...)]
+ * Only OLAP table statistics are supported.
+ * e.g.
+ *   ALTER TABLE table_name
+ *   SET STATS ('k1' = 'v1', ...) [ PARTITIONS(p_name1, p_name2...) ]
  */
 public class AlterTableStatsStmt extends DdlStmt {
 
@@ -57,10 +62,11 @@ public class AlterTableStatsStmt extends DdlStmt {
     private final List<String> partitionNames = Lists.newArrayList();
     private final Map<StatsType, String> statsTypeToValue = Maps.newHashMap();
 
-    public AlterTableStatsStmt(TableName tableName, PartitionNames optPartitionNames, Map<String, String> properties) {
+    public AlterTableStatsStmt(TableName tableName, Map<String, String> properties,
+                               PartitionNames optPartitionNames) {
         this.tableName = tableName;
-        this.optPartitionNames = optPartitionNames;
         this.properties = properties == null ? Maps.newHashMap() : properties;
+        this.optPartitionNames = optPartitionNames;
     }
 
     public TableName getTableName() {
@@ -85,11 +91,15 @@ public class AlterTableStatsStmt extends DdlStmt {
         // disallow external catalog
         Util.prohibitExternalCatalog(tableName.getCtl(), this.getClass().getSimpleName());
 
+        // check partition
+        checkPartitionNames();
+
         // check properties
         Optional<StatsType> optional = properties.keySet().stream().map(StatsType::fromString)
-                .filter(statsType -> !CONFIGURABLE_PROPERTIES_SET.contains(statsType)).findFirst();
+                .filter(statsType -> !CONFIGURABLE_PROPERTIES_SET.contains(statsType))
+                .findFirst();
         if (optional.isPresent()) {
-            throw new AnalysisException(optional.get() + " is invalid statistic");
+            throw new AnalysisException(optional.get() + " is invalid statistics");
         }
 
         // check auth
@@ -99,9 +109,6 @@ public class AlterTableStatsStmt extends DdlStmt {
                     ConnectContext.get().getQualifiedUser(), ConnectContext.get().getRemoteIP(),
                     tableName.getDb() + ": " + tableName.getTbl());
         }
-
-        // check partition
-        checkPartitionNames();
 
         // get statsTypeToValue
         properties.forEach((key, value) -> {
@@ -113,8 +120,16 @@ public class AlterTableStatsStmt extends DdlStmt {
     private void checkPartitionNames() throws AnalysisException {
         if (optPartitionNames != null) {
             optPartitionNames.analyze(analyzer);
-            Database db = analyzer.getCatalog().getInternalDataSource().getDbOrAnalysisException(tableName.getDb());
-            OlapTable olapTable = (OlapTable) db.getTableOrAnalysisException(tableName.getTbl());
+            Database db = analyzer.getCatalog().getInternalDataSource()
+                    .getDbOrAnalysisException(tableName.getDb());
+            Table table = db.getTableOrAnalysisException(tableName.getTbl());
+
+            if (table.getType() != Table.TableType.OLAP) {
+                throw new AnalysisException("Only OLAP table statistics are supported");
+            }
+
+            OlapTable olapTable = (OlapTable) table;
+
             if (olapTable.isPartitioned()) {
                 List<String> names = optPartitionNames.getPartitionNames();
                 Set<String> olapPartitionNames = olapTable.getPartitionNames();
@@ -128,5 +143,21 @@ public class AlterTableStatsStmt extends DdlStmt {
                 throw new AnalysisException("Not a partitioned table: " + olapTable.getName());
             }
         }
+    }
+
+    @Override
+    public String toSql() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("ALTER TABLE ");
+        sb.append(tableName.toSql());
+        sb.append(" SET STATS ");
+        sb.append("(");
+        sb.append(new PrintableMap<>(properties,
+                " = ", true, false));
+        sb.append(") ");
+        if (optPartitionNames != null) {
+            sb.append(optPartitionNames.toSql());
+        }
+        return sb.toString();
     }
 }
