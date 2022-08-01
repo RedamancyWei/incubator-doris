@@ -175,4 +175,9 @@ public class Statistics {
             // tableStats.setRowCount(rowCount);
         }
     }
+
+    // Used for unit test
+    public void putTableStats(long id, TableStats tableStats) {
+        this.idToTableStats.put(id, tableStats);
+    }
 }
