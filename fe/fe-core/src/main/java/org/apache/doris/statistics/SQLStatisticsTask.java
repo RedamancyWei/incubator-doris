@@ -17,7 +17,7 @@
 
 package org.apache.doris.statistics;
 
-import org.apache.doris.catalog.Catalog;
+import org.apache.doris.catalog.Env;
 import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.Table;
 import org.apache.doris.common.Config;
@@ -26,8 +26,8 @@ import org.apache.doris.common.InvalidFormatException;
 import org.apache.doris.statistics.StatisticsTaskResult.TaskResult;
 import org.apache.doris.statistics.StatisticsTaskScheduler.ConnectionPool;
 import org.apache.doris.statistics.StatsGranularity.Granularity;
-import org.apache.doris.statistics.util.QueryResultSet;
 import org.apache.doris.statistics.util.Connection;
+import org.apache.doris.statistics.util.QueryResultSet;
 import org.apache.doris.statistics.util.SqlFactory;
 
 import com.google.common.collect.Lists;
@@ -101,9 +101,9 @@ public class SQLStatisticsTask extends StatisticsTask {
         List<StatsType> statsTypes = statsDesc.getStatsTypes();
         StatsCategory category = statsDesc.getStatsCategory();
 
-        String dbName = Catalog.getCurrentInternalCatalog().getDbOrDdlException(category.getDbId())
+        String dbName = Env.getCurrentInternalCatalog().getDbOrDdlException(category.getDbId())
                 .getFullName().split(":")[1];
-        ConnectionPool connectionPool = Catalog.getCurrentCatalog().getStatisticsTaskScheduler()
+        ConnectionPool connectionPool = Env.getCurrentEnv().getStatisticsTaskScheduler()
                 .getConnectionPool(dbName);
         if (connectionPool == null) {
             throw new DdlException("Unable to connect to database: " + dbName);
@@ -143,7 +143,7 @@ public class SQLStatisticsTask extends StatisticsTask {
 
     private Map<String, String> getQueryParams(StatisticsDesc statsDesc) throws DdlException {
         StatsCategory category = statsDesc.getStatsCategory();
-        Database db = Catalog.getCurrentInternalCatalog().getDbOrDdlException(category.getDbId());
+        Database db = Env.getCurrentInternalCatalog().getDbOrDdlException(category.getDbId());
         Table table = db.getTableOrDdlException(category.getTableId());
 
         Map<String, String> params = Maps.newHashMap();

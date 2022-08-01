@@ -17,8 +17,8 @@
 
 package org.apache.doris.analysis;
 
-import org.apache.doris.catalog.Env;
 import org.apache.doris.catalog.Database;
+import org.apache.doris.catalog.Env;
 import org.apache.doris.catalog.OlapTable;
 import org.apache.doris.catalog.Table;
 import org.apache.doris.common.AnalysisException;
@@ -120,7 +120,7 @@ public class AlterTableStatsStmt extends DdlStmt {
     private void checkPartitionNames() throws AnalysisException {
         if (optPartitionNames != null) {
             optPartitionNames.analyze(analyzer);
-            Database db = analyzer.getCatalog().getInternalDataSource()
+            Database db = analyzer.getEnv().getInternalDataSource()
                     .getDbOrAnalysisException(tableName.getDb());
             Table table = db.getTableOrAnalysisException(tableName.getTbl());
 

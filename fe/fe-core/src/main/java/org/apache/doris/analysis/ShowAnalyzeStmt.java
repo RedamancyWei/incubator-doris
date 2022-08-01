@@ -150,7 +150,7 @@ public class ShowAnalyzeStmt extends ShowStmt {
             String tblName = dbTableName.getTbl();
             checkShowAnalyzePriv(dbName, tblName);
 
-            Database db = analyzer.getCatalog()
+            Database db = analyzer.getEnv()
                     .getInternalDataSource().getDbOrAnalysisException(dbName);
             Table table = db.getTableOrAnalysisException(tblName);
 
@@ -163,7 +163,7 @@ public class ShowAnalyzeStmt extends ShowStmt {
                 ErrorReport.reportAnalysisException(ErrorCode.ERR_NO_DB_ERROR);
             }
 
-            Database db = analyzer.getCatalog()
+            Database db = analyzer.getEnv()
                     .getInternalDataSource().getDbOrAnalysisException(dbName);
 
             db.readLock();
@@ -256,8 +256,7 @@ public class ShowAnalyzeStmt extends ShowStmt {
 
         boolean valid = true;
 
-        CHECK:
-        {
+        CHECK: {
             if (subExpr instanceof BinaryPredicate) {
                 BinaryPredicate binaryPredicate = (BinaryPredicate) subExpr;
                 if (binaryPredicate.getOp() != BinaryPredicate.Operator.EQ) {
