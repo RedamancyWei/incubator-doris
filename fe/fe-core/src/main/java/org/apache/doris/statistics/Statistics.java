@@ -57,9 +57,7 @@ public class Statistics {
 
     public void updateColumnStats(long tableId, String partitionName, String columnName, Type columnType,
                                   Map<StatsType, String> statsTypeToValue) throws AnalysisException {
-        TableStats tableStats = getNotNullTableStats(tableId);
-        Map<String, PartitionStats> nameToPartitionStats = tableStats.getNameToPartitionStats();
-        PartitionStats partitionStats = nameToPartitionStats.get(partitionName);
+        PartitionStats partitionStats = getNotNullPartitionStats(tableId, partitionName);
         partitionStats.updateColumnStats(columnName, columnType, statsTypeToValue);
     }
 
@@ -91,6 +89,24 @@ public class Statistics {
             throw new AnalysisException("Table " + tableId + " has no statistics");
         }
         return tableStats;
+    }
+
+    /**
+     * if the partition stats is not exist, create a new one.
+     *
+     * @param tableId table id
+     * @param partitionName partition name
+     * @return @TableStats
+     */
+    public PartitionStats getNotNullPartitionStats(long tableId, String partitionName) {
+        TableStats tableStats = getNotNullTableStats(tableId);
+        Map<String, PartitionStats> nameToPartitionStats = tableStats.getNameToPartitionStats();
+        PartitionStats partitionStats = nameToPartitionStats.get(partitionName);
+        if (partitionStats == null) {
+            partitionStats = new PartitionStats();
+            nameToPartitionStats.put(partitionName, partitionStats);
+        }
+        return partitionStats;
     }
 
     /**
