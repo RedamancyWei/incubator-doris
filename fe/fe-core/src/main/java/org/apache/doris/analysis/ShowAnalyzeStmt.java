@@ -153,7 +153,6 @@ public class ShowAnalyzeStmt extends ShowStmt {
             Database db = analyzer.getEnv()
                     .getInternalDataSource().getDbOrAnalysisException(dbName);
             Table table = db.getTableOrAnalysisException(tblName);
-
             dbId = db.getId();
             tblIds.add(table.getId());
         } else {
