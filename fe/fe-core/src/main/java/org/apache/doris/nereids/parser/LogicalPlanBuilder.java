@@ -123,6 +123,7 @@ import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.RuleNode;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -453,7 +454,7 @@ public class LogicalPlanBuilder extends DorisParserBaseVisitor<Object> {
     public UnboundFunction visitExtract(DorisParser.ExtractContext ctx) {
         return ParserUtils.withOrigin(ctx, () -> {
             String functionName = ctx.field.getText();
-            return new UnboundFunction(functionName, false, Arrays.asList(getExpression(ctx.source)));
+            return new UnboundFunction(functionName, false, false, Arrays.asList(getExpression(ctx.source)));
         });
     }
 
@@ -465,7 +466,12 @@ public class LogicalPlanBuilder extends DorisParserBaseVisitor<Object> {
             String functionName = ctx.identifier().getText();
             boolean isDistinct = ctx.DISTINCT() != null;
             List<Expression> params = visit(ctx.expression(), Expression.class);
-            return new UnboundFunction(functionName, isDistinct, params);
+            for (Expression expression : params) {
+                if (expression instanceof UnboundStar && functionName.equalsIgnoreCase("count") && !isDistinct) {
+                    return new UnboundFunction(functionName, false, true, new ArrayList<>());
+                }
+            }
+            return new UnboundFunction(functionName, isDistinct, false, params);
         });
     }
 
@@ -582,9 +588,9 @@ public class LogicalPlanBuilder extends DorisParserBaseVisitor<Object> {
             // build left deep join tree
             for (RelationContext relation : ctx.relation()) {
                 LogicalPlan right = plan(relation.relationPrimary());
-                left = left == null
+                left = (left == null)
                         ? right
-                        : new LogicalJoin(JoinType.INNER_JOIN, Optional.empty(), left, right);
+                        : new LogicalJoin<>(JoinType.CROSS_JOIN, Optional.empty(), left, right);
                 left = withJoinRelations(left, relation);
             }
             // TODO: pivot and lateral view
@@ -709,23 +715,31 @@ public class LogicalPlanBuilder extends DorisParserBaseVisitor<Object> {
         LogicalPlan last = input;
         for (JoinRelationContext join : ctx.joinRelation()) {
             JoinType joinType;
-            if (join.joinType().LEFT() != null) {
-                joinType = JoinType.LEFT_OUTER_JOIN;
-            } else if (join.joinType().RIGHT() != null) {
-                joinType = JoinType.RIGHT_OUTER_JOIN;
+            if (join.joinType().CROSS() != null) {
+                joinType = JoinType.CROSS_JOIN;
             } else if (join.joinType().FULL() != null) {
                 joinType = JoinType.FULL_OUTER_JOIN;
             } else if (join.joinType().SEMI() != null) {
-                joinType = JoinType.LEFT_SEMI_JOIN;
+                if (join.joinType().LEFT() != null) {
+                    joinType = JoinType.LEFT_SEMI_JOIN;
+                } else {
+                    joinType = JoinType.RIGHT_SEMI_JOIN;
+                }
             } else if (join.joinType().ANTI() != null) {
-                joinType = JoinType.LEFT_ANTI_JOIN;
-            } else if (join.joinType().CROSS() != null) {
-                joinType = JoinType.CROSS_JOIN;
+                if (join.joinType().LEFT() != null) {
+                    joinType = JoinType.LEFT_ANTI_JOIN;
+                } else {
+                    joinType = JoinType.RIGHT_ANTI_JOIN;
+                }
+            } else if (join.joinType().LEFT() != null) {
+                joinType = JoinType.LEFT_OUTER_JOIN;
+            } else if (join.joinType().RIGHT() != null) {
+                joinType = JoinType.RIGHT_OUTER_JOIN;
             } else {
                 joinType = JoinType.INNER_JOIN;
             }
 
-            // TODO: natural join, lateral join, using join
+            // TODO: natural join, lateral join, using join, union join
             JoinCriteriaContext joinCriteria = join.joinCriteria();
             Expression condition;
             if (joinCriteria == null) {
@@ -734,7 +748,7 @@ public class LogicalPlanBuilder extends DorisParserBaseVisitor<Object> {
                 condition = getExpression(joinCriteria.booleanExpression());
             }
 
-            last = new LogicalJoin(joinType, Optional.ofNullable(condition), last, plan(join.relationPrimary()));
+            last = new LogicalJoin<>(joinType, Optional.ofNullable(condition), last, plan(join.relationPrimary()));
         }
         return last;
     }
@@ -747,14 +761,14 @@ public class LogicalPlanBuilder extends DorisParserBaseVisitor<Object> {
                 return input;
             } else {
                 List<NamedExpression> projects = getNamedExpressions(selectCtx.namedExpressionSeq());
-                return new LogicalProject(projects, input);
+                return new LogicalProject<>(projects, input);
             }
         });
     }
 
     private LogicalPlan withFilter(LogicalPlan input, Optional<WhereClauseContext> whereCtx) {
         return input.optionalMap(whereCtx, () ->
-            new LogicalFilter(getExpression((whereCtx.get().booleanExpression())), input)
+            new LogicalFilter<>(getExpression((whereCtx.get().booleanExpression())), input)
         );
     }
 
@@ -763,7 +777,7 @@ public class LogicalPlanBuilder extends DorisParserBaseVisitor<Object> {
         return input.optionalMap(aggCtx, () -> {
             List<Expression> groupByExpressions = visit(aggCtx.get().groupByItem().expression(), Expression.class);
             List<NamedExpression> namedExpressions = getNamedExpressions(selectCtx.namedExpressionSeq());
-            return new LogicalAggregate(groupByExpressions, namedExpressions, input);
+            return new LogicalAggregate<>(groupByExpressions, namedExpressions, input);
         });
     }
 

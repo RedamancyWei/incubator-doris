@@ -2249,7 +2249,8 @@ public class ShowExecutor {
 
     private void handleShowAnalyze() throws AnalysisException {
         ShowAnalyzeStmt showStmt = (ShowAnalyzeStmt) stmt;
-        StatisticsJobManager jobManager = Env.getCurrentEnv().getStatisticsJobManager();
+        StatisticsJobManager jobManager = Env.getCurrentEnv()
+                .getStatisticsJobManager();
         List<List<String>> results = jobManager.getAnalyzeJobInfos(showStmt);
         resultSet = new ShowResultSet(showStmt.getMetaData(), results);
     }
