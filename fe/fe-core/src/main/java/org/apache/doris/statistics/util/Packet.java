@@ -20,9 +20,9 @@ package org.apache.doris.statistics.util;
 import java.nio.ByteBuffer;
 
 public abstract class Packet {
-    public final int HEADER_SIZE = 4;
+    public static final int HEADER_SIZE = 4;
 
-    public final int MAX_PACKET_SIZE = 16 * 1024 * 1024;
+    public static final int MAX_PACKET_SIZE = 16 * 1024 * 1024;
 
     public int packetLength;
 

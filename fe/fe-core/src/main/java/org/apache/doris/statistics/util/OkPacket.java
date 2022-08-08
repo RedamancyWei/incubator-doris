@@ -95,9 +95,7 @@ public class OkPacket extends Packet {
 
     @Override
     public int calcPacketSize() {
-        int size = 1
-                + BufferUtil.getLength(affectedRows)
-                + BufferUtil.getLength(lastInsertId);
+        int size = 1 + BufferUtil.getLength(affectedRows) + BufferUtil.getLength(lastInsertId);
 
         if ((capabilities & MysqlCapability.Flag.CLIENT_PROTOCOL_41.getFlagBit()) != 0) {
             size += 4;
@@ -126,19 +124,10 @@ public class OkPacket extends Packet {
 
     @Override
     public String toString() {
-        return "OkPacket{"
-                + "header=" + header
-                + ", affectedRows=" + affectedRows
-                + ", lastInsertId=" + lastInsertId
-                + ", statusFlags=" + statusFlags
-                + ", warnings=" + warnings
-                + ", info='" + info + '\''
-                + ", sessionStateChanges='" + sessionStateChanges + '\''
-                + ", capabilities=" + capabilities
-                + ", HEADER_SIZE=" + HEADER_SIZE
-                + ", MAX_PACKET_SIZE=" + MAX_PACKET_SIZE
-                + ", packetLength=" + packetLength
-                + ", packetSequenceId=" + packetSequenceId
-                + '}';
+        return "OkPacket{" + "header=" + header + ", affectedRows=" + affectedRows + ", lastInsertId=" + lastInsertId
+                + ", statusFlags=" + statusFlags + ", warnings=" + warnings + ", info='" + info + '\''
+                + ", sessionStateChanges='" + sessionStateChanges + '\'' + ", capabilities=" + capabilities
+                + ", HEADER_SIZE=" + HEADER_SIZE + ", MAX_PACKET_SIZE=" + MAX_PACKET_SIZE + ", packetLength="
+                + packetLength + ", packetSequenceId=" + packetSequenceId + '}';
     }
 }

@@ -79,7 +79,8 @@ public class Connection implements AutoCloseable {
         this.database = database;
     }
 
-    public Connection(String host, int port, String username, String password, String database) {
+    public Connection(String host, int port, String username,
+            String password, String database) {
         this.host = host;
         this.port = port;
         this.username = username;
@@ -155,19 +156,19 @@ public class Connection implements AutoCloseable {
      * Connection is done by many exchanges:
      * (Create socket)
      * 1. Server sends Initial handshake packet
-     * - If SSL/TLS connection
-     * - Client sends SSLRequest packet and switches to SSL mode for sending and receiving the following messages:
+     *    - If SSL/TLS connection
+     *       - Client sends SSLRequest packet and switches to SSL mode for sending and receiving the following messages:
      * 2. Client sends Handshake response packet
      * 3. Server sends either:
-     * - An OK packet in case of success OkPacket
-     * - An error packet in case of error ErrPacket
-     * - Authentication switch
-     * - If the client or server doesn't have PLUGIN_AUTH capability:
-     * - Server sends 0xFE byte
-     * - Client sends old_password
-     * - else
-     * - Server sends Authentication switch request
-     * - Client may have many exchange with the server according to the Plugin.
+     *    - An OK packet in case of success OkPacket
+     *    - An error packet in case of error ErrPacket
+     *    - Authentication switch
+     *    - If the client or server doesn't have PLUGIN_AUTH capability:
+     *    - Server sends 0xFE byte
+     *    - Client sends old_password
+     *    - else
+     *    - Server sends Authentication switch request
+     *    - Client may have many exchange with the server according to the Plugin.
      * 4. Authentication switch ends with server sending either OkPacket or ErrPacket
      */
     public void init() throws IOException, NoSuchAlgorithmException {
