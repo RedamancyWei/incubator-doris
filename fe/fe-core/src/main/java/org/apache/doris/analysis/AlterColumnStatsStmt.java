@@ -36,6 +36,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -69,10 +70,10 @@ public class AlterColumnStatsStmt extends DdlStmt {
     private final Map<StatsType, String> statsTypeToValue = Maps.newHashMap();
 
     public AlterColumnStatsStmt(TableName tableName, String columnName,
-                                Map<String, String> properties, PartitionNames optPartitionNames) {
+            Map<String, String> properties, PartitionNames optPartitionNames) {
         this.tableName = tableName;
         this.columnName = columnName;
-        this.properties = properties == null ? Maps.newHashMap() : properties;
+        this.properties = properties == null ? Collections.emptyMap() : properties;
         this.optPartitionNames = optPartitionNames;
     }
 
@@ -128,6 +129,9 @@ public class AlterColumnStatsStmt extends DdlStmt {
         });
     }
 
+    /**
+     * TODO(wzt): Support for external tables
+     */
     private void checkPartitionAndColumnNames() throws AnalysisException {
         Database db = analyzer.getEnv().getInternalDataSource()
                 .getDbOrAnalysisException(tableName.getDb());
@@ -138,19 +142,20 @@ public class AlterColumnStatsStmt extends DdlStmt {
         }
 
         OlapTable olapTable = (OlapTable) table;
-
         if (olapTable.getColumn(columnName) == null) {
             ErrorReport.reportAnalysisException(ErrorCode.ERR_WRONG_COLUMN_NAME, columnName);
         }
 
         if (optPartitionNames != null) {
-            optPartitionNames.analyze(analyzer);
             if (!olapTable.isPartitioned()) {
                 throw new AnalysisException("Not a partitioned table: " + olapTable.getName());
             }
+
+            optPartitionNames.analyze(analyzer);
             Set<String> olapPartitionNames = olapTable.getPartitionNames();
             Optional<String> optional = optPartitionNames.getPartitionNames().stream()
-                    .filter(name -> !olapPartitionNames.contains(name)).findFirst();
+                    .filter(name -> !olapPartitionNames.contains(name))
+                    .findFirst();
             if (optional.isPresent()) {
                 throw new AnalysisException("Partition does not exist: " + optional.get());
             }

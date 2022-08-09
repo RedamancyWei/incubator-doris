@@ -63,7 +63,7 @@ public class AlterTableStatsStmt extends DdlStmt {
     private final Map<StatsType, String> statsTypeToValue = Maps.newHashMap();
 
     public AlterTableStatsStmt(TableName tableName, Map<String, String> properties,
-                               PartitionNames optPartitionNames) {
+            PartitionNames optPartitionNames) {
         this.tableName = tableName;
         this.properties = properties == null ? Maps.newHashMap() : properties;
         this.optPartitionNames = optPartitionNames;
@@ -118,30 +118,31 @@ public class AlterTableStatsStmt extends DdlStmt {
     }
 
     private void checkPartitionNames() throws AnalysisException {
+        Database db = analyzer.getEnv().getInternalDataSource()
+                .getDbOrAnalysisException(tableName.getDb());
+        Table table = db.getTableOrAnalysisException(tableName.getTbl());
+
+        if (table.getType() != Table.TableType.OLAP) {
+            throw new AnalysisException("Only OLAP table statistics are supported");
+        }
+
         if (optPartitionNames != null) {
-            optPartitionNames.analyze(analyzer);
-            Database db = analyzer.getEnv().getInternalDataSource()
-                    .getDbOrAnalysisException(tableName.getDb());
-            Table table = db.getTableOrAnalysisException(tableName.getTbl());
-
-            if (table.getType() != Table.TableType.OLAP) {
-                throw new AnalysisException("Only OLAP table statistics are supported");
-            }
-
             OlapTable olapTable = (OlapTable) table;
 
-            if (olapTable.isPartitioned()) {
-                List<String> names = optPartitionNames.getPartitionNames();
-                Set<String> olapPartitionNames = olapTable.getPartitionNames();
-                Optional<String> optional = names.stream()
-                        .filter(name -> !olapPartitionNames.contains(name)).findFirst();
-                if (optional.isPresent()) {
-                    throw new AnalysisException("Partition does not exist: " + optional.get());
-                }
-                partitionNames.addAll(optPartitionNames.getPartitionNames());
-            } else {
+            if (!olapTable.isPartitioned()) {
                 throw new AnalysisException("Not a partitioned table: " + olapTable.getName());
             }
+
+            optPartitionNames.analyze(analyzer);
+            List<String> names = optPartitionNames.getPartitionNames();
+            Set<String> olapPartitionNames = olapTable.getPartitionNames();
+            Optional<String> optional = names.stream()
+                    .filter(name -> !olapPartitionNames.contains(name))
+                    .findFirst();
+            if (optional.isPresent()) {
+                throw new AnalysisException("Partition does not exist: " + optional.get());
+            }
+            partitionNames.addAll(names);
         }
     }
 
