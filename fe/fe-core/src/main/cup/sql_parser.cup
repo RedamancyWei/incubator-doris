@@ -811,6 +811,10 @@ refresh_stmt ::=
     {:
         RESULT = new RefreshMaterializedViewStmt(mv, MVRefreshInfo.RefreshMethod.COMPLETE);
     :}
+    | KW_REFRESH KW_CATALOG ident:catalogName
+    {:
+        RESULT = new RefreshCatalogStmt(catalogName);
+    :}
     ;
 
 clean_stmt ::=
@@ -2853,6 +2857,10 @@ show_param ::=
     {:
         RESULT = new ShowDbStmt(parser.wild, parser.where);
     :}
+    | KW_DATABASES KW_FROM ident:catalogName
+    {:
+        RESULT = new ShowDbStmt(null, null, catalogName);
+    :}
     /* show database id */
     | KW_DATABASE INTEGER_LITERAL:dbId
     {:
@@ -2861,6 +2869,10 @@ show_param ::=
     | KW_SCHEMAS opt_wild_where
     {:
         RESULT = new ShowDbStmt(parser.wild, parser.where);
+    :}
+    | KW_SCHEMAS KW_FROM ident:catalogName
+    {:
+        RESULT = new ShowDbStmt(null, null, catalogName);
     :}
     /* Catalog */
     | KW_CATALOGS
@@ -3588,6 +3600,10 @@ use_stmt ::=
     KW_USE ident:db
     {:
         RESULT = new UseStmt(db);
+    :}
+    | KW_USE ident:ctl DOT ident:db
+    {:
+        RESULT = new UseStmt(ctl, db);
     :}
     ;
 
