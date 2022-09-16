@@ -22,9 +22,12 @@ import org.apache.doris.catalog.Env;
 import org.apache.doris.catalog.Table;
 import org.apache.doris.common.DdlException;
 import org.apache.doris.common.InvalidFormatException;
-import org.apache.doris.statistics.InternalQueryResult.ResultRow;
 import org.apache.doris.statistics.StatisticsTaskResult.TaskResult;
 import org.apache.doris.statistics.StatsGranularity.Granularity;
+import org.apache.doris.statistics.util.InternalQuery;
+import org.apache.doris.statistics.util.InternalQueryResult;
+import org.apache.doris.statistics.util.InternalQueryResult.ResultRow;
+import org.apache.doris.statistics.util.SqlFactory;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;

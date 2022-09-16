@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-package org.apache.doris.statistics;
+package org.apache.doris.statistics.util;
 
 import org.apache.doris.analysis.Analyzer;
 import org.apache.doris.analysis.SqlParser;
@@ -36,7 +36,7 @@ import org.apache.doris.qe.Coordinator;
 import org.apache.doris.qe.OriginStatement;
 import org.apache.doris.qe.QeProcessorImpl;
 import org.apache.doris.qe.RowBatch;
-import org.apache.doris.statistics.InternalQueryResult.ResultRow;
+import org.apache.doris.statistics.util.InternalQueryResult.ResultRow;
 import org.apache.doris.system.SystemInfoService;
 import org.apache.doris.thrift.TQueryOptions;
 import org.apache.doris.thrift.TResultBatch;
