@@ -24,6 +24,7 @@ import org.apache.doris.analysis.StatementBase;
 import org.apache.doris.analysis.UserIdentity;
 import org.apache.doris.catalog.Env;
 import org.apache.doris.catalog.PrimitiveType;
+import org.apache.doris.cluster.ClusterNamespace;
 import org.apache.doris.common.DdlException;
 import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.ErrorReport;
@@ -96,14 +97,15 @@ public class InternalQuery {
 
     private void buildContext() {
         context = new ConnectContext();
+        context.setEnv(Env.getCurrentEnv());
         context.setCluster(SystemInfoService.DEFAULT_CLUSTER);
         context.setCurrentUserIdentity(UserIdentity.ROOT);
         context.setQualifiedUser(UserIdentity.ROOT.getQualifiedUser());
 
-        String fullDbName = SystemInfoService.DEFAULT_CLUSTER + ":" + database;
+        String fullDbName = ClusterNamespace
+                .getFullName(SystemInfoService.DEFAULT_CLUSTER, database);
         context.setDatabase(fullDbName);
 
-        context.setEnv(Env.getCurrentEnv());
         UUID uuid = UUID.randomUUID();
         TUniqueId newQueryId = new TUniqueId(uuid.getMostSignificantBits(),
                 uuid.getLeastSignificantBits());

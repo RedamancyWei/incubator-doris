@@ -26,7 +26,6 @@ import org.apache.doris.common.ThreadPoolManager;
 import org.apache.doris.common.util.MasterDaemon;
 import org.apache.doris.statistics.StatisticsJob.JobState;
 import org.apache.doris.statistics.StatisticsTask.TaskState;
-import org.apache.doris.statistics.util.Connection;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -49,70 +48,10 @@ import java.util.concurrent.TimeoutException;
  */
 public class StatisticsTaskScheduler extends MasterDaemon {
     private static final Logger LOG = LogManager.getLogger(StatisticsTaskScheduler.class);
-    /**
-     * the maximum number of connections per database.
-     * each database can only be connected to CAPACITY.
-     */
-    private static final int CAPACITY = 10;
-    private final Map<String, ConnectionPool> dbToConnections = Maps.newHashMap();
-
     private final Queue<StatisticsTask> queue = Queues.newLinkedBlockingQueue();
-
-    static class ConnectionPool {
-        private int size = 0;
-        private final String database;
-        private final List<Connection> connections = Lists.newArrayList();
-
-        public ConnectionPool(String database) {
-            this.database = database;
-            Connection connection = new Connection(database);
-            connections.add(connection);
-            size++;
-        }
-
-        public synchronized Connection getConnection(long timeoutSec) throws InterruptedException, TimeoutException {
-            int clientNums = connections.size();
-            if (clientNums > 0) {
-                Connection connection = connections.get(clientNums - 1);
-                connections.remove(clientNums - 1);
-                return connection;
-            } else {
-                if (size < CAPACITY) {
-                    Connection connection = new Connection(database);
-                    size++;
-                    return connection;
-                } else {
-                    long currentTime = System.currentTimeMillis();
-                    while (true) {
-                        TimeUnit.SECONDS.sleep(1);
-                        if (System.currentTimeMillis() - currentTime > timeoutSec * 1000) {
-                            throw new TimeoutException("Get client connection timeout.");
-                        } else if (connections.size() > 0) {
-                            return connections.get(connections.size() - 1);
-                        }
-                    }
-                }
-            }
-        }
-
-        public synchronized void close(Connection connection) {
-            connections.add(connection);
-        }
-    }
 
     public StatisticsTaskScheduler() {
         super("Statistics task scheduler", 0);
-    }
-
-    public synchronized ConnectionPool getConnectionPool(String database) {
-        ConnectionPool connectionPool;
-        if (dbToConnections.containsKey(database)) {
-            connectionPool = dbToConnections.get(database);
-        } else {
-            connectionPool = new ConnectionPool(database);
-            dbToConnections.put(database, connectionPool);
-        }
-        return connectionPool;
     }
 
     @Override

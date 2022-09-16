@@ -209,7 +209,7 @@ import org.apache.doris.statistics.StatisticsJobManager;
 import org.apache.doris.statistics.StatisticsJobScheduler;
 import org.apache.doris.statistics.StatisticsManager;
 import org.apache.doris.statistics.StatisticsTaskScheduler;
-import org.apache.doris.statistics.util.StatisticsSchedulerTest;
+import org.apache.doris.statistics.StatisticsSchedulerTest;
 import org.apache.doris.system.Backend;
 import org.apache.doris.system.Frontend;
 import org.apache.doris.system.HeartbeatMgr;

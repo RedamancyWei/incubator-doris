@@ -20,24 +20,17 @@ package org.apache.doris.statistics;
 import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.Env;
 import org.apache.doris.catalog.Table;
-import org.apache.doris.common.Config;
 import org.apache.doris.common.DdlException;
 import org.apache.doris.common.InvalidFormatException;
+import org.apache.doris.statistics.InternalQueryResult.ResultRow;
 import org.apache.doris.statistics.StatisticsTaskResult.TaskResult;
-import org.apache.doris.statistics.StatisticsTaskScheduler.ConnectionPool;
 import org.apache.doris.statistics.StatsGranularity.Granularity;
-import org.apache.doris.statistics.util.Connection;
-import org.apache.doris.statistics.util.QueryResultSet;
-import org.apache.doris.statistics.util.SqlFactory;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
-import java.io.IOException;
-import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeoutException;
 
 /**
  * A statistics task that collects statistics by executing query.
@@ -64,7 +57,8 @@ public class SQLStatisticsTask extends StatisticsTask {
         return new StatisticsTaskResult(taskResults);
     }
 
-    protected String constructQuery(StatisticsDesc statsDesc) throws DdlException, InvalidFormatException {
+    protected String constructQuery(StatisticsDesc statsDesc) throws DdlException,
+            InvalidFormatException {
         Map<String, String> params = getQueryParams(statsDesc);
         List<StatsType> statsTypes = statsDesc.getStatsTypes();
         StatsType type = statsTypes.get(0);
@@ -95,50 +89,32 @@ public class SQLStatisticsTask extends StatisticsTask {
         }
     }
 
-    protected TaskResult executeQuery(StatisticsDesc statsDesc)
-            throws DdlException, IOException, NoSuchAlgorithmException, InterruptedException, TimeoutException {
+    protected TaskResult executeQuery(StatisticsDesc statsDesc) throws Exception {
         StatsGranularity granularity = statsDesc.getStatsGranularity();
         List<StatsType> statsTypes = statsDesc.getStatsTypes();
         StatsCategory category = statsDesc.getStatsCategory();
 
-        String dbName = Env.getCurrentInternalCatalog().getDbOrDdlException(category.getDbId())
-                .getFullName().split(":")[1];
-        ConnectionPool connectionPool = Env.getCurrentEnv().getStatisticsTaskScheduler()
-                .getConnectionPool(dbName);
-        if (connectionPool == null) {
-            throw new DdlException("Unable to connect to database: " + dbName);
+        String dbName = Env.getCurrentInternalCatalog()
+                .getDbOrDdlException(category.getDbId()).getFullName();
+        InternalQuery query = new InternalQuery(dbName, statement);
+        InternalQueryResult queryResult = query.query();
+        List<ResultRow> resultRows = queryResult.getResultRows();
+
+        if (resultRows != null && resultRows.size() == 1) {
+            ResultRow resultRow = resultRows.get(0);
+            List<String> columns = resultRow.getColumns();
+            TaskResult result = createNewTaskResult(category, granularity);
+
+            assert columns.size() == statsTypes.size();
+            for (int i = 0; i < columns.size(); i++) {
+                StatsType statsType = StatsType.fromString(columns.get(i));
+                result.getStatsTypeToValue().put(statsType, resultRow.getString(i));
+            }
+            return result;
         }
 
-        QueryResultSet query;
-        List<List<Object>> rows;
-        Connection connection = null;
-
-        try {
-            connection = connectionPool.getConnection(Config.max_cbo_statistics_task_timeout_sec);
-            query = connection.query(statement);
-            rows = query.getRows();
-
-            if (rows.size() == 1) {
-                List<Object> row = rows.get(0);
-                assert row.size() == statsTypes.size();
-                TaskResult result = createNewTaskResult(category, granularity);
-                List<String> columns = query.getColumns();
-                for (int i = 0; i < columns.size(); i++) {
-                    StatsType statsType = StatsType.fromString(columns.get(i));
-                    if (row.get(i) != null) {
-                        result.getStatsTypeToValue().put(statsType, String.valueOf(row.get(i)));
-                    }
-                }
-                return result;
-            }
-
-            // Statistics statements are executed singly and return only one row data
-            throw new DdlException("Statistics query result is incorrect, " + rows);
-        } finally {
-            if (connection != null) {
-                connectionPool.close(connection);
-            }
-        }
+        // Statistics statements are executed singly and return only one row data
+        throw new DdlException("Statistics query result is incorrect, " + queryResult);
     }
 
     private Map<String, String> getQueryParams(StatisticsDesc statsDesc) throws DdlException {
