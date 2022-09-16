@@ -25,6 +25,7 @@ import org.apache.doris.analysis.UserIdentity;
 import org.apache.doris.catalog.Env;
 import org.apache.doris.catalog.PrimitiveType;
 import org.apache.doris.cluster.ClusterNamespace;
+import org.apache.doris.common.Config;
 import org.apache.doris.common.DdlException;
 import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.ErrorReport;
@@ -64,12 +65,17 @@ public class InternalQuery {
     private ConnectContext context;
     private Coordinator coord;
 
+    private int timeout = 0;
     private StatementBase stmt;
     private final List<TResultBatch> resultBatches = Lists.newArrayList();
 
     public InternalQuery(String database, String sql) {
         this.database = database;
         this.sql = sql;
+    }
+
+    public void setTimeout(int timeout) {
+        this.timeout = timeout;
     }
 
     /**
@@ -113,6 +119,10 @@ public class InternalQuery {
 
         context.setThreadLocalInfo();
         context.setStartTime();
+
+        // If user does not set the timeout, then use max_cbo_statistics_task_timeout_sec
+        timeout = timeout > 0 ? timeout : Config.max_cbo_statistics_task_timeout_sec;
+        context.getSessionVariable().setQueryTimeoutS(timeout);
     }
 
     private void parseSql() throws DdlException {
