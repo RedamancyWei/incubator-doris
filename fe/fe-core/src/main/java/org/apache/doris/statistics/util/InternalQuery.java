@@ -175,10 +175,10 @@ public class InternalQuery {
             List<ByteBuffer> rows = batch.getRows();
             for (ByteBuffer buffer : rows) {
                 List<String> values = Lists.newArrayList();
-                InternalQueryField field = new InternalQueryField(buffer.slice());
+                InternalQueryBuffer queryBuffer = new InternalQueryBuffer(buffer.slice());
 
                 for (int i = 0; i < columns.size(); i++) {
-                    String value = field.readStringWithLength();
+                    String value = queryBuffer.readStringWithLength();
                     values.add(value);
                 }
 

@@ -20,14 +20,13 @@ package org.apache.doris.statistics.util;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 
-public class InternalQueryField {
+public class InternalQueryBuffer {
     private static final long NULL_LENGTH = -1;
-
     private static final byte[] EMPTY_BYTES = new byte[0];
 
     private final ByteBuffer buffer;
 
-    public InternalQueryField(ByteBuffer buffer) {
+    public InternalQueryBuffer(ByteBuffer buffer) {
         this.buffer = buffer;
     }
 

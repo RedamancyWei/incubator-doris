@@ -28,7 +28,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class SqlFactory {
+public class InternalSqlFactory {
     /** -------------------------- for statistics begin -------------------------- */
     public static final String MIN_VALUE_SQL = "SELECT MIN(${column}) AS min_value FROM ${table};";
     public static final String PARTITION_MIN_VALUE_SQL = "SELECT MIN(${column}) AS min_value"
@@ -70,7 +70,7 @@ public class SqlFactory {
             + " ${table} PARTITION (${partition}) WHERE ${column} IS NULL;";
     /** ---------------------------- for statistics end ---------------------------- */
 
-    private static final Logger LOG = LogManager.getLogger(SqlFactory.class);
+    private static final Logger LOG = LogManager.getLogger(InternalSqlFactory.class);
 
     private static final Pattern PATTERN = Pattern.compile("\\$\\{\\w+\\}");
 
