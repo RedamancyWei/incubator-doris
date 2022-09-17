@@ -20,6 +20,7 @@ package org.apache.doris.statistics.util;
 import org.apache.doris.catalog.PrimitiveType;
 import org.apache.doris.common.DdlException;
 
+import com.clearspring.analytics.util.Lists;
 import com.google.common.collect.Maps;
 
 import java.util.List;
@@ -29,15 +30,11 @@ public class InternalQueryResult {
     private static List<String> mateOfColumns;
     private static List<PrimitiveType> mateOfTypes;
 
-    private List<ResultRow> resultRows;
+    private final List<ResultRow> resultRows = Lists.newArrayList();
 
     public InternalQueryResult(List<String> columns, List<PrimitiveType> types) {
         mateOfColumns = columns;
         mateOfTypes = types;
-    }
-
-    public void setResultRows(List<ResultRow> resultRows) {
-        this.resultRows = resultRows;
     }
 
     public List<ResultRow> getResultRows() {
@@ -76,6 +73,10 @@ public class InternalQueryResult {
 
         public List<PrimitiveType> getTypes() throws DdlException {
             return getMateOfTypes();
+        }
+
+        public List<String> getValues() {
+            return values != null ? values : Lists.newArrayList();
         }
 
         private void buildColumnNameMap() throws DdlException {
@@ -236,7 +237,7 @@ public class InternalQueryResult {
 
     @Override
     public String toString() {
-        if (resultRows != null && resultRows.size() > 0) {
+        if (resultRows.size() > 0) {
             StringBuilder sb = new StringBuilder();
             sb.append("InternalQueryResult:\n");
             for (ResultRow resultRow : resultRows) {

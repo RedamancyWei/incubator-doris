@@ -208,6 +208,7 @@ import org.apache.doris.statistics.StatisticsJobManager;
 import org.apache.doris.statistics.StatisticsJobScheduler;
 import org.apache.doris.statistics.StatisticsManager;
 import org.apache.doris.statistics.StatisticsTaskScheduler;
+import org.apache.doris.statistics.util.StatisticsSchedulerTest;
 import org.apache.doris.system.Backend;
 import org.apache.doris.system.Frontend;
 import org.apache.doris.system.HeartbeatMgr;
@@ -393,6 +394,7 @@ public class Env {
     private StatisticsJobManager statisticsJobManager;
     private StatisticsJobScheduler statisticsJobScheduler;
     private StatisticsTaskScheduler statisticsTaskScheduler;
+    private StatisticsSchedulerTest statisticsSchedulerTest;
 
     private PaloAuth auth;
 
@@ -575,6 +577,7 @@ public class Env {
         this.statisticsJobManager = new StatisticsJobManager();
         this.statisticsJobScheduler = new StatisticsJobScheduler();
         this.statisticsTaskScheduler = new StatisticsTaskScheduler();
+        this.statisticsSchedulerTest = new StatisticsSchedulerTest();
 
         this.auth = new PaloAuth();
         this.domainResolver = new DomainResolver(auth);
@@ -1397,6 +1400,9 @@ public class Env {
         partitionInMemoryInfoCollector.start();
         streamLoadRecordMgr.start();
         getInternalCatalog().getIcebergTableCreationRecordMgr().start();
+        this.statisticsJobScheduler.start();
+        this.statisticsTaskScheduler.start();
+        this.statisticsSchedulerTest.start();
     }
 
     // start threads that should running on all FE

@@ -18,6 +18,7 @@
 package org.apache.doris.statistics.util;
 
 import org.apache.doris.analysis.Analyzer;
+import org.apache.doris.analysis.QueryStmt;
 import org.apache.doris.analysis.SqlParser;
 import org.apache.doris.analysis.SqlScanner;
 import org.apache.doris.analysis.StatementBase;
@@ -60,12 +61,13 @@ import java.util.stream.Collectors;
 public class InternalQuery {
     private static final Logger LOG = LogManager.getLogger(InternalQuery.class);
 
-    private final String database;
+    private int timeout = 0;
     private final String sql;
+    private final String database;
+
     private ConnectContext context;
     private Coordinator coord;
 
-    private int timeout = 0;
     private StatementBase stmt;
     private final List<TResultBatch> resultBatches = Lists.newArrayList();
 
@@ -129,12 +131,17 @@ public class InternalQuery {
         SqlScanner input = new SqlScanner(new StringReader(sql),
                 context.getSessionVariable().getSqlMode());
         SqlParser parser = new SqlParser(input);
+
         try {
             stmt = SqlParserUtils.getFirstStmt(parser);
             stmt.setOrigStmt(new OriginStatement(sql, 0));
         } catch (Exception e) {
-            LOG.warn("Failed to parse the internal statement: {}. {}", sql, e);
-            throw new DdlException("Failed to parse the internal statement:" + sql);
+            LOG.warn("Failed to parse the statement: {}. {}", sql, e);
+            throw new DdlException("Failed to parse the statement:" + sql);
+        }
+
+        if (! (stmt instanceof QueryStmt)) {
+            throw new DdlException("Only query statements are supported:" + sql);
         }
     }
 
@@ -178,8 +185,8 @@ public class InternalQuery {
                 .map(e -> e.getType().getPrimitiveType())
                 .collect(Collectors.toList());
 
-        List<ResultRow> resultRows = Lists.newArrayList();
         InternalQueryResult result = new InternalQueryResult(columns, types);
+        List<ResultRow> resultRows = result.getResultRows();
 
         for (TResultBatch batch : resultBatches) {
             List<ByteBuffer> rows = batch.getRows();
@@ -195,8 +202,6 @@ public class InternalQuery {
                 ResultRow resultRow = new ResultRow(values);
                 resultRows.add(resultRow);
             }
-
-            result.setResultRows(resultRows);
         }
 
         return result;

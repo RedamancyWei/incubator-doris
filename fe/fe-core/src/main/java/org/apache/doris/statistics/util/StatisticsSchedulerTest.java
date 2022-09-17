@@ -35,7 +35,7 @@ public class StatisticsSchedulerTest extends MasterDaemon {
         }
 
         String db = "test";
-        String sql = "SELECT * FROM table1";
+        String sql = "select 1";
 
         InternalQuery query = new InternalQuery(db, sql);
         try {
