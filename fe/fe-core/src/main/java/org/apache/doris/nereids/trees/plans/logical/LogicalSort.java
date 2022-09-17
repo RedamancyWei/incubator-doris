@@ -26,10 +26,10 @@ import org.apache.doris.nereids.trees.plans.Plan;
 import org.apache.doris.nereids.trees.plans.PlanType;
 import org.apache.doris.nereids.trees.plans.algebra.Sort;
 import org.apache.doris.nereids.trees.plans.visitor.PlanVisitor;
+import org.apache.doris.nereids.util.Utils;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import org.apache.commons.lang3.StringUtils;
 
 import java.util.List;
 import java.util.Objects;
@@ -60,8 +60,8 @@ public class LogicalSort<CHILD_TYPE extends Plan> extends LogicalUnary<CHILD_TYP
     }
 
     @Override
-    public List<Slot> computeOutput(Plan input) {
-        return input.getOutput();
+    public List<Slot> computeOutput() {
+        return child().getOutput();
     }
 
     public List<OrderKey> getOrderKeys() {
@@ -70,7 +70,8 @@ public class LogicalSort<CHILD_TYPE extends Plan> extends LogicalUnary<CHILD_TYP
 
     @Override
     public String toString() {
-        return "LogicalSort (" + StringUtils.join(orderKeys, ", ") + ")";
+        return Utils.toSqlString("LogicalSort",
+                "orderKeys", orderKeys);
     }
 
     @Override
@@ -90,14 +91,13 @@ public class LogicalSort<CHILD_TYPE extends Plan> extends LogicalUnary<CHILD_TYP
         return Objects.hash(orderKeys);
     }
 
-
     @Override
     public <R, C> R accept(PlanVisitor<R, C> visitor, C context) {
         return visitor.visitLogicalSort((LogicalSort<Plan>) this, context);
     }
 
     @Override
-    public List<Expression> getExpressions() {
+    public List<? extends Expression> getExpressions() {
         return orderKeys.stream()
                 .map(OrderKey::getExpr)
                 .collect(ImmutableList.toImmutableList());
@@ -111,7 +111,7 @@ public class LogicalSort<CHILD_TYPE extends Plan> extends LogicalUnary<CHILD_TYP
 
     @Override
     public Plan withGroupExpression(Optional<GroupExpression> groupExpression) {
-        return new LogicalSort<>(orderKeys, groupExpression, Optional.of(logicalProperties), child());
+        return new LogicalSort<>(orderKeys, groupExpression, Optional.of(getLogicalProperties()), child());
     }
 
     @Override

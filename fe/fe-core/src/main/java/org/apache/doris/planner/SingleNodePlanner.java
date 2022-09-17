@@ -55,6 +55,7 @@ import org.apache.doris.catalog.AggregateFunction;
 import org.apache.doris.catalog.AggregateType;
 import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.FunctionSet;
+import org.apache.doris.catalog.JdbcTable;
 import org.apache.doris.catalog.MysqlTable;
 import org.apache.doris.catalog.OdbcTable;
 import org.apache.doris.catalog.Table;
@@ -65,6 +66,7 @@ import org.apache.doris.common.Reference;
 import org.apache.doris.common.UserException;
 import org.apache.doris.common.util.VectorizedUtil;
 import org.apache.doris.planner.external.ExternalFileScanNode;
+import org.apache.doris.thrift.TNullSide;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
@@ -169,6 +171,7 @@ public class SingleNodePlanner {
         PlanNode singleNodePlan = createQueryPlan(queryStmt, analyzer,
                 ctx.getQueryOptions().getDefaultOrderByLimit());
         Preconditions.checkNotNull(singleNodePlan);
+        analyzer.getDescTbl().materializeIntermediateSlots();
         return singleNodePlan;
     }
 
@@ -181,7 +184,7 @@ public class SingleNodePlanner {
     private PlanNode createEmptyNode(PlanNode inputPlan, QueryStmt stmt, Analyzer analyzer) throws UserException {
         ArrayList<TupleId> tupleIds = Lists.newArrayList();
         if (inputPlan != null) {
-            tupleIds = inputPlan.tupleIds;
+            tupleIds.addAll(inputPlan.getOutputTupleIds());
         }
         if (tupleIds.isEmpty()) {
             // Constant selects do not have materialized tuples at this stage.
@@ -549,8 +552,11 @@ public class SingleNodePlanner {
                     if (col == null) {
                         continue;
                     }
+
+                    String functionName = aggExpr.getFnName().getFunction();
+
                     if (col.isKey()) {
-                        if ((!aggExpr.getFnName().getFunction().equalsIgnoreCase("MAX"))
+                        if ((!functionName.equalsIgnoreCase("MAX"))
                                 && (!aggExpr.getFnName().getFunction().equalsIgnoreCase("MIN"))) {
                             returnColumnValidate = false;
                             turnOffReason = "the type of agg on StorageEngine's Key column should only be MAX or MIN."
@@ -559,56 +565,57 @@ public class SingleNodePlanner {
                         }
                     }
 
-                    if (aggExpr.getFnName().getFunction().equalsIgnoreCase("SUM")) {
+                    if (functionName.equalsIgnoreCase("SUM")) {
                         if (col.getAggregationType() != AggregateType.SUM) {
                             turnOffReason = "Aggregate Operator not match: SUM <--> " + col.getAggregationType();
                             returnColumnValidate = false;
                             break;
                         }
-                    } else if (aggExpr.getFnName().getFunction().equalsIgnoreCase("MAX")) {
+                    } else if (functionName.equalsIgnoreCase("MAX")) {
                         if ((!col.isKey()) && col.getAggregationType() != AggregateType.MAX) {
                             turnOffReason = "Aggregate Operator not match: MAX <--> " + col.getAggregationType();
                             returnColumnValidate = false;
                             break;
                         }
-                    } else if (aggExpr.getFnName().getFunction().equalsIgnoreCase("MIN")) {
+                    } else if (functionName.equalsIgnoreCase("MIN")) {
                         if ((!col.isKey()) && col.getAggregationType() != AggregateType.MIN) {
                             turnOffReason = "Aggregate Operator not match: MIN <--> " + col.getAggregationType();
                             returnColumnValidate = false;
                             break;
                         }
-                    } else if (aggExpr.getFnName().getFunction().equalsIgnoreCase("HLL_UNION_AGG")) {
+                    } else if (functionName.equalsIgnoreCase("HLL_UNION_AGG")) {
                         // do nothing
-                    } else if (aggExpr.getFnName().getFunction().equalsIgnoreCase("HLL_RAW_AGG")) {
+                    } else if (functionName.equalsIgnoreCase("HLL_RAW_AGG")) {
                         // do nothing
-                    } else if (aggExpr.getFnName().getFunction().equalsIgnoreCase("NDV")) {
+                    } else if (functionName.equalsIgnoreCase("NDV")) {
                         if ((!col.isKey())) {
                             turnOffReason = "NDV function with non-key column: " + col.getName();
                             returnColumnValidate = false;
                             break;
                         }
-                    } else if (aggExpr.getFnName().getFunction().equalsIgnoreCase(FunctionSet.BITMAP_UNION_INT)) {
+                    } else if (functionName.equalsIgnoreCase(FunctionSet.BITMAP_UNION_INT)) {
                         if ((!col.isKey())) {
                             turnOffReason = "BITMAP_UNION_INT function with non-key column: " + col.getName();
                             returnColumnValidate = false;
                             break;
                         }
-                    } else if (aggExpr.getFnName().getFunction().equalsIgnoreCase(FunctionSet.BITMAP_UNION)
-                            || aggExpr.getFnName().getFunction().equalsIgnoreCase(FunctionSet.BITMAP_UNION_COUNT)) {
+                    } else if (functionName.equalsIgnoreCase(FunctionSet.BITMAP_UNION)
+                            || functionName.equalsIgnoreCase(FunctionSet.BITMAP_UNION_COUNT)
+                            || functionName.equalsIgnoreCase(FunctionSet.ORTHOGONAL_BITMAP_UNION_COUNT)) {
                         if (col.getAggregationType() != AggregateType.BITMAP_UNION) {
                             turnOffReason =
                                     "Aggregate Operator not match: BITMAP_UNION <--> " + col.getAggregationType();
                             returnColumnValidate = false;
                             break;
                         }
-                    } else if (aggExpr.getFnName().getFunction().equalsIgnoreCase(FunctionSet.QUANTILE_UNION)) {
+                    } else if (functionName.equalsIgnoreCase(FunctionSet.QUANTILE_UNION)) {
                         if (col.getAggregationType() != AggregateType.QUANTILE_UNION) {
                             turnOffReason =
                                     "Aggregate Operator not match: QUANTILE_UNION <---> " + col.getAggregationType();
                             returnColumnValidate = false;
                             break;
                         }
-                    } else if (aggExpr.getFnName().getFunction().equalsIgnoreCase("multi_distinct_count")) {
+                    } else if (functionName.equalsIgnoreCase("multi_distinct_count")) {
                         // count(distinct k1), count(distinct k2) / count(distinct k1,k2) can turn on pre aggregation
                         if ((!col.isKey())) {
                             turnOffReason = "Multi count or sum distinct with non-key column: " + col.getName();
@@ -616,7 +623,7 @@ public class SingleNodePlanner {
                             break;
                         }
                     } else {
-                        turnOffReason = "Invalid Aggregate Operator: " + aggExpr.getFnName().getFunction();
+                        turnOffReason = "Invalid Aggregate Operator: " + functionName;
                         returnColumnValidate = false;
                         break;
                     }
@@ -711,14 +718,14 @@ public class SingleNodePlanner {
             if (plan.getCardinality() == -1) {
                 // use 0 for the size to avoid it becoming the leftmost input
                 // TODO: Consider raw size of scanned partitions in the absence of stats.
-                candidates.add(new Pair<>(ref, new Long(0)));
+                candidates.add(Pair.of(ref, new Long(0)));
                 LOG.debug("The candidate of " + ref.getUniqueAlias() + ": -1. "
                         + "Using 0 instead of -1 to avoid error");
                 continue;
             }
             Preconditions.checkState(ref.isAnalyzed());
             long materializedSize = plan.getCardinality();
-            candidates.add(new Pair<>(ref, new Long(materializedSize)));
+            candidates.add(Pair.of(ref, new Long(materializedSize)));
             LOG.debug("The candidate of " + ref.getUniqueAlias() + ": " + materializedSize);
         }
         if (candidates.isEmpty()) {
@@ -1002,7 +1009,7 @@ public class SingleNodePlanner {
                 }
 
                 Preconditions.checkState(plan != null);
-                refPlans.add(new Pair(ref, plan));
+                refPlans.add(Pair.of(ref, plan));
             }
             // save state of conjunct assignment; needed for join plan generation
             for (Pair<TableRef, PlanNode> entry : refPlans) {
@@ -1143,7 +1150,7 @@ public class SingleNodePlanner {
                 MaterializedViewSelector.BestIndexInfo bestIndexInfo
                         = materializedViewSelector.selectBestMV(olapScanNode);
                 if (bestIndexInfo == null) {
-                    selectFailed |= true;
+                    selectFailed = true;
                     TupleId tupleId = olapScanNode.getTupleId();
                     selectStmt.updateDisableTuplesMVRewriter(tupleId);
                     LOG.debug("MV rewriter of tuple [] will be disable", tupleId);
@@ -1393,8 +1400,14 @@ public class SingleNodePlanner {
                 //set outputSmap to substitute literal in outputExpr
                 unionNode.setWithoutTupleIsNullOutputSmap(inlineViewRef.getSmap());
                 if (analyzer.isOuterJoined(inlineViewRef.getId())) {
-                    List<Expr> nullableRhs = TupleIsNullPredicate.wrapExprs(
-                            inlineViewRef.getSmap().getRhs(), unionNode.getTupleIds(), analyzer);
+                    List<Expr> nullableRhs;
+                    if (analyzer.isOuterJoinedLeftSide(inlineViewRef.getId())) {
+                        nullableRhs = TupleIsNullPredicate.wrapExprs(inlineViewRef.getSmap().getRhs(),
+                            unionNode.getTupleIds(), TNullSide.LEFT, analyzer);
+                    } else {
+                        nullableRhs = TupleIsNullPredicate.wrapExprs(inlineViewRef.getSmap().getRhs(),
+                            unionNode.getTupleIds(), TNullSide.RIGHT, analyzer);
+                    }
                     unionNode.setOutputSmap(new ExprSubstitutionMap(inlineViewRef.getSmap().getLhs(), nullableRhs));
                 }
                 return unionNode;
@@ -1422,7 +1435,7 @@ public class SingleNodePlanner {
             // because the rhs exprs must first be resolved against the physical output of
             // 'planRoot' to correctly determine whether wrapping is necessary.
             List<Expr> nullableRhs = TupleIsNullPredicate.wrapExprs(
-                    outputSmap.getRhs(), rootNode.getTupleIds(), analyzer);
+                    outputSmap.getRhs(), rootNode.getTupleIds(), null, analyzer);
             outputSmap = new ExprSubstitutionMap(outputSmap.getLhs(), nullableRhs);
         }
         // Set output smap of rootNode *before* creating a SelectNode for proper resolution.
@@ -1719,6 +1732,7 @@ public class SingleNodePlanner {
 
         switch (tblRef.getTable().getType()) {
             case OLAP:
+            case MATERIALIZED_VIEW:
                 OlapScanNode olapNode = new OlapScanNode(ctx.getNextNodeId(), tblRef.getDesc(),
                         "OlapScanNode");
                 olapNode.setForceOpenPreAgg(tblRef.isForcePreAggOpened());
@@ -1756,6 +1770,9 @@ public class SingleNodePlanner {
             case HUDI:
                 scanNode = new HudiScanNode(ctx.getNextNodeId(), tblRef.getDesc(), "HudiScanNode",
                         null, -1);
+                break;
+            case JDBC:
+                scanNode = new JdbcScanNode(ctx.getNextNodeId(), tblRef.getDesc(), (JdbcTable) tblRef.getTable());
                 break;
             case TABLE_VALUED_FUNCTION:
                 scanNode = new TableValuedFunctionScanNode(ctx.getNextNodeId(), tblRef.getDesc(),

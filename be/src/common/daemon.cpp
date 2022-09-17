@@ -22,6 +22,7 @@
 #include <signal.h>
 
 #include "common/config.h"
+#include "common/logging.h"
 #include "exprs/array_functions.h"
 #include "exprs/bitmap_function.h"
 #include "exprs/cast_functions.h"
@@ -56,7 +57,6 @@
 #include "util/debug_util.h"
 #include "util/disk_info.h"
 #include "util/doris_metrics.h"
-#include "util/logging.h"
 #include "util/mem_info.h"
 #include "util/network_util.h"
 #include "util/system_metrics.h"
@@ -68,6 +68,7 @@ namespace doris {
 bool k_doris_exit = false;
 
 void Daemon::tcmalloc_gc_thread() {
+    // TODO All cache GC wish to be supported
     while (!_stop_background_threads_latch.wait_for(std::chrono::seconds(10))) {
         size_t used_size = 0;
         size_t free_size = 0;

@@ -17,7 +17,9 @@
 
 package org.apache.doris.utframe;
 
+import org.apache.doris.alter.AlterJobV2;
 import org.apache.doris.analysis.AlterSqlBlockRuleStmt;
+import org.apache.doris.analysis.AlterTableStmt;
 import org.apache.doris.analysis.Analyzer;
 import org.apache.doris.analysis.CreateDbStmt;
 import org.apache.doris.analysis.CreatePolicyStmt;
@@ -44,6 +46,7 @@ import org.apache.doris.common.util.SqlParserUtils;
 import org.apache.doris.nereids.CascadesContext;
 import org.apache.doris.nereids.StatementContext;
 import org.apache.doris.nereids.parser.NereidsParser;
+import org.apache.doris.nereids.trees.expressions.NamedExpressionUtil;
 import org.apache.doris.nereids.trees.plans.logical.LogicalPlan;
 import org.apache.doris.planner.Planner;
 import org.apache.doris.qe.ConnectContext;
@@ -67,6 +70,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.apache.commons.io.FileUtils;
+import org.junit.Assert;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
@@ -115,6 +119,7 @@ public abstract class TestWithFeService {
         runAfterAll();
         Env.getCurrentEnv().clear();
         cleanDorisFeDir(runningDir);
+        NamedExpressionUtil.clear();
     }
 
     @BeforeEach
@@ -497,4 +502,27 @@ public abstract class TestWithFeService {
         connectContext.setCurrentUserIdentity(user);
         connectContext.setQualifiedUser(SystemInfoService.DEFAULT_CLUSTER + ":" + userName);
     }
+
+    protected void addRollup(String sql) throws Exception {
+        AlterTableStmt alterTableStmt = (AlterTableStmt) UtFrameUtils.parseAndAnalyzeStmt(sql, connectContext);
+        Env.getCurrentEnv().alterTable(alterTableStmt);
+        checkAlterJob();
+        // waiting table state to normal
+        Thread.sleep(100);
+    }
+
+    private void checkAlterJob() throws InterruptedException {
+        // check alter job
+        Map<Long, AlterJobV2> alterJobs = Env.getCurrentEnv().getMaterializedViewHandler().getAlterJobsV2();
+        for (AlterJobV2 alterJobV2 : alterJobs.values()) {
+            while (!alterJobV2.getJobState().isFinalState()) {
+                System.out.println("alter job " + alterJobV2.getDbId()
+                        + " is running. state: " + alterJobV2.getJobState());
+                Thread.sleep(100);
+            }
+            System.out.println("alter job " + alterJobV2.getDbId() + " is done. state: " + alterJobV2.getJobState());
+            Assert.assertEquals(AlterJobV2.JobState.FINISHED, alterJobV2.getJobState());
+        }
+    }
+
 }

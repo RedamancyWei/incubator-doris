@@ -54,9 +54,10 @@ set(VEC_FILES
   common/exception.cpp
   common/mremap.cpp
   common/pod_array.cpp
+  common/sort/sorter.cpp
+  common/sort/vsort_exec_exprs.cpp
   common/string_utils/string_utils.cpp
   core/block.cpp
-  core/block_info.cpp
   core/column_with_type_and_name.cpp
   core/field.cpp
   core/field.cpp
@@ -66,6 +67,7 @@ set(VEC_FILES
   data_types/data_type_array.cpp
   data_types/data_type_bitmap.cpp
   data_types/data_type_factory.cpp
+  data_types/data_type_fixed_length_object.cpp
   data_types/data_type_hll.cpp
   data_types/data_type_nothing.cpp
   data_types/data_type_nothing.cpp
@@ -85,7 +87,6 @@ set(VEC_FILES
   exec/ves_http_scanner.cpp
   exec/volap_scan_node.cpp
   exec/vsort_node.cpp
-  exec/vsort_exec_exprs.cpp
   exec/volap_scanner.cpp
   exec/vexchange_node.cpp
   exec/vset_operation_node.cpp
@@ -106,6 +107,8 @@ set(VEC_FILES
   exec/vbroker_scan_node.cpp
   exec/vbroker_scanner.cpp
   exec/vjson_scanner.cpp
+  exec/vjdbc_connector.cpp
+  exec/vjdbc_scan_node.cpp
   exec/vparquet_scanner.cpp
   exec/vorc_scanner.cpp
   exec/join/vhash_join_node.cpp
@@ -210,11 +213,14 @@ set(VEC_FILES
   sink/vmysql_table_sink.cpp
   sink/vodbc_table_sink.cpp
   sink/vresult_file_sink.cpp
+  sink/vjdbc_table_sink.cpp
+  sink/vtable_sink.cpp
   runtime/vdatetime_value.cpp
   runtime/vdata_stream_recvr.cpp
   runtime/vdata_stream_mgr.cpp
   runtime/vfile_result_writer.cpp
   runtime/vpartition_info.cpp
+  runtime/vparquet_writer.cpp
   utils/arrow_column_to_doris_column.cpp
   runtime/vsorted_run_merger.cpp
   exec/file_arrow_scanner.cpp
@@ -231,8 +237,19 @@ set(VEC_FILES
   exec/format/parquet/schema_desc.cpp
   exec/format/parquet/vparquet_column_reader.cpp
   exec/format/parquet/level_decoder.cpp
-  exec/format/parquet/parquet_common.cpp)
+  exec/format/parquet/parquet_common.cpp
+  exec/scan/vscan_node.cpp
+  exec/scan/vscanner.cpp
+  exec/scan/scanner_context.cpp
+  exec/scan/scanner_scheduler.cpp
+  exec/scan/new_olap_scan_node.cpp
+  exec/scan/new_olap_scanner.cpp
+  exec/scan/new_file_arrow_scanner.cpp
+  exec/scan/new_file_scan_node.cpp
+  exec/scan/new_file_scanner.cpp
+  exec/scan/new_file_text_scanner.cpp
+  )
 
 add_library(Vec STATIC
-    ${VEC_FILES}
-)
+        ${VEC_FILES}
+        )

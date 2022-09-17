@@ -17,14 +17,17 @@
 
 package org.apache.doris.nereids.trees.plans;
 
+import org.apache.doris.nereids.analyzer.Unbound;
 import org.apache.doris.nereids.memo.GroupExpression;
 import org.apache.doris.nereids.properties.LogicalProperties;
 import org.apache.doris.nereids.trees.AbstractTreeNode;
+import org.apache.doris.nereids.trees.expressions.Slot;
+import org.apache.doris.nereids.util.TreeStringUtils;
 import org.apache.doris.statistics.StatsDeriveResult;
 
-import org.apache.commons.lang3.StringUtils;
+import com.google.common.base.Supplier;
+import com.google.common.base.Suppliers;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -37,7 +40,7 @@ public abstract class AbstractPlan extends AbstractTreeNode<Plan> implements Pla
     protected StatsDeriveResult statsDeriveResult;
     protected final PlanType type;
     protected final Optional<GroupExpression> groupExpression;
-    protected final LogicalProperties logicalProperties;
+    protected final Supplier<LogicalProperties> logicalPropertiesSupplier;
 
     public AbstractPlan(PlanType type, Plan... children) {
         this(type, Optional.empty(), Optional.empty(), children);
@@ -53,8 +56,9 @@ public abstract class AbstractPlan extends AbstractTreeNode<Plan> implements Pla
         super(groupExpression, children);
         this.type = Objects.requireNonNull(type, "type can not be null");
         this.groupExpression = Objects.requireNonNull(groupExpression, "groupExpression can not be null");
-        LogicalProperties logicalProperties = optLogicalProperties.orElseGet(() -> computeLogicalProperties(children));
-        this.logicalProperties = Objects.requireNonNull(logicalProperties, "logicalProperties can not be null");
+        Objects.requireNonNull(optLogicalProperties, "logicalProperties can not be null");
+        this.logicalPropertiesSupplier = Suppliers.memoize(() -> optLogicalProperties.orElseGet(
+                this::computeLogicalProperties));
     }
 
     @Override
@@ -66,6 +70,13 @@ public abstract class AbstractPlan extends AbstractTreeNode<Plan> implements Pla
         return groupExpression;
     }
 
+    @Override
+    public boolean canBind() {
+        return !bound()
+                && !(this instanceof Unbound)
+                && childrenBound();
+    }
+
     /**
      * Get tree like string describing query plan.
      *
@@ -73,33 +84,9 @@ public abstract class AbstractPlan extends AbstractTreeNode<Plan> implements Pla
      */
     @Override
     public String treeString() {
-        List<String> lines = new ArrayList<>();
-        treeString(lines, 0, new ArrayList<>(), this);
-        return StringUtils.join(lines, "\n");
-    }
-
-    private void treeString(List<String> lines, int depth, List<Boolean> lastChildren, Plan plan) {
-        StringBuilder sb = new StringBuilder();
-        if (depth > 0) {
-            if (lastChildren.size() > 1) {
-                for (int i = 0; i < lastChildren.size() - 1; i++) {
-                    sb.append(lastChildren.get(i) ? "   " : "|  ");
-                }
-            }
-            if (lastChildren.size() > 0) {
-                Boolean last = lastChildren.get(lastChildren.size() - 1);
-                sb.append(last ? "+--" : "|--");
-            }
-        }
-        sb.append(plan.toString());
-        lines.add(sb.toString());
-
-        List<Plan> children = plan.children();
-        for (int i = 0; i < children.size(); i++) {
-            List<Boolean> newLasts = new ArrayList<>(lastChildren);
-            newLasts.add(i + 1 == children.size());
-            treeString(lines, depth + 1, newLasts, children.get(i));
-        }
+        return TreeStringUtils.treeString(this,
+                plan -> plan.toString(),
+                plan -> (List) ((Plan) plan).children());
     }
 
     @Override
@@ -112,11 +99,26 @@ public abstract class AbstractPlan extends AbstractTreeNode<Plan> implements Pla
         }
         AbstractPlan that = (AbstractPlan) o;
         return Objects.equals(statsDeriveResult, that.statsDeriveResult)
-                && Objects.equals(logicalProperties, that.logicalProperties);
+                && Objects.equals(getLogicalProperties(), that.getLogicalProperties());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(statsDeriveResult, logicalProperties);
+        return Objects.hash(statsDeriveResult, getLogicalProperties());
+    }
+
+    @Override
+    public List<Slot> getOutput() {
+        return getLogicalProperties().getOutput();
+    }
+
+    @Override
+    public Plan child(int index) {
+        return super.child(index);
+    }
+
+    @Override
+    public LogicalProperties getLogicalProperties() {
+        return logicalPropertiesSupplier.get();
     }
 }

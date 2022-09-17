@@ -27,17 +27,21 @@ import org.apache.doris.nereids.jobs.scheduler.JobScheduler;
 import org.apache.doris.nereids.jobs.scheduler.JobStack;
 import org.apache.doris.nereids.jobs.scheduler.SimpleJobScheduler;
 import org.apache.doris.nereids.memo.Memo;
+import org.apache.doris.nereids.processor.post.RuntimeFilterContext;
 import org.apache.doris.nereids.properties.PhysicalProperties;
 import org.apache.doris.nereids.rules.Rule;
 import org.apache.doris.nereids.rules.RuleFactory;
 import org.apache.doris.nereids.rules.RuleSet;
 import org.apache.doris.nereids.rules.analysis.Scope;
+import org.apache.doris.nereids.trees.expressions.SubqueryExpr;
 import org.apache.doris.nereids.trees.plans.Plan;
 import org.apache.doris.qe.ConnectContext;
 
 import com.google.common.collect.ImmutableList;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -50,6 +54,10 @@ public class CascadesContext {
     private JobPool jobPool;
     private final JobScheduler jobScheduler;
     private JobContext currentJobContext;
+    // subqueryExprIsAnalyzed: whether the subquery has been analyzed.
+    private Map<SubqueryExpr, Boolean> subqueryExprIsAnalyzed;
+
+    private RuntimeFilterContext runtimeFilterContext;
 
     /**
      * Constructor of OptimizerContext.
@@ -64,6 +72,8 @@ public class CascadesContext {
         this.jobPool = new JobStack();
         this.jobScheduler = new SimpleJobScheduler();
         this.currentJobContext = new JobContext(this, PhysicalProperties.ANY, Double.MAX_VALUE);
+        this.subqueryExprIsAnalyzed = new HashMap<>();
+        this.runtimeFilterContext = new RuntimeFilterContext(getConnectContext().getSessionVariable());
     }
 
     public static CascadesContext newContext(StatementContext statementContext, Plan initPlan) {
@@ -118,6 +128,10 @@ public class CascadesContext {
         return currentJobContext;
     }
 
+    public RuntimeFilterContext getRuntimeFilterContext() {
+        return runtimeFilterContext;
+    }
+
     public void setCurrentJobContext(JobContext currentJobContext) {
         this.currentJobContext = currentJobContext;
     }
@@ -125,6 +139,18 @@ public class CascadesContext {
     public CascadesContext setJobContext(PhysicalProperties physicalProperties) {
         this.currentJobContext = new JobContext(this, physicalProperties, Double.MAX_VALUE);
         return this;
+    }
+
+    public void setSubqueryExprIsAnalyzed(SubqueryExpr subqueryExpr, boolean isAnalyzed) {
+        subqueryExprIsAnalyzed.put(subqueryExpr, isAnalyzed);
+    }
+
+    public boolean subqueryIsAnalyzed(SubqueryExpr subqueryExpr) {
+        if (subqueryExprIsAnalyzed.get(subqueryExpr) == null) {
+            setSubqueryExprIsAnalyzed(subqueryExpr, false);
+            return false;
+        }
+        return subqueryExprIsAnalyzed.get(subqueryExpr);
     }
 
     public CascadesContext bottomUpRewrite(RuleFactory... rules) {

@@ -271,7 +271,7 @@ public class DistributedPlanner {
      * TODO: hbase scans are range-partitioned on the row key
      */
     private PlanFragment createScanFragment(PlanNode node) throws UserException {
-        if (node instanceof MysqlScanNode || node instanceof OdbcScanNode) {
+        if (node instanceof MysqlScanNode || node instanceof OdbcScanNode || node instanceof JdbcScanNode) {
             return new PlanFragment(ctx.getNextFragmentId(), node, DataPartition.UNPARTITIONED);
         } else if (node instanceof SchemaScanNode) {
             return new PlanFragment(ctx.getNextFragmentId(), node, DataPartition.RANDOM);
@@ -323,11 +323,11 @@ public class DistributedPlanner {
 
         // bucket shuffle join is better than broadcast and shuffle join
         // it can reduce the network cost of join, so doris chose it first
-        List<Expr> rhsPartitionxprs = Lists.newArrayList();
-        if (canBucketShuffleJoin(node, leftChildFragment, rhsPartitionxprs)) {
+        List<Expr> rhsPartitionExprs = Lists.newArrayList();
+        if (canBucketShuffleJoin(node, leftChildFragment, rhsPartitionExprs)) {
             node.setDistributionMode(HashJoinNode.DistributionMode.BUCKET_SHUFFLE);
             DataPartition rhsJoinPartition =
-                    new DataPartition(TPartitionType.BUCKET_SHFFULE_HASH_PARTITIONED, rhsPartitionxprs);
+                    new DataPartition(TPartitionType.BUCKET_SHFFULE_HASH_PARTITIONED, rhsPartitionExprs);
             ExchangeNode rhsExchange =
                     new ExchangeNode(ctx.getNextNodeId(), rightChildFragment.getPlanRoot(), false);
             rhsExchange.setNumInstances(rightChildFragment.getPlanRoot().getNumInstances());
@@ -459,7 +459,7 @@ public class DistributedPlanner {
             if (rightScanNode == null) {
                 return false;
             }
-            Pair<OlapScanNode, OlapScanNode> eqPair = new Pair<>(leftScanNode, rightScanNode);
+            Pair<OlapScanNode, OlapScanNode> eqPair = Pair.of(leftScanNode, rightScanNode);
             List<BinaryPredicate> predicateList = scanNodeWithJoinConjuncts.get(eqPair);
             if (predicateList == null) {
                 predicateList = Lists.newArrayList();

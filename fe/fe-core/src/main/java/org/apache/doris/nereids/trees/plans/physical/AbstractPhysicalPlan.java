@@ -20,13 +20,12 @@ package org.apache.doris.nereids.trees.plans.physical;
 import org.apache.doris.nereids.memo.GroupExpression;
 import org.apache.doris.nereids.properties.LogicalProperties;
 import org.apache.doris.nereids.properties.PhysicalProperties;
-import org.apache.doris.nereids.trees.expressions.Slot;
 import org.apache.doris.nereids.trees.plans.AbstractPlan;
 import org.apache.doris.nereids.trees.plans.Plan;
 import org.apache.doris.nereids.trees.plans.PlanType;
 
-import java.util.List;
 import java.util.Optional;
+import javax.annotation.Nullable;
 
 /**
  * Abstract class for all concrete physical plan.
@@ -39,9 +38,7 @@ public abstract class AbstractPhysicalPlan extends AbstractPlan implements Physi
      * create physical plan by op, logicalProperties and children.
      */
     public AbstractPhysicalPlan(PlanType type, LogicalProperties logicalProperties, Plan... children) {
-        super(type, Optional.empty(), Optional.of(logicalProperties), children);
-        // TODO: compute physical properties
-        this.physicalProperties = PhysicalProperties.ANY;
+        this(type, Optional.empty(), logicalProperties, children);
     }
 
     /**
@@ -54,22 +51,15 @@ public abstract class AbstractPhysicalPlan extends AbstractPlan implements Physi
      */
     public AbstractPhysicalPlan(PlanType type, Optional<GroupExpression> groupExpression,
                                 LogicalProperties logicalProperties, Plan... children) {
+        this(type, groupExpression, logicalProperties, PhysicalProperties.ANY, children);
+    }
+
+    public AbstractPhysicalPlan(PlanType type, Optional<GroupExpression> groupExpression,
+            LogicalProperties logicalProperties, @Nullable PhysicalProperties physicalProperties, Plan... children) {
         super(type, groupExpression, Optional.of(logicalProperties), children);
-        // TODO: compute physical properties
-        this.physicalProperties = PhysicalProperties.ANY;
+        this.physicalProperties = physicalProperties == null ? PhysicalProperties.ANY : physicalProperties;
     }
 
-    @Override
-    public List<Slot> getOutput() {
-        return logicalProperties.getOutput();
-    }
-
-    @Override
-    public LogicalProperties getLogicalProperties() {
-        return logicalProperties;
-    }
-
-    @Override
     public PhysicalProperties getPhysicalProperties() {
         return physicalProperties;
     }

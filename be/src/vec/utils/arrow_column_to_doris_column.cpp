@@ -23,15 +23,14 @@
 
 #include "arrow/array/array_binary.h"
 #include "arrow/array/array_nested.h"
-#include "arrow/scalar.h"
 #include "arrow/type.h"
 #include "arrow/type_fwd.h"
-#include "arrow/type_traits.h"
 #include "gutil/casts.h"
 #include "vec/columns/column_array.h"
 #include "vec/columns/column_nullable.h"
 #include "vec/data_types/data_type_array.h"
 #include "vec/data_types/data_type_decimal.h"
+#include "vec/data_types/data_type_nullable.h"
 #include "vec/runtime/vdatetime_value.h"
 
 #define FOR_ARROW_TYPES(M)                            \
@@ -113,7 +112,6 @@ static Status convert_column_with_string_data(const arrow::Array* array, size_t 
             const auto* raw_data = buffer->data() + concrete_array->value_offset(offset_i);
             column_chars_t.insert(raw_data, raw_data + concrete_array->value_length(offset_i));
         }
-        column_chars_t.emplace_back('\0');
 
         column_offsets.emplace_back(column_chars_t.size());
     }
@@ -135,7 +133,6 @@ static Status convert_column_with_fixed_size_data(const arrow::Array* array, siz
             const auto* raw_data = array_data + (offset_i * width);
             column_chars_t.insert(raw_data, raw_data + width);
         }
-        column_chars_t.emplace_back('\0');
         column_offsets.emplace_back(column_chars_t.size());
     }
     return Status::OK();
@@ -354,7 +351,7 @@ Status arrow_column_to_doris_column(const arrow::Array* arrow_column, size_t arr
             (*std::move(doris_column)).mutate().get());
     fill_nullable_column(arrow_column, arrow_batch_cur_idx, nullable_column, num_elements);
     data_column = nullable_column->get_nested_column_ptr();
-    WhichDataType which_type(type);
+    WhichDataType which_type(remove_nullable(type));
     // process data
     switch (arrow_column->type()->id()) {
     case arrow::Type::STRING:

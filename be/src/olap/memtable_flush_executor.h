@@ -37,7 +37,8 @@ class MemTrackerLimiter;
 // use atomic because it may be updated by multi threads
 struct FlushStatistic {
     std::atomic_uint64_t flush_time_ns = 0;
-    std::atomic_uint64_t flush_count = 0;
+    std::atomic_uint64_t flush_running_count = 0;
+    std::atomic_uint64_t flush_finish_count = 0;
     std::atomic_uint64_t flush_size_bytes = 0;
     std::atomic_uint64_t flush_disk_size_bytes = 0;
     std::atomic_uint64_t flush_wait_time_ns = 0;
@@ -106,7 +107,7 @@ public:
     void init(const std::vector<DataDir*>& data_dirs);
 
     Status create_flush_token(std::unique_ptr<FlushToken>* flush_token, RowsetTypePB rowset_type,
-                              bool is_high_priority);
+                              bool should_serial, bool is_high_priority);
 
 private:
     std::unique_ptr<ThreadPool> _flush_pool;

@@ -171,7 +171,12 @@ Status VOlapScanner::_init_tablet_reader_params(
                       ->rowset_meta()
                       ->is_segments_overlapping());
 
-    _tablet_reader_params.direct_mode = _aggregation || single_version;
+    if (_runtime_state->skip_storage_engine_merge()) {
+        _tablet_reader_params.direct_mode = true;
+        _aggregation = true;
+    } else {
+        _tablet_reader_params.direct_mode = _aggregation || single_version;
+    }
 
     RETURN_IF_ERROR(_init_return_columns(!_tablet_reader_params.direct_mode));
 
@@ -192,10 +197,17 @@ Status VOlapScanner::_init_tablet_reader_params(
     std::copy(function_filters.cbegin(), function_filters.cend(),
               std::inserter(_tablet_reader_params.function_filters,
                             _tablet_reader_params.function_filters.begin()));
+    if (!_runtime_state->skip_delete_predicate()) {
+        auto& delete_preds = _tablet->delete_predicates();
+        std::copy(delete_preds.cbegin(), delete_preds.cend(),
+                  std::inserter(_tablet_reader_params.delete_predicates,
+                                _tablet_reader_params.delete_predicates.begin()));
+    }
 
-    std::copy(_tablet->delete_predicates().cbegin(), _tablet->delete_predicates().cend(),
-              std::inserter(_tablet_reader_params.delete_predicates,
-                            _tablet_reader_params.delete_predicates.begin()));
+    // Merge the columns in delete predicate that not in latest schema in to current tablet schema
+    for (auto& del_pred_rs : _tablet_reader_params.delete_predicates) {
+        _tablet_schema->merge_dropped_columns(_tablet->tablet_schema(del_pred_rs->version()));
+    }
 
     // Range
     for (auto key_range : key_ranges) {
@@ -246,15 +258,17 @@ Status VOlapScanner::_init_tablet_reader_params(
         _tablet_reader_params.delete_bitmap = &_tablet->tablet_meta()->delete_bitmap();
     }
 
-    if (_parent->_olap_scan_node.__isset.sort_info &&
-        _parent->_olap_scan_node.sort_info.is_asc_order.size() > 0) {
-        _limit = _parent->_limit_per_scanner;
-        _tablet_reader_params.read_orderby_key = true;
-        if (!_parent->_olap_scan_node.sort_info.is_asc_order[0]) {
-            _tablet_reader_params.read_orderby_key_reverse = true;
+    if (!_runtime_state->skip_storage_engine_merge()) {
+        if (_parent->_olap_scan_node.__isset.sort_info &&
+            _parent->_olap_scan_node.sort_info.is_asc_order.size() > 0) {
+            _limit = _parent->_limit_per_scanner;
+            _tablet_reader_params.read_orderby_key = true;
+            if (!_parent->_olap_scan_node.sort_info.is_asc_order[0]) {
+                _tablet_reader_params.read_orderby_key_reverse = true;
+            }
+            _tablet_reader_params.read_orderby_key_num_prefix_columns =
+                    _parent->_olap_scan_node.sort_info.is_asc_order.size();
         }
-        _tablet_reader_params.read_orderby_key_num_prefix_columns =
-                _parent->_olap_scan_node.sort_info.is_asc_order.size();
     }
 
     return Status::OK();
@@ -335,6 +349,8 @@ Status VOlapScanner::get_block(RuntimeState* state, vectorized::Block* block, bo
             _update_realtime_counter();
             RETURN_IF_ERROR(
                     VExprContext::filter_block(_vconjunct_ctx, block, _tuple_desc->slots().size()));
+            // record rows return (after filter) for _limit check
+            _num_rows_return += block->rows();
         } while (block->rows() == 0 && !(*eof) && raw_rows_read() < raw_rows_threshold);
     }
     // NOTE:
@@ -344,7 +360,7 @@ Status VOlapScanner::get_block(RuntimeState* state, vectorized::Block* block, bo
 
     // set eof to true if per scanner limit is reached
     // currently for query: ORDER BY key LIMIT n
-    if (_limit > 0 && _num_rows_read > _limit) {
+    if (_limit > 0 && _num_rows_return > _limit) {
         *eof = true;
     }
 
@@ -382,7 +398,6 @@ Status VOlapScanner::close(RuntimeState* state) {
     _tablet_reader_params.rs_readers.clear();
     update_counter();
     _tablet_reader.reset();
-    Expr::close(_conjunct_ctxs, state);
     _is_closed = true;
     return Status::OK();
 }

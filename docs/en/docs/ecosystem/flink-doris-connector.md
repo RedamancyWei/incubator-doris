@@ -26,7 +26,7 @@ under the License.
 
 # Flink Doris Connector
 
-> This document applies to flink-doris-connector versions after 1.1.0, for versions before 1.1.0 refer to [here](https://doris.apache.org/docs/1.0/extending-doris/flink-doris-connector)
+> This document applies to flink-doris-connector versions after 1.1.0, for versions before 1.1.0 refer to [here](https://doris.apache.org/docs/0.15/extending-doris/flink-doris-connector)
 
 
 
@@ -43,10 +43,11 @@ Github: https://github.com/apache/incubator-doris-flink-connector
 
 ## Version Compatibility
 
-| Connector       | Flink  | Doris | Java | Scala |
-| --------------- | ------ | ----- | ---- | ----- |
-| 1.14_2.11-1.1.0 | 1.14.x | 1.0+  | 8    | 2.11  |
-| 1.14_2.12-1.1.0 | 1.14.x | 1.0+  | 8    | 2.12  |
+| Connector Version | Flink Version | Doris Version | Java Version | Scala Version |
+| --------- | ----- | ------ | ---- | ----- |
+| 1.0.3     | 1.11+ | 0.15+  | 8    | 2.11,2.12 |
+| 1.1.0     | 1.14+ | 1.0+   | 8    | 2.11,2.12 |
+| 1.2.0     | 1.15+ | 1.0+   | 8    | -         |
 
 ## Build and Install
 
@@ -252,6 +253,8 @@ env.fromSource(dorisSource, WatermarkStrategy.noWatermarks(), "doris source").pr
 ```java
 // enable checkpoint
 env.enableCheckpointing(10000);
+// using batch mode for bounded data
+env.setRuntimeMode(RuntimeExecutionMode.BATCH);
 
 DorisSink.Builder<String> builder = DorisSink.builder();
 DorisOptions.Builder dorisBuilder = DorisOptions.builder();
@@ -291,6 +294,8 @@ source.map((MapFunction<Tuple2<String, Integer>, String>) t -> t.f0 + "\t" + t.f
 ```java
 // enable checkpoint
 env.enableCheckpointing(10000);
+// using batch mode for bounded data
+env.setRuntimeMode(RuntimeExecutionMode.BATCH);
 
 //doris sink option
 DorisSink.Builder<RowData> builder = DorisSink.builder();
@@ -426,7 +431,7 @@ insert into doris_sink select id,name from cdc_mysql_source;
 
 ## Java example
 
-`samples/doris-demo/fink-demo/`  An example of the Java version is provided below for reference, see [here](https://github.com/apache/incubator-doris/tree/master/samples/doris-demo/flink-demo)
+`samples/doris-demo/`  An example of the Java version is provided below for reference, see [here](https://github.com/apache/incubator-doris/tree/master/samples/doris-demo/)
 
 ## Best Practices
 

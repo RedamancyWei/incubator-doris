@@ -35,6 +35,7 @@ class ConfigOptions {
     static Option feHttpAddressOpt
     static Option feHttpUserOpt
     static Option feHttpPasswordOpt
+    static Option metaServiceHttpAddressOpt
     static Option pathOpt
     static Option dataOpt
     static Option realDataOpt
@@ -53,9 +54,10 @@ class ConfigOptions {
     static Option suiteParallelOpt
     static Option actionParallelOpt
     static Option randomOrderOpt
-    static Option stopWhenFail
+    static Option stopWhenFailOpt
     static Option timesOpt
     static Option withOutLoadDataOpt
+    static Option dryRunOpt
 
     static CommandLine initCommands(String[] args) {
         helpOption = Option.builder("h")
@@ -223,6 +225,14 @@ class ConfigOptions {
                 .longOpt("feHttpPassword")
                 .desc("the password of fe http server")
                 .build()
+        metaServiceHttpAddressOpt = Option.builder("hm")
+                .argName("address")
+                .required(false)
+                .hasArg(true)
+                .type(String.class)
+                .longOpt("metaServiceHttpAddress")
+                .desc("the meta service http address, format is ip:port")
+                .build()
         genOutOpt = Option.builder("genOut")
                 .required(false)
                 .hasArg(false)
@@ -271,7 +281,7 @@ class ConfigOptions {
                 .hasArg(false)
                 .desc("run tests in random order")
                 .build()
-        stopWhenFail = Option.builder("stopWhenFail")
+        stopWhenFailOpt = Option.builder("stopWhenFail")
                 .required(false)
                 .hasArg(false)
                 .desc("stop when a failure happens")
@@ -285,12 +295,16 @@ class ConfigOptions {
                 .longOpt("times")
                 .desc("the times tests run, load.groovy is run only one time.")
                 .build()
-
         withOutLoadDataOpt = Option.builder("w")
                 .required(false)
                 .hasArg(false)
                 .longOpt("withOutLoadData")
                 .desc("do not run load.groovy to reload data to Doris.")
+                .build()
+        dryRunOpt = Option.builder("dryRun")
+                .required(false)
+                .hasArg(false)
+                .desc("just print cases and does not run")
                 .build()
 
         Options options = new Options()
@@ -311,6 +325,7 @@ class ConfigOptions {
                 .addOption(feHttpAddressOpt)
                 .addOption(feHttpUserOpt)
                 .addOption(feHttpPasswordOpt)
+                .addOption(metaServiceHttpAddressOpt)
                 .addOption(genOutOpt)
                 .addOption(confFileOpt)
                 .addOption(forceGenOutOpt)
@@ -318,9 +333,10 @@ class ConfigOptions {
                 .addOption(suiteParallelOpt)
                 .addOption(actionParallelOpt)
                 .addOption(randomOrderOpt)
-                .addOption(stopWhenFail)
+                .addOption(stopWhenFailOpt)
                 .addOption(timesOpt)
                 .addOption(withOutLoadDataOpt)
+                .addOption(dryRunOpt)
 
         CommandLine cmd = new DefaultParser().parse(options, args, true)
         if (cmd.hasOption(helpOption)) {

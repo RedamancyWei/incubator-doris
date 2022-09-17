@@ -21,6 +21,7 @@ import org.apache.doris.analysis.InsertStmt;
 import org.apache.doris.analysis.KillStmt;
 import org.apache.doris.analysis.Queriable;
 import org.apache.doris.analysis.QueryStmt;
+import org.apache.doris.analysis.SelectStmt;
 import org.apache.doris.analysis.SqlParser;
 import org.apache.doris.analysis.SqlScanner;
 import org.apache.doris.analysis.StatementBase;
@@ -39,7 +40,7 @@ import org.apache.doris.common.Pair;
 import org.apache.doris.common.UserException;
 import org.apache.doris.common.util.DebugUtil;
 import org.apache.doris.common.util.SqlParserUtils;
-import org.apache.doris.datasource.DataSourceIf;
+import org.apache.doris.datasource.CatalogIf;
 import org.apache.doris.metric.MetricRepo;
 import org.apache.doris.mysql.MysqlChannel;
 import org.apache.doris.mysql.MysqlCommand;
@@ -60,6 +61,8 @@ import org.apache.doris.thrift.TUniqueId;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanContext;
+import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.logging.log4j.LogManager;
@@ -111,12 +114,12 @@ public class ConnectProcessor {
 
         // check catalog and db exists
         if (catalogName != null) {
-            DataSourceIf dataSourceIf = ctx.getEnv().getDataSourceMgr().getCatalogNullable(catalogName);
-            if (dataSourceIf == null) {
+            CatalogIf catalogIf = ctx.getEnv().getCatalogMgr().getCatalogNullable(catalogName);
+            if (catalogIf == null) {
                 ctx.getState().setError(ErrorCode.ERR_BAD_DB_ERROR, "No match catalog in doris: " + fullDbName);
                 return;
             }
-            if (dataSourceIf.getDbNullable(dbName) == null) {
+            if (catalogIf.getDbNullable(dbName) == null) {
                 ctx.getState().setError(ErrorCode.ERR_BAD_DB_ERROR, "No match database in doris: " + fullDbName);
                 return;
             }
@@ -149,6 +152,7 @@ public class ConnectProcessor {
         // slow query
         long endTime = System.currentTimeMillis();
         long elapseMs = endTime - ctx.getStartTime();
+        SpanContext spanContext = Span.fromContext(Context.current()).getSpanContext();
 
         ctx.getAuditEventBuilder().setEventType(EventType.AFTER_QUERY)
                 .setState(ctx.getState().toString()).setQueryTime(elapseMs)
@@ -158,7 +162,8 @@ public class ConnectProcessor {
                 .setPeakMemoryBytes(statistics == null ? 0 : statistics.getMaxPeakMemoryBytes())
                 .setReturnRows(ctx.getReturnRows())
                 .setStmtId(ctx.getStmtId())
-                .setQueryId(ctx.queryId() == null ? "NaN" : DebugUtil.printId(ctx.queryId()));
+                .setQueryId(ctx.queryId() == null ? "NaN" : DebugUtil.printId(ctx.queryId()))
+                .setTraceId(spanContext.isValid() ? spanContext.getTraceId() : "");
 
         if (ctx.getState().isQuery()) {
             MetricRepo.COUNTER_QUERY_ALL.increase(1L);
@@ -230,11 +235,14 @@ public class ConnectProcessor {
         boolean alreadyAddedToAuditInfoList = false;
         try {
             List<StatementBase> stmts = null;
-            if (ctx.getSessionVariable().isEnableNereidsPlanner()) {
+            Exception nereidsParseException = null;
+            // ctx could be null in some unit tests
+            if (ctx != null && ctx.getSessionVariable().isEnableNereidsPlanner()) {
                 NereidsParser nereidsParser = new NereidsParser();
                 try {
                     stmts = nereidsParser.parseSQL(originStmt);
                 } catch (Exception e) {
+                    nereidsParseException = e;
                     // TODO: We should catch all exception here until we support all query syntax.
                     LOG.warn(" Fallback to stale planner."
                             + " Nereids cannot process this statement: \"{}\".", originStmt, e);
@@ -251,6 +259,11 @@ public class ConnectProcessor {
                     ctx.resetReturnRows();
                 }
                 parsedStmt = stmts.get(i);
+                if (parsedStmt instanceof SelectStmt) {
+                    if (!ctx.getSessionVariable().enableFallbackToOriginalPlanner) {
+                        throw new Exception(String.format("SQL: {}", parsedStmt.toSql()), nereidsParseException);
+                    }
+                }
                 parsedStmt.setOrigStmt(new OriginStatement(originStmt, i));
                 parsedStmt.setUserInfo(ctx.getCurrentUserIdentity());
                 executor = new StmtExecutor(ctx, parsedStmt);
@@ -261,7 +274,7 @@ public class ConnectProcessor {
                     ctx.getState().serverStatus |= MysqlServerStatusFlag.SERVER_MORE_RESULTS_EXISTS;
                     finalizeCommand();
                 }
-                auditInfoList.add(new Pair<>(executor.getParsedStmt(), executor.getQueryStatisticsForAuditLog()));
+                auditInfoList.add(Pair.of(executor.getParsedStmt(), executor.getQueryStatisticsForAuditLog()));
                 alreadyAddedToAuditInfoList = true;
             }
         } catch (IOException e) {
@@ -287,17 +300,20 @@ public class ConnectProcessor {
 
         // that means execute some statement failed
         if (!alreadyAddedToAuditInfoList && executor != null) {
-            auditInfoList.add(new Pair<>(executor.getParsedStmt(), executor.getQueryStatisticsForAuditLog()));
+            auditInfoList.add(Pair.of(executor.getParsedStmt(), executor.getQueryStatisticsForAuditLog()));
         }
 
-        // audit after exec
+        // audit after exec, analysis query would not be recorded
         if (!auditInfoList.isEmpty()) {
             for (Pair<StatementBase, Data.PQueryStatistics> audit : auditInfoList) {
                 auditAfterExec(originStmt.replace("\n", " "), audit.first, audit.second);
             }
-        } else {
-            // auditInfoList can be empty if we encounter analysis error.
+        } else if (QueryState.ErrType.ANALYSIS_ERR != ctx.getState().getErrType()) {
+            // auditInfoList can be empty if we encounter error.
             auditAfterExec(originStmt.replace("\n", " "), null, null);
+        }
+        if (executor != null) {
+            executor.addProfileToSpan();
         }
     }
 
@@ -335,7 +351,7 @@ public class ConnectProcessor {
             ctx.getState().setError(ErrorCode.ERR_UNKNOWN_TABLE, "Empty tableName");
             return;
         }
-        DatabaseIf db = ctx.getCurrentDataSource().getDbNullable(ctx.getDatabase());
+        DatabaseIf db = ctx.getCurrentCatalog().getDbNullable(ctx.getDatabase());
         if (db == null) {
             ctx.getState().setError(ErrorCode.ERR_BAD_DB_ERROR, "Unknown database(" + ctx.getDatabase() + ")");
             return;

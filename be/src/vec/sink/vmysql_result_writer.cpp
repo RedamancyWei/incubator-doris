@@ -20,6 +20,7 @@
 #include "runtime/buffer_control_block.h"
 #include "runtime/large_int_value.h"
 #include "runtime/runtime_state.h"
+#include "vec/columns/column_array.h"
 #include "vec/columns/column_nullable.h"
 #include "vec/columns/column_vector.h"
 #include "vec/common/assert_cast.h"
@@ -235,7 +236,6 @@ Status VMysqlResultWriter::_add_one_column(const ColumnPtr& column_ptr,
                 buf_ret = _buffer.push_string(buf, pos - buf - 1);
             }
             if constexpr (type == TYPE_DATETIMEV2) {
-                // TODO: use correct scale here
                 char buf[64];
                 auto time_num = data[i];
                 doris::vectorized::DateV2Value<DateTimeV2ValueType> date_val;

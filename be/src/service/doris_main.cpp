@@ -59,7 +59,6 @@
 #include "service/single_replica_load_download_service.h"
 #include "util/debug_util.h"
 #include "util/doris_metrics.h"
-#include "util/logging.h"
 #include "util/perf_counters.h"
 #include "util/telemetry/telemetry.h"
 #include "util/thrift_rpc_helper.h"
@@ -323,7 +322,9 @@ int main(int argc, char** argv) {
         !defined(THREAD_SANITIZER) && !defined(USE_JEMALLOC)
     // Aggressive decommit is required so that unused pages in the TCMalloc page heap are
     // not backed by physical pages and do not contribute towards memory consumption.
-    MallocExtension::instance()->SetNumericProperty("tcmalloc.aggressive_memory_decommit", 1);
+    if (doris::config::tc_enable_aggressive_memory_decommit) {
+        MallocExtension::instance()->SetNumericProperty("tcmalloc.aggressive_memory_decommit", 1);
+    }
     // Change the total TCMalloc thread cache size if necessary.
     if (!MallocExtension::instance()->SetNumericProperty(
                 "tcmalloc.max_total_thread_cache_bytes",
@@ -502,8 +503,10 @@ int main(int argc, char** argv) {
         // 1s clear the expired task mem tracker, a query mem tracker is about 57 bytes.
         // this will cause coredump for ASAN build when running regression test,
         // disable temporarily.
-        // TODO: fix the coredump
-        // doris::ExecEnv::GetInstance()->task_pool_mem_tracker_registry()->logout_task_mem_tracker();
+        doris::ExecEnv::GetInstance()->task_pool_mem_tracker_registry()->logout_task_mem_tracker();
+        // The process tracker print log usage interval is 1s to avoid a large number of tasks being
+        // canceled when the process exceeds the mem limit, resulting in too many duplicate logs.
+        doris::ExecEnv::GetInstance()->process_mem_tracker_raw()->enable_print_log_usage();
         sleep(1);
     }
 

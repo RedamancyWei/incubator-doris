@@ -82,13 +82,13 @@ public class LogicalSelectHint<CHILD_TYPE extends Plan> extends LogicalUnary<CHI
     }
 
     @Override
-    public List<Expression> getExpressions() {
+    public List<? extends Expression> getExpressions() {
         return ImmutableList.of();
     }
 
     @Override
     public LogicalSelectHint<CHILD_TYPE> withGroupExpression(Optional<GroupExpression> groupExpression) {
-        return new LogicalSelectHint<>(hints, groupExpression, Optional.of(logicalProperties), child());
+        return new LogicalSelectHint<>(hints, groupExpression, Optional.of(getLogicalProperties()), child());
     }
 
     @Override
@@ -97,7 +97,7 @@ public class LogicalSelectHint<CHILD_TYPE extends Plan> extends LogicalUnary<CHI
     }
 
     @Override
-    public List<Slot> computeOutput(Plan input) {
+    public List<Slot> computeOutput() {
         return child().getOutput();
     }
 

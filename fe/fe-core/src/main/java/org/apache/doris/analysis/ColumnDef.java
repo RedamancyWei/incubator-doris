@@ -205,8 +205,7 @@ public class ColumnDef {
         // When string type length is not assigned, it need to be assigned to 1.
         if (typeDef.getType().isScalarType()) {
             final ScalarType targetType = (ScalarType) typeDef.getType();
-            if (targetType.getPrimitiveType().isStringType()
-                    && !targetType.isAssignedStrLenInColDefinition()) {
+            if (targetType.getPrimitiveType().isStringType() && !targetType.isLengthSet()) {
                 targetType.setLength(1);
             }
         }
@@ -266,6 +265,10 @@ public class ColumnDef {
         }
 
         if (type.getPrimitiveType() == PrimitiveType.ARRAY) {
+            if (isKey()) {
+                throw new AnalysisException("Array can only be used in the non-key column of"
+                    + " the duplicate table at present.");
+            }
             if (defaultValue.isSet && defaultValue != DefaultValue.NULL_DEFAULT_VALUE) {
                 throw new AnalysisException("Array type column default value only support null");
             }

@@ -171,7 +171,8 @@ public class OlapScanNode extends ScanNode {
 
     public void setIsPreAggregation(boolean isPreAggregation, String reason) {
         this.isPreAggregation = isPreAggregation;
-        this.reasonOfPreAggregation = reason;
+        this.reasonOfPreAggregation = this.reasonOfPreAggregation == null ? reason :
+                                      this.reasonOfPreAggregation + " " + reason;
     }
 
     public boolean isPreAggregation() {
@@ -231,9 +232,21 @@ public class OlapScanNode extends ScanNode {
         this.tupleIds = tupleIds;
     }
 
-    // only used for UT
+    // only used for UT and Nereids
     public void setSelectedPartitionIds(Collection<Long> selectedPartitionIds) {
         this.selectedPartitionIds = selectedPartitionIds;
+    }
+
+    /**
+     * Only used for Neredis to set rollup or materialized view selection result.
+     */
+    public void selectSelectIndexInfo(
+            long selectedIndexId,
+            boolean isPreAggregation,
+            String reasonOfPreAggregation) {
+        this.selectedIndexId = selectedIndexId;
+        this.isPreAggregation = isPreAggregation;
+        this.reasonOfPreAggregation = reasonOfPreAggregation;
     }
 
     /**
@@ -318,11 +331,11 @@ public class OlapScanNode extends ScanNode {
             }
             situation = "The key type of table is aggregated.";
             update = false;
-            break CHECK;
         } // CHECKSTYLE IGNORE THIS LINE
 
         if (update) {
             this.selectedIndexId = selectedIndexId;
+            updateSlotUniqueId();
             setIsPreAggregation(isPreAggregation, reasonOfDisable);
             updateColumnType();
             if (LOG.isDebugEnabled()) {
@@ -366,6 +379,25 @@ public class OlapScanNode extends ScanNode {
                 slotDescriptor.setColumn(mvColumn);
             }
         }
+    }
+
+    /**
+     * In some situation, we need use mv col unique id , because mv col unique and
+     * base col unique id is different.
+     * For example: select count(*) from table (table has a mv named mv1)
+     * if Optimizer deceide use mv1, we need updateSlotUniqueId.
+     */
+    private void updateSlotUniqueId() {
+        if (!olapTable.getEnableLightSchemaChange() || selectedIndexId == olapTable.getBaseIndexId()) {
+            return;
+        }
+        MaterializedIndexMeta meta = olapTable.getIndexMetaByIndexId(selectedIndexId);
+        for (SlotDescriptor slotDescriptor : desc.getSlots()) {
+            Column baseColumn = slotDescriptor.getColumn();
+            Column mvColumn = meta.getColumnByName(baseColumn.getName());
+            slotDescriptor.setColumn(mvColumn);
+        }
+        LOG.debug("updateSlotUniqueId() slots: {}", desc.getSlots());
     }
 
     public OlapTable getOlapTable() {
@@ -696,6 +728,7 @@ public class OlapScanNode extends ScanNode {
         }
         final RollupSelector rollupSelector = new RollupSelector(analyzer, desc, olapTable);
         selectedIndexId = rollupSelector.selectBestRollup(selectedPartitionIds, conjuncts, isPreAggregation);
+        updateSlotUniqueId();
         LOG.debug("select best roll up cost: {} ms, best index id: {}",
                 (System.currentTimeMillis() - start), selectedIndexId);
     }
@@ -795,7 +828,8 @@ public class OlapScanNode extends ScanNode {
         StringBuilder output = new StringBuilder();
 
         String indexName = olapTable.getIndexNameById(selectedIndexId);
-        output.append(prefix).append("TABLE: ").append(olapTable.getName()).append("(").append(indexName).append(")");
+        output.append(prefix).append("TABLE: ").append(olapTable.getQualifiedName())
+                .append("(").append(indexName).append(")");
         if (detailLevel == TExplainLevel.BRIEF) {
             return output.toString();
         }
@@ -1023,6 +1057,9 @@ public class OlapScanNode extends ScanNode {
             Expr conjunct = new BinaryPredicate(BinaryPredicate.Operator.EQ, deleteSignSlot, new IntLiteral(0));
             conjunct.analyze(analyzer);
             conjuncts.add(conjunct);
+            if (!olapTable.getEnableUniqueKeyMergeOnWrite()) {
+                closePreAggregation(Column.DELETE_SIGN + " is used as conjuncts.");
+            }
         }
     }
 

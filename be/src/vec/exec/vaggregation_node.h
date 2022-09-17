@@ -25,6 +25,7 @@
 #include "vec/aggregate_functions/aggregate_function.h"
 #include "vec/common/columns_hashing.h"
 #include "vec/common/hash_table/fixed_hash_map.h"
+#include "vec/common/hash_table/string_hash_map.h"
 #include "vec/exprs/vectorized_agg_fn.h"
 #include "vec/exprs/vslot_ref.h"
 
@@ -649,6 +650,7 @@ private:
     bool _needs_finalize;
     bool _is_merge;
     bool _is_first_phase;
+    bool _use_fixed_length_serialization_opt;
     std::unique_ptr<MemPool> _mem_pool;
 
     std::unique_ptr<MemTracker> _data_mem_tracker;
@@ -669,14 +671,25 @@ private:
     RuntimeProfile::Counter* _merge_timer;
     RuntimeProfile::Counter* _expr_timer;
     RuntimeProfile::Counter* _get_results_timer;
+    RuntimeProfile::Counter* _serialize_data_timer;
+    RuntimeProfile::Counter* _serialize_result_timer;
+    RuntimeProfile::Counter* _deserialize_data_timer;
+    RuntimeProfile::Counter* _hash_table_compute_timer;
+    RuntimeProfile::Counter* _streaming_agg_timer;
+    RuntimeProfile::Counter* _hash_table_size_counter;
+    RuntimeProfile::Counter* _hash_table_input_counter;
 
     bool _is_streaming_preagg;
     Block _preagg_block = Block();
     bool _should_expand_hash_table = true;
-    std::vector<char*> _streaming_pre_places;
 
     bool _should_limit_output = false;
     bool _reach_limit = false;
+
+    PODArray<AggregateDataPtr> _places;
+    std::vector<char> _deserialize_buffer;
+    std::vector<size_t> _hash_values;
+    std::vector<AggregateDataPtr> _values;
 
 private:
     /// Return true if we should keep expanding hash tables in the preagg. If false,
@@ -736,21 +749,23 @@ private:
         }
 
         int rows = block->rows();
-        PODArray<AggregateDataPtr> places(rows);
+        if (_places.size() < rows) {
+            _places.resize(rows);
+        }
 
         if constexpr (limit) {
-            _find_in_hash_table(places.data(), key_columns, rows);
+            _find_in_hash_table(_places.data(), key_columns, rows);
 
             for (int i = 0; i < _aggregate_evaluators.size(); ++i) {
                 _aggregate_evaluators[i]->execute_batch_add_selected(
-                        block, _offsets_of_aggregate_states[i], places.data(), &_agg_arena_pool);
+                        block, _offsets_of_aggregate_states[i], _places.data(), &_agg_arena_pool);
             }
         } else {
-            _emplace_into_hash_table(places.data(), key_columns, rows);
+            _emplace_into_hash_table(_places.data(), key_columns, rows);
 
             for (int i = 0; i < _aggregate_evaluators.size(); ++i) {
                 _aggregate_evaluators[i]->execute_batch_add(block, _offsets_of_aggregate_states[i],
-                                                            places.data(), &_agg_arena_pool);
+                                                            _places.data(), &_agg_arena_pool);
             }
 
             if (_should_limit_output) {
@@ -759,6 +774,17 @@ private:
         }
 
         return Status::OK();
+    }
+
+    // We should call this function only at 1st phase.
+    // 1st phase: is_merge=true, only have one SlotRef.
+    // 2nd phase: is_merge=false, maybe have multiple exprs.
+    int _get_slot_column_id(const AggFnEvaluator* evaluator) {
+        auto ctxs = evaluator->input_exprs_ctxs();
+        CHECK(ctxs.size() == 1 && ctxs[0]->root()->is_slot_ref())
+                << "input_exprs_ctxs is invalid, input_exprs_ctx[0]="
+                << ctxs[0]->root()->debug_string();
+        return ((VSlotRef*)ctxs[0]->root())->column_id();
     }
 
     template <bool limit>
@@ -775,66 +801,88 @@ private:
         }
 
         int rows = block->rows();
-        PODArray<AggregateDataPtr> places(rows);
+        if (_places.size() < rows) {
+            _places.resize(rows);
+        }
 
         if constexpr (limit) {
-            _find_in_hash_table(places.data(), key_columns, rows);
+            _find_in_hash_table(_places.data(), key_columns, rows);
 
             for (int i = 0; i < _aggregate_evaluators.size(); ++i) {
-                DCHECK(_aggregate_evaluators[i]->input_exprs_ctxs().size() == 1 &&
-                       _aggregate_evaluators[i]->input_exprs_ctxs()[0]->root()->is_slot_ref());
-                int col_id = ((VSlotRef*)_aggregate_evaluators[i]->input_exprs_ctxs()[0]->root())
-                                     ->column_id();
                 if (_aggregate_evaluators[i]->is_merge()) {
+                    int col_id = _get_slot_column_id(_aggregate_evaluators[i]);
                     auto column = block->get_by_position(col_id).column;
                     if (column->is_nullable()) {
                         column = ((ColumnNullable*)column.get())->get_nested_column_ptr();
                     }
 
-                    std::unique_ptr<char[]> deserialize_buffer(
-                            new char[_aggregate_evaluators[i]->function()->size_of_data() * rows]);
+                    size_t buffer_size =
+                            _aggregate_evaluators[i]->function()->size_of_data() * rows;
+                    if (_deserialize_buffer.size() < buffer_size) {
+                        _deserialize_buffer.resize(buffer_size);
+                    }
 
-                    _aggregate_evaluators[i]->function()->deserialize_vec(
-                            deserialize_buffer.get(), (ColumnString*)(column.get()),
-                            &_agg_arena_pool, rows);
+                    if (_use_fixed_length_serialization_opt) {
+                        SCOPED_TIMER(_deserialize_data_timer);
+                        _aggregate_evaluators[i]->function()->deserialize_from_column(
+                                _deserialize_buffer.data(), *column, &_agg_arena_pool, rows);
+                    } else {
+                        SCOPED_TIMER(_deserialize_data_timer);
+                        _aggregate_evaluators[i]->function()->deserialize_vec(
+                                _deserialize_buffer.data(), (ColumnString*)(column.get()),
+                                &_agg_arena_pool, rows);
+                    }
                     _aggregate_evaluators[i]->function()->merge_vec_selected(
-                            places.data(), _offsets_of_aggregate_states[i],
-                            deserialize_buffer.get(), &_agg_arena_pool, rows);
+                            _places.data(), _offsets_of_aggregate_states[i],
+                            _deserialize_buffer.data(), &_agg_arena_pool, rows);
+
+                    _aggregate_evaluators[i]->function()->destroy_vec(_deserialize_buffer.data(),
+                                                                      rows);
 
                 } else {
                     _aggregate_evaluators[i]->execute_batch_add_selected(
-                            block, _offsets_of_aggregate_states[i], places.data(),
+                            block, _offsets_of_aggregate_states[i], _places.data(),
                             &_agg_arena_pool);
                 }
             }
         } else {
-            _emplace_into_hash_table(places.data(), key_columns, rows);
+            _emplace_into_hash_table(_places.data(), key_columns, rows);
 
             for (int i = 0; i < _aggregate_evaluators.size(); ++i) {
-                DCHECK(_aggregate_evaluators[i]->input_exprs_ctxs().size() == 1 &&
-                       _aggregate_evaluators[i]->input_exprs_ctxs()[0]->root()->is_slot_ref());
-                int col_id = ((VSlotRef*)_aggregate_evaluators[i]->input_exprs_ctxs()[0]->root())
-                                     ->column_id();
                 if (_aggregate_evaluators[i]->is_merge()) {
+                    int col_id = _get_slot_column_id(_aggregate_evaluators[i]);
                     auto column = block->get_by_position(col_id).column;
                     if (column->is_nullable()) {
                         column = ((ColumnNullable*)column.get())->get_nested_column_ptr();
                     }
 
-                    std::unique_ptr<char[]> deserialize_buffer(
-                            new char[_aggregate_evaluators[i]->function()->size_of_data() * rows]);
+                    size_t buffer_size =
+                            _aggregate_evaluators[i]->function()->size_of_data() * rows;
+                    if (_deserialize_buffer.size() < buffer_size) {
+                        _deserialize_buffer.resize(buffer_size);
+                    }
 
-                    _aggregate_evaluators[i]->function()->deserialize_vec(
-                            deserialize_buffer.get(), (ColumnString*)(column.get()),
-                            &_agg_arena_pool, rows);
+                    if (_use_fixed_length_serialization_opt) {
+                        SCOPED_TIMER(_deserialize_data_timer);
+                        _aggregate_evaluators[i]->function()->deserialize_from_column(
+                                _deserialize_buffer.data(), *column, &_agg_arena_pool, rows);
+                    } else {
+                        SCOPED_TIMER(_deserialize_data_timer);
+                        _aggregate_evaluators[i]->function()->deserialize_vec(
+                                _deserialize_buffer.data(), (ColumnString*)(column.get()),
+                                &_agg_arena_pool, rows);
+                    }
                     _aggregate_evaluators[i]->function()->merge_vec(
-                            places.data(), _offsets_of_aggregate_states[i],
-                            deserialize_buffer.get(), &_agg_arena_pool, rows);
+                            _places.data(), _offsets_of_aggregate_states[i],
+                            _deserialize_buffer.data(), &_agg_arena_pool, rows);
+
+                    _aggregate_evaluators[i]->function()->destroy_vec(_deserialize_buffer.data(),
+                                                                      rows);
 
                 } else {
                     _aggregate_evaluators[i]->execute_batch_add(block,
                                                                 _offsets_of_aggregate_states[i],
-                                                                places.data(), &_agg_arena_pool);
+                                                                _places.data(), &_agg_arena_pool);
                 }
             }
 

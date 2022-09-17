@@ -22,11 +22,13 @@ import groovy.util.logging.Slf4j
 
 import com.google.common.collect.Maps
 import org.apache.commons.cli.CommandLine
+import org.apache.commons.cli.Option
 import org.apache.doris.regression.util.FileUtils
 import org.apache.doris.regression.util.JdbcUtils
 
 import java.sql.Connection
 import java.sql.DriverManager
+import java.util.concurrent.atomic.AtomicReference
 import java.util.function.Predicate
 
 import static org.apache.doris.regression.ConfigOptions.*
@@ -42,6 +44,8 @@ class Config {
     public String feHttpAddress
     public String feHttpUser
     public String feHttpPassword
+
+    public String metaServiceHttpAddress
 
     public String suitePath
     public String dataPath
@@ -59,6 +63,7 @@ class Config {
     public boolean forceGenerateOutputFile
     public boolean randomOrder
     public boolean stopWhenFail
+    public boolean dryRun
 
     public Properties otherConfigs = new Properties()
 
@@ -71,6 +76,7 @@ class Config {
     public Set<String> excludeDirectorySet = new HashSet<>()
 
     public InetSocketAddress feHttpInetSocketAddress
+    public InetSocketAddress metaServiceHttpInetSocketAddress
     public Integer parallel
     public Integer suiteParallel
     public Integer actionParallel
@@ -80,7 +86,7 @@ class Config {
     Config() {}
 
     Config(String defaultDb, String jdbcUrl, String jdbcUser, String jdbcPassword,
-           String feHttpAddress, String feHttpUser, String feHttpPassword,
+           String feHttpAddress, String feHttpUser, String feHttpPassword, String metaServiceHttpAddress,
            String suitePath, String dataPath, String realDataPath, String sf1DataPath,
            String testGroups, String excludeGroups, String testSuites, String excludeSuites,
            String testDirectories, String excludeDirectories, String pluginPath) {
@@ -91,6 +97,7 @@ class Config {
         this.feHttpAddress = feHttpAddress
         this.feHttpUser = feHttpUser
         this.feHttpPassword = feHttpPassword
+        this.metaServiceHttpAddress = metaServiceHttpAddress
         this.suitePath = suitePath
         this.dataPath = dataPath
         this.realDataPath = realDataPath
@@ -164,6 +171,16 @@ class Config {
             throw new IllegalStateException("Can not parse stream load address: ${config.feHttpAddress}", t)
         }
 
+        config.metaServiceHttpAddress = cmd.getOptionValue(metaServiceHttpAddressOpt, config.metaServiceHttpAddress)
+        try {
+            Inet4Address host = Inet4Address.getByName(config.metaServiceHttpAddress.split(":")[0]) as Inet4Address
+            int port = Integer.valueOf(config.metaServiceHttpAddress.split(":")[1])
+            config.metaServiceHttpInetSocketAddress = new InetSocketAddress(host, port)
+        } catch (Throwable t) {
+            throw new IllegalStateException("Can not parse meta service address: ${config.metaServiceHttpAddress}", t)
+        }
+        log.info("msAddr : $config.metaServiceHttpAddress, socketAddr : $config.metaServiceHttpInetSocketAddress")
+
         config.defaultDb = cmd.getOptionValue(defaultDbOpt, config.defaultDb)
         config.jdbcUrl = cmd.getOptionValue(jdbcOpt, config.jdbcUrl)
         config.jdbcUser = cmd.getOptionValue(userOpt, config.jdbcUser)
@@ -177,8 +194,14 @@ class Config {
         config.actionParallel = Integer.parseInt(cmd.getOptionValue(actionParallelOpt, "10"))
         config.times = Integer.parseInt(cmd.getOptionValue(timesOpt, "1"))
         config.randomOrder = cmd.hasOption(randomOrderOpt)
-        config.stopWhenFail = cmd.hasOption(stopWhenFail)
+        config.stopWhenFail = cmd.hasOption(stopWhenFailOpt)
         config.withOutLoadData = cmd.hasOption(withOutLoadDataOpt)
+        config.dryRun = cmd.hasOption(dryRunOpt)
+
+        log.info("randomOrder is ${config.randomOrder}".toString())
+        log.info("stopWhenFail is ${config.stopWhenFail}".toString())
+        log.info("withOutLoadData is ${config.withOutLoadData}".toString())
+        log.info("dryRun is ${config.dryRun}".toString())
 
         Properties props = cmd.getOptionProperties("conf")
         config.otherConfigs.putAll(props)
@@ -198,6 +221,7 @@ class Config {
             configToString(obj.feHttpAddress),
             configToString(obj.feHttpUser),
             configToString(obj.feHttpPassword),
+            configToString(obj.metaServiceHttpAddress),
             configToString(obj.suitePath),
             configToString(obj.dataPath),
             configToString(obj.realDataPath),
@@ -248,6 +272,11 @@ class Config {
         if (config.feHttpAddress == null) {
             config.feHttpAddress = "127.0.0.1:8030"
             log.info("Set feHttpAddress to '${config.feHttpAddress}' because not specify.".toString())
+        }
+
+        if (config.metaServiceHttpAddress == null) {
+            config.metaServiceHttpAddress = "127.0.0.1:5000"
+            log.info("Set metaServiceHttpAddress to '${config.metaServiceHttpAddress}' because not specify.".toString())
         }
 
         if (config.feHttpUser == null) {
@@ -329,21 +358,6 @@ class Config {
             config.actionParallel = 10
             log.info("Set actionParallel to 10 because not specify.".toString())
         }
-
-        if (config.randomOrder == null) {
-            config.randomOrder = false
-            log.info("set randomOrder to false because not specify.".toString())
-        }
-
-        if (config.stopWhenFail == null) {
-            config.stopWhenFail = false
-            log.info("set stopWhenFail to false because not specify.".toString())
-        }
-
-        if (config.withOutLoadData == null) {
-            config.withOutLoadData = false
-            log.info("set withOutLoadData to false because not specify.".toString())
-        }
     }
     
     static String configToString(Object obj) {
@@ -359,8 +373,10 @@ class Config {
         try {
             String sql = "CREATE DATABASE IF NOT EXISTS ${dbName}"
             log.info("Try to create db, sql: ${sql}".toString())
-            getConnection().withCloseable { conn ->
-                JdbcUtils.executeToList(conn, sql)
+            if (!dryRun) {
+                getConnection().withCloseable { conn ->
+                    JdbcUtils.executeToList(conn, sql)
+                }
             }
         } catch (Throwable t) {
             throw new IllegalStateException("Create database failed, jdbcUrl: ${jdbcUrl}", t)
@@ -381,7 +397,7 @@ class Config {
     String getDbNameByFile(File suiteFile) {
         String dir = new File(suitePath).relativePath(suiteFile.parentFile)
         // We put sql files under sql dir, so dbs and tables used by cases
-        // under sql directory should be prepared by load.groovy unbder the
+        // under sql directory should be prepared by load.groovy under the
         // parent.
         //
         // e.g.

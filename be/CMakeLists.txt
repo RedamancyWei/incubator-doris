@@ -328,6 +328,9 @@ set_target_properties(aws-s2n PROPERTIES IMPORTED_LOCATION ${THIRDPARTY_DIR}/lib
 add_library(minizip STATIC IMPORTED)
 set_target_properties(minizip PROPERTIES IMPORTED_LOCATION ${THIRDPARTY_DIR}/lib64/libminizip.a)
 
+add_library(simdjson STATIC IMPORTED)
+set_target_properties(simdjson PROPERTIES IMPORTED_LOCATION ${THIRDPARTY_DIR}/lib64/libsimdjson.a)
+
 add_library(idn STATIC IMPORTED)
 set_target_properties(idn PROPERTIES IMPORTED_LOCATION ${THIRDPARTY_DIR}/lib64/libidn.a)
 
@@ -407,7 +410,7 @@ check_function_exists(sched_getcpu HAVE_SCHED_GETCPU)
 #  -pthread: enable multithreaded malloc
 #  -DBOOST_DATE_TIME_POSIX_TIME_STD_CONFIG: enable nanosecond precision for boost
 #  -fno-omit-frame-pointers: Keep frame pointer for functions in register
-set(CXX_COMMON_FLAGS "${CXX_COMMON_FLAGS} -Wall -Wno-sign-compare -pthread -Werror")
+set(CXX_COMMON_FLAGS "${CXX_COMMON_FLAGS} -frecord-gcc-switches -Wall -Wno-sign-compare -pthread -Werror")
 set(CXX_COMMON_FLAGS "${CXX_COMMON_FLAGS} -fstrict-aliasing -fno-omit-frame-pointer")
 set(CXX_COMMON_FLAGS "${CXX_COMMON_FLAGS} -std=gnu++17 -D__STDC_FORMAT_MACROS")
 set(CXX_COMMON_FLAGS "${CXX_COMMON_FLAGS} -DBOOST_DATE_TIME_POSIX_TIME_STD_CONFIG")
@@ -701,6 +704,7 @@ set(COMMON_THIRDPARTY
     hdfs3
     xml2
     lzma
+    simdjson
 )
 
 if (${MAKE_TEST} STREQUAL "ON")

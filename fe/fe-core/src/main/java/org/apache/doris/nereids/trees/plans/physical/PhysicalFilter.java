@@ -19,11 +19,13 @@ package org.apache.doris.nereids.trees.plans.physical;
 
 import org.apache.doris.nereids.memo.GroupExpression;
 import org.apache.doris.nereids.properties.LogicalProperties;
+import org.apache.doris.nereids.properties.PhysicalProperties;
 import org.apache.doris.nereids.trees.expressions.Expression;
 import org.apache.doris.nereids.trees.plans.Plan;
 import org.apache.doris.nereids.trees.plans.PlanType;
 import org.apache.doris.nereids.trees.plans.algebra.Filter;
 import org.apache.doris.nereids.trees.plans.visitor.PlanVisitor;
+import org.apache.doris.nereids.util.Utils;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -44,8 +46,14 @@ public class PhysicalFilter<CHILD_TYPE extends Plan> extends PhysicalUnary<CHILD
     }
 
     public PhysicalFilter(Expression predicates, Optional<GroupExpression> groupExpression,
-                          LogicalProperties logicalProperties, CHILD_TYPE child) {
+            LogicalProperties logicalProperties, CHILD_TYPE child) {
         super(PlanType.PHYSICAL_FILTER, groupExpression, logicalProperties, child);
+        this.predicates = Objects.requireNonNull(predicates, "predicates can not be null");
+    }
+
+    public PhysicalFilter(Expression predicates, Optional<GroupExpression> groupExpression,
+            LogicalProperties logicalProperties, PhysicalProperties physicalProperties, CHILD_TYPE child) {
+        super(PlanType.PHYSICAL_FILTER, groupExpression, logicalProperties, physicalProperties, child);
         this.predicates = Objects.requireNonNull(predicates, "predicates can not be null");
     }
 
@@ -55,7 +63,9 @@ public class PhysicalFilter<CHILD_TYPE extends Plan> extends PhysicalUnary<CHILD
 
     @Override
     public String toString() {
-        return "PhysicalFilter (" + predicates + ")";
+        return Utils.toSqlString("PhysicalFilter",
+                "predicates", predicates
+        );
     }
 
     @Override
@@ -76,28 +86,33 @@ public class PhysicalFilter<CHILD_TYPE extends Plan> extends PhysicalUnary<CHILD
     }
 
     @Override
-    public List<Expression> getExpressions() {
+    public List<? extends Expression> getExpressions() {
         return ImmutableList.of(predicates);
     }
 
     @Override
     public <R, C> R accept(PlanVisitor<R, C> visitor, C context) {
-        return visitor.visitPhysicalFilter((PhysicalFilter<Plan>) this, context);
+        return visitor.visitPhysicalFilter(this, context);
     }
 
     @Override
-    public PhysicalUnary<Plan> withChildren(List<Plan> children) {
+    public PhysicalFilter<Plan> withChildren(List<Plan> children) {
         Preconditions.checkArgument(children.size() == 1);
-        return new PhysicalFilter<>(predicates, logicalProperties, children.get(0));
+        return new PhysicalFilter<>(predicates, getLogicalProperties(), children.get(0));
     }
 
     @Override
-    public Plan withGroupExpression(Optional<GroupExpression> groupExpression) {
-        return new PhysicalFilter<>(predicates, groupExpression, logicalProperties, child());
+    public PhysicalFilter<CHILD_TYPE> withGroupExpression(Optional<GroupExpression> groupExpression) {
+        return new PhysicalFilter<>(predicates, groupExpression, getLogicalProperties(), child());
     }
 
     @Override
-    public Plan withLogicalProperties(Optional<LogicalProperties> logicalProperties) {
+    public PhysicalFilter<CHILD_TYPE> withLogicalProperties(Optional<LogicalProperties> logicalProperties) {
         return new PhysicalFilter<>(predicates, Optional.empty(), logicalProperties.get(), child());
+    }
+
+    @Override
+    public PhysicalFilter<CHILD_TYPE> withPhysicalProperties(PhysicalProperties physicalProperties) {
+        return new PhysicalFilter<>(predicates, Optional.empty(), getLogicalProperties(), physicalProperties, child());
     }
 }
