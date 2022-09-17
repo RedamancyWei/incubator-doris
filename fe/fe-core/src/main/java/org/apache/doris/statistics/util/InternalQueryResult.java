@@ -26,6 +26,10 @@ import com.google.common.collect.Maps;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Readable results of internal SQL execution,
+ * providing some read operations.
+ */
 public class InternalQueryResult {
     private static List<String> mateOfColumns;
     private static List<PrimitiveType> mateOfTypes;

@@ -20,6 +20,11 @@ package org.apache.doris.statistics.util;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 
+/**
+ * Parse the MySQL protocol result data returned by BE,
+ * only simple parsing operations are performed here (parsed as String).
+ * For more, @see `be/src/runtime/mysql_result_writer.cpp`.
+ */
 public class InternalQueryBuffer {
     private static final long NULL_LENGTH = -1;
     private static final byte[] EMPTY_BYTES = new byte[0];
@@ -40,6 +45,10 @@ public class InternalQueryBuffer {
 
     public int position() {
         return buffer.position();
+    }
+
+    public void clear() {
+        buffer.clear();
     }
 
     private byte read() {
@@ -79,6 +88,13 @@ public class InternalQueryBuffer {
         return i;
     }
 
+    /**
+     * The length of the data is not fixed, the length value is determined by the 1-9 bytes
+     * before the data, and the number of bytes occupied by the length value is not fixed,
+     * and the number of bytes is determined by the first byte. (@see be/src/runtime/mysql_row_buffer.cpp)
+     *
+     * @return Length coded binary
+     */
     private long readLength() {
         int length = read() & 0xff;
         switch (length) {

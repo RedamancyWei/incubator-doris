@@ -81,13 +81,13 @@ public class InternalQuery {
     }
 
     /**
-     * 123
+     * Execute the query internally and return the query result.
      *
-     * @return 123
-     * @throws Exception 123
+     * @return Result of the query statement
+     * @throws Exception Errors in parsing or execution
      */
     public InternalQueryResult query() throws Exception {
-        // step1:
+        // step1: mock ConnectContext
         buildContext();
 
         // step2: parse sql
@@ -99,7 +99,7 @@ public class InternalQuery {
         // step4: execute and get result
         execute();
 
-        // step5: parse result data adn return
+        // step5: parse result data and return
         return fetchResult();
     }
 
@@ -207,7 +207,7 @@ public class InternalQuery {
         return result;
     }
 
-    private void cancel() {
+    public void cancel() {
         if (!coord.isDone()) {
             coord.cancel();
             LOG.info("Internal query has been cancelled: {}", sql);

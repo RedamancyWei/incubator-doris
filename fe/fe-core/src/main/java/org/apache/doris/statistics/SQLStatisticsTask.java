@@ -27,7 +27,7 @@ import org.apache.doris.statistics.StatsGranularity.Granularity;
 import org.apache.doris.statistics.util.InternalQuery;
 import org.apache.doris.statistics.util.InternalQueryResult;
 import org.apache.doris.statistics.util.InternalQueryResult.ResultRow;
-import org.apache.doris.statistics.util.InternalSqlFactory;
+import org.apache.doris.statistics.util.SqlTemplate;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -72,20 +72,20 @@ public class SQLStatisticsTask extends StatisticsTask {
 
         switch (type) {
             case ROW_COUNT:
-                return nonPartitioned ? InternalSqlFactory.buildRowCountSql(params)
-                        : InternalSqlFactory.buildPartitionRowCountSql(params);
+                return nonPartitioned ? SqlTemplate.buildRowCountSql(params)
+                        : SqlTemplate.buildPartitionRowCountSql(params);
             case NUM_NULLS:
-                return nonPartitioned ? InternalSqlFactory.buildNumNullsSql(params)
-                        : InternalSqlFactory.buildPartitionNumNullsSql(params);
+                return nonPartitioned ? SqlTemplate.buildNumNullsSql(params)
+                        : SqlTemplate.buildPartitionNumNullsSql(params);
             case MAX_SIZE:
             case AVG_SIZE:
-                return nonPartitioned ? InternalSqlFactory.buildMaxAvgSizeSql(params)
-                        : InternalSqlFactory.buildPartitionMaxAvgSizeSql(params);
+                return nonPartitioned ? SqlTemplate.buildMaxAvgSizeSql(params)
+                        : SqlTemplate.buildPartitionMaxAvgSizeSql(params);
             case NDV:
             case MAX_VALUE:
             case MIN_VALUE:
-                return nonPartitioned ? InternalSqlFactory.buildMinMaxNdvValueSql(params)
-                        : InternalSqlFactory.buildPartitionMinMaxNdvValueSql(params);
+                return nonPartitioned ? SqlTemplate.buildMinMaxNdvValueSql(params)
+                        : SqlTemplate.buildPartitionMinMaxNdvValueSql(params);
             case DATA_SIZE:
             default:
                 throw new DdlException("Unsupported statistics type: " + type);

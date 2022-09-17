@@ -28,7 +28,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class InternalSqlFactory {
+public class SqlTemplate {
     /** -------------------------- for statistics begin -------------------------- */
     public static final String MIN_VALUE_SQL = "SELECT MIN(${column}) AS min_value FROM ${table};";
     public static final String PARTITION_MIN_VALUE_SQL = "SELECT MIN(${column}) AS min_value"
@@ -70,7 +70,7 @@ public class InternalSqlFactory {
             + " ${table} PARTITION (${partition}) WHERE ${column} IS NULL;";
     /** ---------------------------- for statistics end ---------------------------- */
 
-    private static final Logger LOG = LogManager.getLogger(InternalSqlFactory.class);
+    private static final Logger LOG = LogManager.getLogger(SqlTemplate.class);
 
     private static final Pattern PATTERN = Pattern.compile("\\$\\{\\w+\\}");
 
@@ -236,7 +236,6 @@ public class InternalSqlFactory {
             throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
         }
     }
-
 
     public static String buildPartitionMaxAvgSizeSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
