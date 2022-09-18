@@ -28,7 +28,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class SqlTemplate {
+public class InternalSqlTemplate {
     /** -------------------------- for statistics begin -------------------------- */
     public static final String MIN_VALUE_SQL = "SELECT MIN(${column}) AS min_value FROM ${table};";
     public static final String PARTITION_MIN_VALUE_SQL = "SELECT MIN(${column}) AS min_value"
@@ -70,7 +70,7 @@ public class SqlTemplate {
             + " ${table} PARTITION (${partition}) WHERE ${column} IS NULL;";
     /** ---------------------------- for statistics end ---------------------------- */
 
-    private static final Logger LOG = LogManager.getLogger(SqlTemplate.class);
+    private static final Logger LOG = LogManager.getLogger(InternalSqlTemplate.class);
 
     private static final Pattern PATTERN = Pattern.compile("\\$\\{\\w+\\}");
 
@@ -83,7 +83,7 @@ public class SqlTemplate {
      * <p>
      *
      * @param template sql template
-     * @param params   k,v parameter
+     * @param params   k,v parameter, if without parameter, params should be null
      * @return SQL statement with parameters concatenated
      */
     public static String processTemplate(String template, Map<String, String> params) {
@@ -102,7 +102,16 @@ public class SqlTemplate {
         return sb.toString();
     }
 
-    public static String buildMinValueSql(Map<String, String> params) throws InvalidFormatException {
+    private static boolean checkParams(Set<String> requiredParams, Map<String, String> params) {
+        if (params != null) {
+            Set<String> paramsSet = params.keySet();
+            return paramsSet.containsAll(requiredParams);
+        } else {
+            return requiredParams == null;
+        }
+    }
+
+    public static String buildStatsMinValueSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table", "column");
         if (checkParams(requiredParams, params)) {
             return processTemplate(MIN_VALUE_SQL, params);
@@ -111,7 +120,7 @@ public class SqlTemplate {
         }
     }
 
-    public static String buildPartitionMinValueSql(Map<String, String> params) throws InvalidFormatException {
+    public static String buildStatsPartitionMinValueSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
         if (checkParams(requiredParams, params)) {
             return processTemplate(PARTITION_MIN_VALUE_SQL, params);
@@ -120,7 +129,7 @@ public class SqlTemplate {
         }
     }
 
-    public static String buildMaxValueSql(Map<String, String> params) throws InvalidFormatException {
+    public static String buildStatsMaxValueSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table", "column");
         if (checkParams(requiredParams, params)) {
             return processTemplate(MAX_VALUE_SQL, params);
@@ -129,7 +138,7 @@ public class SqlTemplate {
         }
     }
 
-    public static String buildPartitionMaxValueSql(Map<String, String> params) throws InvalidFormatException {
+    public static String buildStatsPartitionMaxValueSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
         if (checkParams(requiredParams, params)) {
             return processTemplate(PARTITION_MAX_VALUE_SQL, params);
@@ -138,7 +147,7 @@ public class SqlTemplate {
         }
     }
 
-    public static String buildNdvValueSql(Map<String, String> params) throws InvalidFormatException {
+    public static String buildStatsNdvValueSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table", "column");
         if (checkParams(requiredParams, params)) {
             return processTemplate(NDV_VALUE_SQL, params);
@@ -147,7 +156,7 @@ public class SqlTemplate {
         }
     }
 
-    public static String buildPartitionNdvValueSql(Map<String, String> params) throws InvalidFormatException {
+    public static String buildStatsPartitionNdvValueSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
         if (checkParams(requiredParams, params)) {
             return processTemplate(PARTITION_NDV_VALUE_SQL, params);
@@ -156,7 +165,7 @@ public class SqlTemplate {
         }
     }
 
-    public static String buildMinMaxNdvValueSql(Map<String, String> params) throws InvalidFormatException {
+    public static String buildStatsMinMaxNdvValueSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table", "column");
         if (checkParams(requiredParams, params)) {
             return processTemplate(MIN_MAX_NDV_VALUE_SQL, params);
@@ -165,7 +174,7 @@ public class SqlTemplate {
         }
     }
 
-    public static String buildPartitionMinMaxNdvValueSql(Map<String, String> params) throws InvalidFormatException {
+    public static String buildStatsPartitionMinMaxNdvValueSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
         if (checkParams(requiredParams, params)) {
             return processTemplate(PARTITION_MIN_MAX_NDV_VALUE_SQL, params);
@@ -174,7 +183,7 @@ public class SqlTemplate {
         }
     }
 
-    public static String buildRowCountSql(Map<String, String> params) throws InvalidFormatException {
+    public static String buildStatsRowCountSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table");
         if (checkParams(requiredParams, params)) {
             return processTemplate(ROW_COUNT_SQL, params);
@@ -183,16 +192,16 @@ public class SqlTemplate {
         }
     }
 
-    public static String buildPartitionRowCountSql(Map<String, String> params) throws InvalidFormatException {
+    public static String buildStatsPartitionRowCountSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table", "partition");
-        if (!checkParams(requiredParams, params)) {
+        if (checkParams(requiredParams, params)) {
             return processTemplate(PARTITION_ROW_COUNT_SQL, params);
         } else {
             throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
         }
     }
 
-    public static String buildMaxSizeSql(Map<String, String> params) throws InvalidFormatException {
+    public static String buildStatsMaxSizeSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table", "column");
         if (checkParams(requiredParams, params)) {
             return processTemplate(MAX_SIZE_SQL, params);
@@ -201,7 +210,7 @@ public class SqlTemplate {
         }
     }
 
-    public static String buildPartitionMaxSizeSql(Map<String, String> params) throws InvalidFormatException {
+    public static String buildStatsPartitionMaxSizeSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
         if (checkParams(requiredParams, params)) {
             return processTemplate(PARTITION_MAX_SIZE_SQL, params);
@@ -210,7 +219,7 @@ public class SqlTemplate {
         }
     }
 
-    public static String buildAvgSizeSql(Map<String, String> params) throws InvalidFormatException {
+    public static String buildStatsAvgSizeSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table", "column");
         if (checkParams(requiredParams, params)) {
             return processTemplate(AVG_SIZE_SQL, params);
@@ -219,7 +228,7 @@ public class SqlTemplate {
         }
     }
 
-    public static String buildPartitionAvgSizeSql(Map<String, String> params) throws InvalidFormatException {
+    public static String buildStatsPartitionAvgSizeSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
         if (checkParams(requiredParams, params)) {
             return processTemplate(PARTITION_AVG_SIZE_SQL, params);
@@ -228,7 +237,7 @@ public class SqlTemplate {
         }
     }
 
-    public static String buildMaxAvgSizeSql(Map<String, String> params) throws InvalidFormatException {
+    public static String buildStatsMaxAvgSizeSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table", "column");
         if (checkParams(requiredParams, params)) {
             return processTemplate(MAX_AVG_SIZE_SQL, params);
@@ -237,7 +246,7 @@ public class SqlTemplate {
         }
     }
 
-    public static String buildPartitionMaxAvgSizeSql(Map<String, String> params) throws InvalidFormatException {
+    public static String buildStatsPartitionMaxAvgSizeSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
         if (checkParams(requiredParams, params)) {
             return processTemplate(PARTITION_MAX_AVG_SIZE_SQL, params);
@@ -246,7 +255,7 @@ public class SqlTemplate {
         }
     }
 
-    public static String buildNumNullsSql(Map<String, String> params) throws InvalidFormatException {
+    public static String buildStatsNumNullsSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table", "column");
         if (checkParams(requiredParams, params)) {
             return processTemplate(NUM_NULLS_SQL, params);
@@ -255,21 +264,12 @@ public class SqlTemplate {
         }
     }
 
-    public static String buildPartitionNumNullsSql(Map<String, String> params) throws InvalidFormatException {
+    public static String buildStatsPartitionNumNullsSql(Map<String, String> params) throws InvalidFormatException {
         Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
         if (checkParams(requiredParams, params)) {
             return processTemplate(PARTITION_NUM_NULLS_SQL, params);
         } else {
             throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
-        }
-    }
-
-    private static boolean checkParams(Set<String> requiredParams, Map<String, String> params) {
-        if (params != null) {
-            Set<String> paramsSet = params.keySet();
-            return paramsSet.containsAll(requiredParams);
-        } else {
-            return requiredParams == null;
         }
     }
 }
