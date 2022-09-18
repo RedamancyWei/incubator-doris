@@ -91,7 +91,7 @@ public class InternalQueryBuffer {
     /**
      * The length of the data is not fixed, the length value is determined by the 1-9 bytes
      * before the data, and the number of bytes occupied by the length value is not fixed,
-     * and the number of bytes is determined by the first byte. (@see be/src/runtime/mysql_row_buffer.cpp)
+     * and the number of bytes is determined by the first byte. (@see `be/src/runtime/mysql_row_buffer.cpp`)
      *
      * @return Length coded binary
      */

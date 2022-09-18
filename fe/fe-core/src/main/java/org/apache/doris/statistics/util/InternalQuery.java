@@ -55,8 +55,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Mainly used for statistics module. FE obtains statistics by SQL query BE,
- * such as column maximum value, minimum value, etc.
+ * Execute SQL query statements internally(in FE). Internal-query mainly used for statistics module,
+ * FE obtains statistics by SQL from BE, such as column maximum value, minimum value, etc.
  **/
 public class InternalQuery {
     private static final Logger LOG = LogManager.getLogger(InternalQuery.class);
@@ -87,7 +87,7 @@ public class InternalQuery {
      * @throws Exception Errors in parsing or execution
      */
     public InternalQueryResult query() throws Exception {
-        // step1: mock ConnectContext
+        // step1: mock connectContext
         buildContext();
 
         // step2: parse sql
