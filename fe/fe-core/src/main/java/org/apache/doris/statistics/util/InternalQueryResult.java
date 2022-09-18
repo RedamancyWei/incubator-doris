@@ -20,16 +20,17 @@ package org.apache.doris.statistics.util;
 import org.apache.doris.catalog.PrimitiveType;
 import org.apache.doris.common.DdlException;
 
-import com.clearspring.analytics.util.Lists;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
 import java.util.List;
 import java.util.Map;
 
 /**
- * Readable results of internal SQL execution,
- * providing some read operations.
- */
+ * Execute SQL query statements internally(in FE). Internal-query mainly used for statistics module,
+ * FE obtains statistics by SQL from BE, such as column maximum value, minimum value, etc.
+ * TODO(wzt): For statistics it should be better to implement a statistics sink.
+ **/
 public class InternalQueryResult {
     private static List<String> mateOfColumns;
     private static List<PrimitiveType> mateOfTypes;
