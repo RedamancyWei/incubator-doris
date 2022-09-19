@@ -186,7 +186,7 @@ public class InternalQuery {
                 .map(e -> e.getType().getPrimitiveType())
                 .collect(Collectors.toList());
 
-        InternalQueryResult result = new InternalQueryResult(columns, types);
+        InternalQueryResult result = new InternalQueryResult();
         List<ResultRow> resultRows = result.getResultRows();
 
         for (TResultBatch batch : resultBatches) {
@@ -200,7 +200,7 @@ public class InternalQuery {
                     values.add(value);
                 }
 
-                ResultRow resultRow = new ResultRow(values);
+                ResultRow resultRow = new ResultRow(columns, types, values);
                 resultRows.add(resultRow);
             }
         }
