@@ -57,6 +57,7 @@ import java.util.stream.Collectors;
 /**
  * Execute SQL query statements internally(in FE). Internal-query mainly used for statistics module,
  * FE obtains statistics by SQL from BE, such as column maximum value, minimum value, etc.
+ * TODO(wzt): For statistics it should be better to implement a statistics sink.
  **/
 public class InternalQuery {
     private static final Logger LOG = LogManager.getLogger(InternalQuery.class);

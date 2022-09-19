@@ -156,4 +156,3 @@ public class InternalQueryBuffer {
         return src == null ? null : new Double(src);
     }
 }
-

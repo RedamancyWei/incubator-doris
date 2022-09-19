@@ -28,6 +28,12 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * Template for building internal query SQL statements.
+ * e.g.:
+ *   - "SELECT ${column} FROM ${table}"
+ *   - ${column} and ${table} will be replaced with the actual executed table and column.
+ */
 public class InternalSqlTemplate {
     /** -------------------------- for statistics begin -------------------------- */
     public static final String MIN_VALUE_SQL = "SELECT MIN(${column}) AS min_value FROM ${table};";
@@ -102,17 +108,8 @@ public class InternalSqlTemplate {
         return sb.toString();
     }
 
-    private static boolean checkParams(Set<String> requiredParams, Map<String, String> params) {
-        if (params != null) {
-            Set<String> paramsSet = params.keySet();
-            return paramsSet.containsAll(requiredParams);
-        } else {
-            return requiredParams == null;
-        }
-    }
-
     public static String buildStatsMinValueSql(Map<String, String> params) throws InvalidFormatException {
-        Set<String> requiredParams = Sets.newHashSet("table", "column");
+        Set<String> requiredParams = getTemplateParams(MIN_VALUE_SQL);
         if (checkParams(requiredParams, params)) {
             return processTemplate(MIN_VALUE_SQL, params);
         } else {
@@ -121,7 +118,7 @@ public class InternalSqlTemplate {
     }
 
     public static String buildStatsPartitionMinValueSql(Map<String, String> params) throws InvalidFormatException {
-        Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
+        Set<String> requiredParams = getTemplateParams(PARTITION_MIN_VALUE_SQL);
         if (checkParams(requiredParams, params)) {
             return processTemplate(PARTITION_MIN_VALUE_SQL, params);
         } else {
@@ -130,7 +127,7 @@ public class InternalSqlTemplate {
     }
 
     public static String buildStatsMaxValueSql(Map<String, String> params) throws InvalidFormatException {
-        Set<String> requiredParams = Sets.newHashSet("table", "column");
+        Set<String> requiredParams = getTemplateParams(MAX_VALUE_SQL);
         if (checkParams(requiredParams, params)) {
             return processTemplate(MAX_VALUE_SQL, params);
         } else {
@@ -139,7 +136,7 @@ public class InternalSqlTemplate {
     }
 
     public static String buildStatsPartitionMaxValueSql(Map<String, String> params) throws InvalidFormatException {
-        Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
+        Set<String> requiredParams = getTemplateParams(PARTITION_MAX_VALUE_SQL);
         if (checkParams(requiredParams, params)) {
             return processTemplate(PARTITION_MAX_VALUE_SQL, params);
         } else {
@@ -148,7 +145,7 @@ public class InternalSqlTemplate {
     }
 
     public static String buildStatsNdvValueSql(Map<String, String> params) throws InvalidFormatException {
-        Set<String> requiredParams = Sets.newHashSet("table", "column");
+        Set<String> requiredParams = getTemplateParams(NDV_VALUE_SQL);
         if (checkParams(requiredParams, params)) {
             return processTemplate(NDV_VALUE_SQL, params);
         } else {
@@ -157,7 +154,7 @@ public class InternalSqlTemplate {
     }
 
     public static String buildStatsPartitionNdvValueSql(Map<String, String> params) throws InvalidFormatException {
-        Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
+        Set<String> requiredParams = getTemplateParams(PARTITION_NDV_VALUE_SQL);
         if (checkParams(requiredParams, params)) {
             return processTemplate(PARTITION_NDV_VALUE_SQL, params);
         } else {
@@ -166,7 +163,7 @@ public class InternalSqlTemplate {
     }
 
     public static String buildStatsMinMaxNdvValueSql(Map<String, String> params) throws InvalidFormatException {
-        Set<String> requiredParams = Sets.newHashSet("table", "column");
+        Set<String> requiredParams = getTemplateParams(MIN_MAX_NDV_VALUE_SQL);
         if (checkParams(requiredParams, params)) {
             return processTemplate(MIN_MAX_NDV_VALUE_SQL, params);
         } else {
@@ -174,8 +171,9 @@ public class InternalSqlTemplate {
         }
     }
 
-    public static String buildStatsPartitionMinMaxNdvValueSql(Map<String, String> params) throws InvalidFormatException {
-        Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
+    public static String buildStatsPartitionMinMaxNdvValueSql(Map<String, String> params)
+            throws InvalidFormatException {
+        Set<String> requiredParams = getTemplateParams(PARTITION_MIN_MAX_NDV_VALUE_SQL);
         if (checkParams(requiredParams, params)) {
             return processTemplate(PARTITION_MIN_MAX_NDV_VALUE_SQL, params);
         } else {
@@ -184,7 +182,7 @@ public class InternalSqlTemplate {
     }
 
     public static String buildStatsRowCountSql(Map<String, String> params) throws InvalidFormatException {
-        Set<String> requiredParams = Sets.newHashSet("table");
+        Set<String> requiredParams = getTemplateParams(ROW_COUNT_SQL);
         if (checkParams(requiredParams, params)) {
             return processTemplate(ROW_COUNT_SQL, params);
         } else {
@@ -193,7 +191,7 @@ public class InternalSqlTemplate {
     }
 
     public static String buildStatsPartitionRowCountSql(Map<String, String> params) throws InvalidFormatException {
-        Set<String> requiredParams = Sets.newHashSet("table", "partition");
+        Set<String> requiredParams = getTemplateParams(PARTITION_ROW_COUNT_SQL);
         if (checkParams(requiredParams, params)) {
             return processTemplate(PARTITION_ROW_COUNT_SQL, params);
         } else {
@@ -202,7 +200,7 @@ public class InternalSqlTemplate {
     }
 
     public static String buildStatsMaxSizeSql(Map<String, String> params) throws InvalidFormatException {
-        Set<String> requiredParams = Sets.newHashSet("table", "column");
+        Set<String> requiredParams = getTemplateParams(MAX_SIZE_SQL);
         if (checkParams(requiredParams, params)) {
             return processTemplate(MAX_SIZE_SQL, params);
         } else {
@@ -211,7 +209,7 @@ public class InternalSqlTemplate {
     }
 
     public static String buildStatsPartitionMaxSizeSql(Map<String, String> params) throws InvalidFormatException {
-        Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
+        Set<String> requiredParams = getTemplateParams(PARTITION_MAX_SIZE_SQL);
         if (checkParams(requiredParams, params)) {
             return processTemplate(PARTITION_MAX_SIZE_SQL, params);
         } else {
@@ -220,7 +218,7 @@ public class InternalSqlTemplate {
     }
 
     public static String buildStatsAvgSizeSql(Map<String, String> params) throws InvalidFormatException {
-        Set<String> requiredParams = Sets.newHashSet("table", "column");
+        Set<String> requiredParams = getTemplateParams(AVG_SIZE_SQL);
         if (checkParams(requiredParams, params)) {
             return processTemplate(AVG_SIZE_SQL, params);
         } else {
@@ -229,7 +227,7 @@ public class InternalSqlTemplate {
     }
 
     public static String buildStatsPartitionAvgSizeSql(Map<String, String> params) throws InvalidFormatException {
-        Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
+        Set<String> requiredParams = getTemplateParams(PARTITION_AVG_SIZE_SQL);
         if (checkParams(requiredParams, params)) {
             return processTemplate(PARTITION_AVG_SIZE_SQL, params);
         } else {
@@ -238,7 +236,7 @@ public class InternalSqlTemplate {
     }
 
     public static String buildStatsMaxAvgSizeSql(Map<String, String> params) throws InvalidFormatException {
-        Set<String> requiredParams = Sets.newHashSet("table", "column");
+        Set<String> requiredParams = getTemplateParams(MAX_AVG_SIZE_SQL);
         if (checkParams(requiredParams, params)) {
             return processTemplate(MAX_AVG_SIZE_SQL, params);
         } else {
@@ -247,7 +245,7 @@ public class InternalSqlTemplate {
     }
 
     public static String buildStatsPartitionMaxAvgSizeSql(Map<String, String> params) throws InvalidFormatException {
-        Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
+        Set<String> requiredParams = getTemplateParams(PARTITION_MAX_AVG_SIZE_SQL);
         if (checkParams(requiredParams, params)) {
             return processTemplate(PARTITION_MAX_AVG_SIZE_SQL, params);
         } else {
@@ -256,7 +254,7 @@ public class InternalSqlTemplate {
     }
 
     public static String buildStatsNumNullsSql(Map<String, String> params) throws InvalidFormatException {
-        Set<String> requiredParams = Sets.newHashSet("table", "column");
+        Set<String> requiredParams = getTemplateParams(NUM_NULLS_SQL);
         if (checkParams(requiredParams, params)) {
             return processTemplate(NUM_NULLS_SQL, params);
         } else {
@@ -265,11 +263,33 @@ public class InternalSqlTemplate {
     }
 
     public static String buildStatsPartitionNumNullsSql(Map<String, String> params) throws InvalidFormatException {
-        Set<String> requiredParams = Sets.newHashSet("table", "column", "partition");
+        Set<String> requiredParams = getTemplateParams(PARTITION_NUM_NULLS_SQL);
         if (checkParams(requiredParams, params)) {
             return processTemplate(PARTITION_NUM_NULLS_SQL, params);
         } else {
             throw new InvalidFormatException("Wrong parameter format. need params: " + requiredParams);
+        }
+    }
+
+    private static Set<String> getTemplateParams(String template) {
+        Matcher matcher = PATTERN.matcher(template);
+        Set<String> requiredParams = Sets.newHashSet();
+
+        while (matcher.find()) {
+            String param = matcher.group();
+            String value = param.substring(2, param.length() - 1);
+            requiredParams.add(value);
+        }
+
+        return requiredParams;
+    }
+
+    private static boolean checkParams(Set<String> requiredParams, Map<String, String> params) {
+        if (params != null && !params.isEmpty()) {
+            Set<String> paramsSet = params.keySet();
+            return paramsSet.containsAll(requiredParams);
+        } else {
+            return requiredParams == null;
         }
     }
 }
