@@ -23,6 +23,7 @@ import org.apache.doris.common.AnalysisException;
 import com.google.common.collect.Maps;
 
 import java.util.Map;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * There are the statistics of all of tables.
@@ -36,29 +37,70 @@ import java.util.Map;
  */
 public class Statistics {
 
+    private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock(true);
+
     private final Map<Long, TableStats> idToTableStats = Maps.newConcurrentMap();
 
+    public Statistics() {
+    }
+
+    public void readLock() {
+        lock.readLock().lock();
+    }
+
+    public void readUnlock() {
+        lock.readLock().unlock();
+    }
+
+    private void writeLock() {
+        lock.writeLock().lock();
+    }
+
+    private void writeUnlock() {
+        lock.writeLock().unlock();
+    }
+
     public void updateTableStats(long tableId, Map<StatsType, String> statsTypeToValue) throws AnalysisException {
-        TableStats tableStats = getNotNullTableStats(tableId);
-        tableStats.updateTableStats(statsTypeToValue);
+        writeLock();
+        try {
+            TableStats tableStats = getNotNullTableStats(tableId);
+            tableStats.updateTableStats(statsTypeToValue);
+        } finally {
+            writeUnlock();
+        }
     }
 
     public void updatePartitionStats(long tableId, String partitionName, Map<StatsType, String> statsTypeToValue)
             throws AnalysisException {
-        TableStats tableStats = getNotNullTableStats(tableId);
-        tableStats.updatePartitionStats(partitionName, statsTypeToValue);
+        writeLock();
+        try {
+            TableStats tableStats = getNotNullTableStats(tableId);
+            tableStats.updatePartitionStats(partitionName, statsTypeToValue);
+        } finally {
+            writeUnlock();
+        }
     }
 
     public void updateColumnStats(long tableId, String columnName, Type columnType,
                                   Map<StatsType, String> statsTypeToValue) throws AnalysisException {
-        TableStats tableStats = getNotNullTableStats(tableId);
-        tableStats.updateColumnStats(columnName, columnType, statsTypeToValue);
+        writeLock();
+        try {
+            TableStats tableStats = getNotNullTableStats(tableId);
+            tableStats.updateColumnStats(columnName, columnType, statsTypeToValue);
+        } finally {
+            writeUnlock();
+        }
     }
 
     public void updateColumnStats(long tableId, String partitionName, String columnName, Type columnType,
                                   Map<StatsType, String> statsTypeToValue) throws AnalysisException {
-        PartitionStats partitionStats = getNotNullPartitionStats(tableId, partitionName);
-        partitionStats.updateColumnStats(columnName, columnType, statsTypeToValue);
+        writeLock();
+        try {
+            PartitionStats partitionStats = getNotNullPartitionStats(tableId, partitionName);
+            partitionStats.updateColumnStats(columnName, columnType, statsTypeToValue);
+        } finally {
+            writeUnlock();
+        }
     }
 
     /**
