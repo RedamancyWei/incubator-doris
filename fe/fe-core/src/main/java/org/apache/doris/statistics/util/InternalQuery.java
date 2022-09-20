@@ -180,7 +180,7 @@ public class InternalQuery {
         }
     }
 
-    private InternalQueryResult fetchResult() throws DdlException {
+    private InternalQueryResult fetchResult() {
         List<String> columns = stmt.getColLabels();
         List<PrimitiveType> types = stmt.getResultExprs().stream()
                 .map(e -> e.getType().getPrimitiveType())
