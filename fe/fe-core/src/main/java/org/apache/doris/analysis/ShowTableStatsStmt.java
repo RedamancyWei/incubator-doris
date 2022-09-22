@@ -29,8 +29,8 @@ import org.apache.doris.statistics.TableStats;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
 
+import java.util.Collections;
 import java.util.List;
 
 public class ShowTableStatsStmt extends ShowStmt {
@@ -42,7 +42,7 @@ public class ShowTableStatsStmt extends ShowStmt {
                     .add(TableStats.DATA_SIZE.getValue())
                     .build();
 
-    private TableName tableName;
+    private final TableName tableName;
 
     // after analyzed
     // There is only on attribute for both @tableName and @dbName at the same time.
@@ -73,7 +73,7 @@ public class ShowTableStatsStmt extends ShowStmt {
 
     public List<String> getPartitionNames() {
         if (partitionNames == null) {
-            return Lists.newArrayList();
+            return Collections.emptyList();
         }
         return partitionNames.getPartitionNames();
     }

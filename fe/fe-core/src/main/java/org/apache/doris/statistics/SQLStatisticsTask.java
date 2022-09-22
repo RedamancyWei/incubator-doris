@@ -108,16 +108,18 @@ public class SQLStatisticsTask extends StatisticsTask {
             List<String> columns = resultRow.getColumns();
             TaskResult result = createNewTaskResult(category, granularity);
 
-            assert columns.size() == statsTypes.size();
-            for (int i = 0; i < columns.size(); i++) {
-                StatsType statsType = StatsType.fromString(columns.get(i));
-                result.getStatsTypeToValue().put(statsType, resultRow.getString(i));
+            if (columns.size() == statsTypes.size()) {
+                for (int i = 0; i < columns.size(); i++) {
+                    StatsType statsType = StatsType.fromString(columns.get(i));
+                    result.getStatsTypeToValue().put(statsType, resultRow.getString(i));
+                }
+                return result;
             }
-            return result;
         }
 
         // Statistics statements are executed singly and return only one row data
-        throw new DdlException("Statistics query result is incorrect, " + queryResult);
+        throw new DdlException("Statistics query result is incorrect, statement: "
+                + statement + " queryResult: " + queryResult);
     }
 
     private Map<String, String> getQueryParams(StatisticsDesc statsDesc) throws DdlException {
@@ -126,9 +128,9 @@ public class SQLStatisticsTask extends StatisticsTask {
         Table table = db.getTableOrDdlException(category.getTableId());
 
         Map<String, String> params = Maps.newHashMap();
-        params.put("table", table.getName());
-        params.put("partition", category.getPartitionName());
-        params.put("column", category.getColumnName());
+        params.put(InternalSqlTemplate.TABLE, table.getName());
+        params.put(InternalSqlTemplate.PARTITION, category.getPartitionName());
+        params.put(InternalSqlTemplate.COLUMN, category.getColumnName());
         return params;
     }
 }

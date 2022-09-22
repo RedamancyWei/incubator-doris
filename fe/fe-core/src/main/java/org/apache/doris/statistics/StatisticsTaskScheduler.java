@@ -48,6 +48,7 @@ import java.util.concurrent.TimeoutException;
  */
 public class StatisticsTaskScheduler extends MasterDaemon {
     private static final Logger LOG = LogManager.getLogger(StatisticsTaskScheduler.class);
+
     private final Queue<StatisticsTask> queue = Queues.newLinkedBlockingQueue();
 
     public StatisticsTaskScheduler() {

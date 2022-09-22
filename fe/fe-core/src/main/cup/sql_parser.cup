@@ -765,12 +765,12 @@ stmt ::=
     {: RESULT = stmt; :}
     | clean_stmt:stmt
     {: RESULT = stmt; :}
+    | analyze_stmt:stmt
+    {: RESULT = stmt; :}
     | /* empty: query only has comments */
     {:
         RESULT = new EmptyStmt();
     :}
-    | analyze_stmt:stmt
-        {: RESULT = stmt; :}
     ;
 
 cluster_name ::=
