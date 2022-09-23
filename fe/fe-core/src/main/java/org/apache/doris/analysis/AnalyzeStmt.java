@@ -153,8 +153,8 @@ public class AnalyzeStmt extends DdlStmt {
                 if (partitionNames.isEmpty() && olapTable.isPartitioned()) {
                     partitionNames.addAll(olapTable.getPartitionNames());
                 }
-                List<String> notEmptyPartitionNames = getNotEmptyPartition(olapTable, partitionNames);
-                tableIdToPartitionName.put(table.getId(), notEmptyPartitionNames);
+                List<String> notEmptyPartition = getNotEmptyPartition(olapTable, partitionNames);
+                tableIdToPartitionName.put(table.getId(), notEmptyPartition);
             } finally {
                 table.readUnlock();
             }
@@ -333,14 +333,14 @@ public class AnalyzeStmt extends DdlStmt {
     }
 
     private List<String> getNotEmptyPartition(OlapTable olapTable, List<String> partitionNames) {
-        List<String> notEmptyPartitionNames = Lists.newArrayList();
+        List<String> notEmptyPartition = Lists.newArrayList();
         for (String partitionName : partitionNames) {
             Partition partition = olapTable.getPartition(partitionName);
             if (partition != null && partition.getDataSize() > 0) {
-                notEmptyPartitionNames.add(partitionName);
+                notEmptyPartition.add(partitionName);
             }
         }
-        return notEmptyPartitionNames;
+        return notEmptyPartition;
     }
 
     @Override

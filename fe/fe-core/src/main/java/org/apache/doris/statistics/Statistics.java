@@ -26,23 +26,19 @@ import java.util.Map;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
- * There are the statistics of all of tables.
+ * There are the statistics of all tables.
  * The @Statistics are mainly used to provide input for the Optimizer's cost model.
  *
  * @idToTableStats: <@Long tableId, @TableStats tableStats>
- * Each table will have corresponding @TableStats.
- * Those @TableStats are recorded in @idToTableStats form of MAP.
- * This facilitates the optimizer to quickly find the corresponding
+ *     - Each table will have corresponding @TableStats
+ *     - Those @TableStats are recorded in @idToTableStats form of MAP.
+ *     - This facilitates the optimizer to quickly find the corresponding
  * @TableStats based on the table id.
  */
 public class Statistics {
-
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock(true);
 
     private final Map<Long, TableStats> idToTableStats = Maps.newConcurrentMap();
-
-    public Statistics() {
-    }
 
     public void readLock() {
         lock.readLock().lock();

@@ -23,6 +23,7 @@ import org.apache.doris.common.DdlException;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -57,15 +58,15 @@ public class InternalQueryResult {
         }
 
         public List<String> getColumns() {
-            return columns != null ? columns : Lists.newArrayList();
+            return columns != null ? columns : Collections.emptyList();
         }
 
         public List<PrimitiveType> getTypes() {
-            return types != null ? types : Lists.newArrayList();
+            return types != null ? types : Collections.emptyList();
         }
 
         public List<String> getValues() {
-            return values != null ? values : Lists.newArrayList();
+            return values != null ? values : Collections.emptyList();
         }
 
         private void buildColumnNameMap() {
