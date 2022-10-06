@@ -819,14 +819,12 @@ CONF_Int32(object_pool_buffer_size, "100");
 
 // ParquetReaderWrap prefetch buffer size
 CONF_Int32(parquet_reader_max_buffer_size, "50");
-CONF_Bool(parquet_predicate_push_down, "true");
 // Max size of parquet page header in bytes
 CONF_mInt32(parquet_header_max_size_mb, "1");
 // Max buffer size for parquet row group
 CONF_mInt32(parquet_rowgroup_max_buffer_mb, "128");
 // Max buffer size for parquet chunk column
 CONF_mInt32(parquet_column_max_buffer_mb, "8");
-CONF_Bool(parquet_reader_using_internal, "false");
 
 // When the rows number reached this limit, will check the filter rate the of bloomfilter
 // if it is lower than a specific threshold, the predicate will be disabled.
@@ -884,10 +882,10 @@ CONF_mInt64(nodechannel_pending_queue_max_bytes, "67108864");
 CONF_mInt32(max_fragment_start_wait_time_seconds, "30");
 
 // Temp config. True to use new file scan node to do load job. Will remove after fully test.
-CONF_Bool(enable_new_load_scan_node, "false");
+CONF_mBool(enable_new_load_scan_node, "false");
 
 // Temp config. True to use new file scanner. Will remove after fully test.
-CONF_Bool(enable_new_file_scanner, "false");
+CONF_mBool(enable_new_file_scanner, "false");
 
 #ifdef BE_TEST
 // test s3

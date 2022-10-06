@@ -24,7 +24,6 @@ import org.apache.doris.nereids.rules.expression.rewrite.ExpressionNormalization
 import org.apache.doris.nereids.rules.expression.rewrite.ExpressionOptimization;
 import org.apache.doris.nereids.rules.mv.SelectRollupWithAggregate;
 import org.apache.doris.nereids.rules.mv.SelectRollupWithoutAggregate;
-import org.apache.doris.nereids.rules.rewrite.AggregateDisassemble;
 import org.apache.doris.nereids.rules.rewrite.logical.ColumnPruning;
 import org.apache.doris.nereids.rules.rewrite.logical.EliminateFilter;
 import org.apache.doris.nereids.rules.rewrite.logical.EliminateLimit;
@@ -33,6 +32,7 @@ import org.apache.doris.nereids.rules.rewrite.logical.FindHashConditionForJoin;
 import org.apache.doris.nereids.rules.rewrite.logical.LimitPushDown;
 import org.apache.doris.nereids.rules.rewrite.logical.NormalizeAggregate;
 import org.apache.doris.nereids.rules.rewrite.logical.PruneOlapScanPartition;
+import org.apache.doris.nereids.rules.rewrite.logical.PushFilterInsideJoin;
 import org.apache.doris.nereids.rules.rewrite.logical.ReorderJoin;
 
 import com.google.common.collect.ImmutableList;
@@ -67,8 +67,8 @@ public class NereidsRewriteJobExecutor extends BatchRulesJob {
                 .add(topDownBatch(ImmutableList.of(new ReorderJoin())))
                 .add(topDownBatch(ImmutableList.of(new ColumnPruning())))
                 .add(topDownBatch(RuleSet.PUSH_DOWN_JOIN_CONDITION_RULES, false))
+                .add(topDownBatch(ImmutableList.of(PushFilterInsideJoin.INSTANCE)))
                 .add(topDownBatch(ImmutableList.of(new FindHashConditionForJoin())))
-                .add(topDownBatch(ImmutableList.of(new AggregateDisassemble())))
                 .add(topDownBatch(ImmutableList.of(new LimitPushDown())))
                 .add(topDownBatch(ImmutableList.of(new EliminateLimit())))
                 .add(topDownBatch(ImmutableList.of(new EliminateFilter())))

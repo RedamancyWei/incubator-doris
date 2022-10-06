@@ -193,9 +193,8 @@ public class PhysicalPlanTranslator extends DefaultPlanVisitor<PlanFragment, Pla
         // 3. generate output tuple
         List<Slot> slotList = Lists.newArrayList();
         TupleDescriptor outputTupleDesc;
-        if (aggregate.getAggPhase() == AggPhase.LOCAL) {
-            outputTupleDesc = generateTupleDesc(aggregate.getOutput(), null, context);
-        } else if ((aggregate.getAggPhase() == AggPhase.GLOBAL && aggregate.isFinalPhase())
+        if (aggregate.getAggPhase() == AggPhase.LOCAL
+                || (aggregate.getAggPhase() == AggPhase.GLOBAL && aggregate.isFinalPhase())
                 || aggregate.getAggPhase() == AggPhase.DISTINCT_LOCAL) {
             slotList.addAll(groupSlotList);
             slotList.addAll(aggFunctionOutput);
@@ -222,10 +221,12 @@ public class PhysicalPlanTranslator extends DefaultPlanVisitor<PlanFragment, Pla
                 outputTupleDesc, aggregate.getAggPhase().toExec());
         AggregationNode aggregationNode = new AggregationNode(context.nextPlanNodeId(),
                 inputPlanFragment.getPlanRoot(), aggInfo);
+        if (!aggregate.isFinalPhase()) {
+            aggregationNode.unsetNeedsFinalize();
+        }
         PlanFragment currentFragment = inputPlanFragment;
         switch (aggregate.getAggPhase()) {
             case LOCAL:
-                aggregationNode.unsetNeedsFinalize();
                 aggregationNode.setUseStreamingPreagg(aggregate.isUsingStream());
                 aggregationNode.setIntermediateTuple();
                 break;
@@ -698,6 +699,10 @@ public class PhysicalPlanTranslator extends DefaultPlanVisitor<PlanFragment, Pla
             crossJoinNode.setChild(0, leftFragment.getPlanRoot());
             connectChildFragment(crossJoinNode, 1, leftFragment, rightFragment, context);
             leftFragment.setPlanRoot(crossJoinNode);
+            if (nestedLoopJoin.getOtherJoinCondition().isPresent()) {
+                ExpressionUtils.extractConjunction(nestedLoopJoin.getOtherJoinCondition().get()).stream()
+                        .map(e -> ExpressionTranslator.translate(e, context)).forEach(crossJoinNode::addConjunct);
+            }
 
             return leftFragment;
         } else {
