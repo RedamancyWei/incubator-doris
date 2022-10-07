@@ -163,7 +163,7 @@ public class Statistics {
     public void mockTableStatsWithRowCount(long tableId, long rowCount) {
         TableStats tableStats = idToTableStats.get(tableId);
         if (tableStats == null) {
-            tableStats = new TableStats(rowCount, 1);
+            tableStats = new TableStats(-1, -1);
             idToTableStats.put(tableId, tableStats);
         }
     }
