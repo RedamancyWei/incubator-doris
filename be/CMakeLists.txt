@@ -69,9 +69,10 @@ option(GLIBC_COMPATIBILITY "Enable compatibility with older glibc libraries." ON
 message(STATUS "GLIBC_COMPATIBILITY is ${GLIBC_COMPATIBILITY}")
 
 # set CMAKE_BUILD_TYPE
-if (NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE RELEASE)
-endif()
+# if (NOT CMAKE_BUILD_TYPE)
+#     set(CMAKE_BUILD_TYPE RELEASE)
+# endif()
+set(CMAKE_BUILD_TYPE "DEBUG")
 
 string(TOUPPER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE)
 message(STATUS "Build type is ${CMAKE_BUILD_TYPE}")
@@ -121,7 +122,7 @@ endif()
 set(Boost_DEBUG FALSE)
 set(Boost_USE_MULTITHREADED ON)
 set(Boost_ROOT ${THIRDPARTY_DIR})
-set(Boost_NO_BOOST_CMAKE OFF)
+set(Boost_NO_BOOST_CMAKE ON)
 set(BOOST_VERSION "1.73.0")
 
 if (NOT APPLE)

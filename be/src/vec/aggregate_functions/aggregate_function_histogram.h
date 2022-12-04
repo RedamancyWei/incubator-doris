@@ -35,7 +35,6 @@
 #include "vec/columns/column_nullable.h"
 #include "vec/common/assert_cast.h"
 #include "vec/data_types/data_type_number.h"
-#include "vec/io/io_helper.h"
 
 #include <sstream>
 
@@ -72,28 +71,149 @@
 #include "vec/data_types/data_type_factory.hpp"
 #include "util/slice.h"
 
+#include<cmath>
+
+#include "common/logging.h"
+#include "runtime/datetime_value.h"
+#include "runtime/decimalv2_value.h"
+#include "runtime/large_int_value.h"
+
+#include "vec/runtime/vdatetime_value.h"
+
+#include<iostream>
+#include<string>
+#include <sstream>
+
 namespace doris::vectorized {
+
+const int64_t MAX_BUCKET_SIZE = 128;
 
 template<typename T>
 struct Bucket {
 public:
     Bucket() = default;
-
-    Bucket(T lower, T upper, size_t count, size_t upper_repeats)
-            : lower(lower), upper(upper), count(count), upper_repeats(upper_repeats), count_in_bucket(1) {}
+    Bucket(T value, size_t pre_sum)
+            : lower(value), upper(value), count(1), pre_sum(pre_sum), ndv(1) {}
+    Bucket(T lower, T upper, size_t count, size_t pre_sum, size_t ndv)
+            : lower(lower), upper(upper), count(count), pre_sum(pre_sum), ndv(ndv) {}
 
     T lower;
     T upper;
-    // Up to this bucket, the total value
     int64_t count;
-    // the number of values that on the upper boundary
-    int64_t upper_repeats;
-    // total value count in this bucket
-    int64_t count_in_bucket;
+    int64_t pre_sum;
+    int64_t ndv;
+};
+
+struct AggregateFunctionHistogramBase {
+public:
+    AggregateFunctionHistogramBase() = default;
+
+    template <typename T>
+    static std::vector<Bucket<T>> build_bucket_from_data(const std::vector<T>& sorted_data,
+                                                          int64_t max_bucket_size) {
+        std::vector<Bucket<T>> buckets;
+
+        if (sorted_data.size() > 0) {
+            int64_t data_size = sorted_data.size();
+            int num_per_bucket = (int64_t) std::ceil((Float64) data_size / max_bucket_size);
+
+            for (int i = 0; i < data_size; ++i) {
+                T v = sorted_data[i];
+                if (buckets.empty()) {
+                    Bucket<T> bucket(v, 0);
+                    buckets.emplace_back(bucket);
+                } else {
+                    Bucket<T>* bucket = &buckets.back();
+                    T upper = bucket->upper;
+                    if (upper == v) {
+                        bucket->count++;
+                    } else if (bucket->count < num_per_bucket) {
+                        bucket->count++;
+                        bucket->ndv++;
+                        bucket->upper = v;
+                    } else {
+                        int64_t pre_sum = bucket->pre_sum + bucket->count;
+                        Bucket<T> new_bucket(v, pre_sum);
+                        buckets.emplace_back(new_bucket);
+                    }
+                }
+            }
+        }
+
+        return buckets;
+    }
+
+    static std::string to_bucket_json(std::string lower, std::string upper,
+                                      size_t count, size_t pre_sum, size_t ndv) {
+        return fmt::format(R"(["{}","{}","{}","{}"])",
+                           lower,
+                           upper,
+                           std::to_string((int64_t)(count)),
+                           std::to_string((int64_t)(pre_sum)),
+                           std::to_string((int64_t)(ndv)));
+    }
+
+    template <typename T>
+    static std::string build_json_from_bucket(const std::vector<Bucket<T>>& buckets,
+                                              const DataTypePtr& data_type) {
+        std::string bucket_json;
+
+        if (buckets.empty()) {
+            bucket_json = "[]";
+        } else {
+            bucket_json = "[";
+            WhichDataType type(data_type);
+            if (type.is_int() || type.is_float() || type.is_decimal() || type.is_string()) {
+                for (int i = 0; i < buckets.size(); ++i) {
+                    std::string lower_str = numerical_to_string(buckets[i].lower);
+                    std::string upper_str = numerical_to_string(buckets[i].upper);
+                    bucket_json += to_bucket_json(lower_str,
+                                                  upper_str,
+                                                  buckets[i].count,
+                                                  buckets[i].pre_sum,
+                                                  buckets[i].ndv) + ",";
+                }
+            } else if (type.is_date_or_datetime()) {
+                for (int i = 0; i < buckets.size(); ++i) {
+                    std::string lower_str = to_date_string(buckets[i].lower);
+                    std::string upper_str = to_date_string(buckets[i].upper);
+                    bucket_json += to_bucket_json(lower_str,
+                                                  upper_str,
+                                                  buckets[i].count,
+                                                  buckets[i].pre_sum,
+                                                  buckets[i].ndv) + ",";
+                }
+            } else {
+                LOG(WARNING) << fmt::format("unable to convert histogram data of type {}",
+                                            data_type->get_name());
+            }
+
+            bucket_json[bucket_json.size() - 1] = ']';
+        }
+
+        return bucket_json;
+    }
+
+private:
+    template <typename T>
+    static std::string numerical_to_string(T input) {
+         fmt::memory_buffer buffer;
+         fmt::format_to(buffer, "{}", input);
+         return std::string(buffer.data(), buffer.size());
+    }
+
+    template <typename T>
+    static std::string to_date_string(T input) {
+        auto* date_int = reinterpret_cast<vectorized::Int64*>(&input);
+        auto date_value = binary_cast<vectorized::Int64, vectorized::VecDateTimeValue>(*date_int);
+        char str[MAX_DTVALUE_STR_LEN];
+        date_value.to_string(str);
+        return std::string(str, strlen(str));
+    }
 };
 
 template<typename T>
-struct AggregateFunctionHistogramData {
+struct AggregateFunctionHistogramData : public AggregateFunctionHistogramBase {
     using ElementType = T;
     using ColVecType = ColumnVectorOrDecimal<ElementType>;
     PaddedPODArray<ElementType> data;
@@ -126,7 +246,7 @@ struct AggregateFunctionHistogramData {
         memcpy(vec.data() + old_size, data.data(), data.size() * sizeof(ElementType));
     }
 
-    std::vector<ElementType> get() const {
+    std::string get(const DataTypePtr& data_type) const {
         std::vector<ElementType> vec_data;
 
         for (size_t i = 0; i < data.size(); ++i) {
@@ -134,22 +254,18 @@ struct AggregateFunctionHistogramData {
             vec_data.push_back(d);
         }
 
-        return vec_data;
+        std::sort(vec_data.begin(), vec_data.end());
+        auto buckets = build_bucket_from_data<ElementType>(vec_data, MAX_BUCKET_SIZE);
+        auto result_str = build_json_from_bucket<ElementType>(buckets, data_type);
+
+        return result_str;
     }
 
     void reset() { data.clear(); }
-
-    void set_parameters(int input_bucket_num, double input_sample_ratio = 0) {
-        bucket_num = input_bucket_num;
-        sample_ratio = input_sample_ratio;
-    }
-
-    int bucket_num = 0;
-    double sample_ratio = 0;
 };
 
 template<>
-struct AggregateFunctionHistogramData<StringRef> {
+struct AggregateFunctionHistogramData<StringRef> : public AggregateFunctionHistogramBase {
     using ElementType = StringRef;
     using ColVecType = ColumnString;
     MutableColumnPtr data;
@@ -191,34 +307,30 @@ struct AggregateFunctionHistogramData<StringRef> {
         to_str.insert_range_from(*data, 0, data->size());
     }
 
-    std::vector<ElementType> get() const {
-        std::vector<ElementType> vec_data;
+    std::string get(const DataTypePtr& data_type) const {
+        std::vector<std::string> str_data;
         auto* res_column = reinterpret_cast<ColVecType*>(data.get());
 
         for (int i = 0; i < res_column->size(); ++i) {
             [[maybe_unused]] ElementType c = res_column->get_data_at(i);
-            vec_data.push_back(c);
-            LOG(WARNING) << fmt::format("ElementType==========> {}", c.to_string());
+            str_data.push_back(c.to_string());
         }
 
-        return vec_data;
+        std::sort(str_data.begin(), str_data.end());
+        const auto buckets = build_bucket_from_data<std::string>(str_data, MAX_BUCKET_SIZE);
+        auto result_str = build_json_from_bucket<std::string>(buckets, data_type);
+
+        return result_str;
     }
 
     void reset() { data->clear(); }
-
-    void set_parameters(int input_bucket_num, double input_sample_ratio = 0) {
-        bucket_num = input_bucket_num;
-        sample_ratio = input_sample_ratio;
-    }
-
-    int bucket_num = 0;
-    double sample_ratio = 0;
 };
 
 template<typename Data, typename T>
 class AggregateFunctionHistogram final
         : public IAggregateFunctionDataHelper<Data, AggregateFunctionHistogram<Data, T>> {
 public:
+    AggregateFunctionHistogram() = default;
     AggregateFunctionHistogram(const DataTypes &argument_types_)
             : IAggregateFunctionDataHelper<Data, AggregateFunctionHistogram<Data, T>>(argument_types_,
                                                                                       {}),
@@ -234,15 +346,14 @@ public:
 
     DataTypePtr get_return_type() const override {
         return std::make_shared<DataTypeString>();
-        // return std::make_shared<DataTypeArray>(make_nullable(_argument_type));
     }
 
     void add(AggregateDataPtr __restrict place, const IColumn **columns, size_t row_num,
              Arena *arena) const override {
-        // assert(!columns[0]->is_null_at(row_num));
         if (columns[0]->is_null_at(row_num)) {
             return;
         }
+
         this->data(place).add(*columns[0], row_num);
     }
 
@@ -263,27 +374,7 @@ public:
     }
 
     void insert_result_into(ConstAggregateDataPtr __restrict place, IColumn &to) const override {
-
-
-        // To json
-        std::string bucket_json = "哈哈";
-        const std::vector<T> res_column = this->data(place).get();
-        std::sort(res_column.begin(), res_column.end());
-
-        if (!res_column.empty()) {
-            for(int i=0; i < res_column.size(); i++) {
-                [[maybe_unused]] T t0 = res_column[i];
-                [[maybe_unused]] T t1 = res_column[i];
-                if (std::is_same_v<T, StringRef>) {
-//                    auto t0_ = assert_cast<StringRef>(t0);
-//                    auto t1_ = assert_cast<StringRef>(t1);
-//                    [[maybe_unused]] std::string s0 = t0_->to_string();
-//                    [[maybe_unused]] std::string s1 = t1_->to_string();
-                }
-                // const StringRef& s = assert_cast<const StringRef&>();
-            }
-        }
-
+        const std::string bucket_json = this->data(place).get(_argument_type);
         assert_cast<ColumnString &>(to).insert_data(bucket_json.c_str(), bucket_json.length());
     }
 

@@ -461,19 +461,19 @@ if [[ "${BUILD_FE}" -eq 1 ]]; then
 fi
 
 # Clean and build Frontend
-if [[ "${FE_MODULES}" != '' ]]; then
-    echo "Build Frontend Modules: ${FE_MODULES}"
-    cd "${DORIS_HOME}/fe"
-    if [[ "${CLEAN}" -eq 1 ]]; then
-        clean_fe
-    fi
-    if [[ "${DISABLE_JAVA_CHECK_STYLE}" = "ON" ]]; then
-        "${MVN_CMD}" package -pl ${FE_MODULES:+${FE_MODULES}} -DskipTests -Dcheckstyle.skip=true
-    else
-        "${MVN_CMD}" package -pl ${FE_MODULES:+${FE_MODULES}} -DskipTests
-    fi
-    cd "${DORIS_HOME}"
-fi
+#if [[ "${FE_MODULES}" != '' ]]; then
+#    echo "Build Frontend Modules: ${FE_MODULES}"
+#    cd "${DORIS_HOME}/fe"
+#    if [[ "${CLEAN}" -eq 1 ]]; then
+#        clean_fe
+#    fi
+#    if [[ "${DISABLE_JAVA_CHECK_STYLE}" = "ON" ]]; then
+#        "${MVN_CMD}" package -pl ${FE_MODULES:+${FE_MODULES}} -DskipTests -Dcheckstyle.skip=true
+#    else
+#        "${MVN_CMD}" package -pl ${FE_MODULES:+${FE_MODULES}} -DskipTests
+#    fi
+#    cd "${DORIS_HOME}"
+#fi
 
 # Clean and prepare output dir
 DORIS_OUTPUT=${DORIS_HOME}/output/
