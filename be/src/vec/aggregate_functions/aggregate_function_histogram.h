@@ -17,17 +17,16 @@
 
 #pragma once
 
-#include <cmath>
-
-#include "vec/aggregate_functions/aggregate_function.h"
-#include "vec/aggregate_functions/aggregate_function_simple_factory.h"
-#include "vec/io/io_helper.h"
-
 #include <rapidjson/document.h>
 #include <rapidjson/prettywriter.h>
 #include <rapidjson/stringbuffer.h>
 
+#include <cmath>
 #include <iostream>
+
+#include "vec/aggregate_functions/aggregate_function.h"
+#include "vec/aggregate_functions/aggregate_function_simple_factory.h"
+#include "vec/io/io_helper.h"
 
 namespace doris::vectorized {
 
@@ -88,8 +87,62 @@ public:
         return buckets;
     }
 
-    static void to_bucket_json(rapidjson::Document::AllocatorType &allocator, rapidjson::Value &bucket_arr,
-                                std::string lower, std::string upper, int64 count, int64 pre_sum, int64 ndv) {
+    template <typename T>
+    static std::string build_json_from_bucket(const std::vector<Bucket<T>>& buckets,
+                                              const DataTypePtr& data_type, int64_t max_bucket_size) {
+        rapidjson::Document doc;
+        doc.SetObject();
+        rapidjson::Document::AllocatorType& allocator = doc.GetAllocator();
+
+        // max_bucket_size
+        rapidjson::Value max_bucket_size_val(max_bucket_size);
+        doc.AddMember("max_bucket_size", max_bucket_size_val, allocator);
+
+        // buckets
+        rapidjson::Value bucket_arr(rapidjson::kArrayType);
+
+        if (!buckets.empty()) {
+            int size = buckets.size();
+            rapidjson::Value bucket_size_val(size);
+            doc.AddMember("bucket_size", bucket_size_val, allocator);
+
+            WhichDataType type(data_type);
+            if (type.is_int() || type.is_float() || type.is_decimal() || type.is_string()) {
+                for (int i = 0; i < size; ++i) {
+                    std::string lower_str = numerical_to_string(buckets[i].lower);
+                    std::string upper_str = numerical_to_string(buckets[i].upper);
+                    to_bucket_json(allocator, bucket_arr, lower_str, upper_str,
+                                   (int64_t)(buckets[i].count), (int64_t)(buckets[i].pre_sum),
+                                   (int64_t)(buckets[i].ndv));
+                }
+            } else if (type.is_date_or_datetime()) {
+                for (int i = 0; i < size; ++i) {
+                    std::string lower_str = to_date_string(buckets[i].lower);
+                    std::string upper_str = to_date_string(buckets[i].upper);
+                    to_bucket_json(allocator, bucket_arr, lower_str, upper_str,
+                                   (int64_t)(buckets[i].count), (int64_t)(buckets[i].pre_sum),
+                                   (int64_t)(buckets[i].ndv));
+                }
+            } else {
+                rapidjson::Value bucket_size_val(0);
+                doc.AddMember("bucket_size", bucket_size_val, allocator);
+                LOG(WARNING) << fmt::format("unable to convert histogram data of type {}",
+                                            data_type->get_name());
+            }
+        }
+
+        doc.AddMember("buckets", bucket_arr, allocator);
+
+        rapidjson::StringBuffer sb;
+        rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
+        doc.Accept(writer);
+
+        return std::string(sb.GetString());
+    }
+
+    static void to_bucket_json(rapidjson::Document::AllocatorType& allocator,
+                               rapidjson::Value& bucket_arr, std::string lower, std::string upper,
+                               int64 count, int64 pre_sum, int64 ndv) {
         rapidjson::Value bucket(rapidjson::kObjectType);
 
         rapidjson::Value lower_val(lower.c_str(), allocator);
@@ -108,55 +161,6 @@ public:
         bucket.AddMember("ndv", ndv_val, allocator);
 
         bucket_arr.PushBack(bucket, allocator);
-    }
-
-    template <typename T>
-    static std::string build_json_from_bucket(const std::vector<Bucket<T>>& buckets,
-                                              const DataTypePtr& data_type) {
-
-         rapidjson::Document doc;
-         doc.SetObject();
-         rapidjson::Document::AllocatorType& allocator = doc.GetAllocator();
-
-        doc.AddMember("name", MAX_BUCKET_SIZE, allocator);
-
-        std::string bucket_json;
-
-        rapidjson::Value bucket_arr(rapidjson::kArrayType);
-        if (!buckets.empty()) {
-            WhichDataType type(data_type);
-            if (type.is_int() || type.is_float() || type.is_decimal() || type.is_string()) {
-                for (int i = 0; i < buckets.size(); ++i) {
-                    std::string lower_str = numerical_to_string(buckets[i].lower);
-                    std::string upper_str = numerical_to_string(buckets[i].upper);
-                    to_bucket_json(allocator, bucket_arr, lower_str, upper_str,
-                                    (int64_t)(buckets[i].count),
-                                    (int64_t)(buckets[i].pre_sum),
-                                    (int64_t)(buckets[i].ndv));
-                }
-            } else if (type.is_date_or_datetime()) {
-                for (int i = 0; i < buckets.size(); ++i) {
-                    std::string lower_str = to_date_string(buckets[i].lower);
-                    std::string upper_str = to_date_string(buckets[i].upper);
-                    to_bucket_json(allocator, bucket_arr, lower_str, upper_str,
-                                    (int64_t)(buckets[i].count),
-                                    (int64_t)(buckets[i].pre_sum),
-                                    (int64_t)(buckets[i].ndv));
-                }
-            } else {
-                LOG(WARNING) << fmt::format("unable to convert histogram data of type {}",
-                                            data_type->get_name());
-            }
-
-            bucket_json[bucket_json.size() - 1] = ']';
-        }
-
-        doc.AddMember("buckets", bucket_arr, allocator);
-        rapidjson::StringBuffer s;
-        rapidjson::Writer<rapidjson::StringBuffer> writer(s);
-        doc.Accept(writer);
-
-        return std::string(s.GetString());
     }
 
 private:
@@ -221,7 +225,7 @@ struct AggregateFunctionHistogramData : public AggregateFunctionHistogramBase {
 
         std::sort(vec_data.begin(), vec_data.end());
         auto buckets = build_bucket_from_data<ElementType>(vec_data, MAX_BUCKET_SIZE);
-        auto result_str = build_json_from_bucket<ElementType>(buckets, data_type);
+        auto result_str = build_json_from_bucket<ElementType>(buckets, data_type, MAX_BUCKET_SIZE);
 
         return result_str;
     }
@@ -283,7 +287,7 @@ struct AggregateFunctionHistogramData<StringRef> : public AggregateFunctionHisto
 
         std::sort(str_data.begin(), str_data.end());
         const auto buckets = build_bucket_from_data<std::string>(str_data, MAX_BUCKET_SIZE);
-        auto result_str = build_json_from_bucket<std::string>(buckets, data_type);
+        auto result_str = build_json_from_bucket<std::string>(buckets, data_type, MAX_BUCKET_SIZE);
 
         return result_str;
     }
