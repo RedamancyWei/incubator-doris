@@ -15,63 +15,59 @@
 // specific language governing permissions and limitations
 // under the License.
 
-
 #include "vec/aggregate_functions/aggregate_function_histogram.h"
-
-#include "vec/utils/template_helpers.hpp"
 
 namespace doris::vectorized {
 
-    template <typename T>
-    AggregateFunctionPtr create_agg_function_histogram(const DataTypes& argument_types) {
-        return AggregateFunctionPtr(
-                new AggregateFunctionHistogram<AggregateFunctionHistogramData<T>, T>(argument_types));
+template <typename T>
+AggregateFunctionPtr create_agg_function_histogram(const DataTypes& argument_types) {
+    return AggregateFunctionPtr(
+            new AggregateFunctionHistogram<AggregateFunctionHistogramData<T>, T>(argument_types));
+}
+
+AggregateFunctionPtr create_aggregate_function_histogram(const std::string& name,
+                                                         const DataTypes& argument_types,
+                                                         const Array& parameters,
+                                                         const bool result_is_nullable) {
+    WhichDataType type(argument_types[0]);
+
+    if (type.is_uint8()) {
+        return create_agg_function_histogram<UInt8>(argument_types);
+    } else if (type.is_int8()) {
+        return create_agg_function_histogram<Int8>(argument_types);
+    } else if (type.is_int16()) {
+        return create_agg_function_histogram<Int16>(argument_types);
+    } else if (type.is_int32()) {
+        return create_agg_function_histogram<Int32>(argument_types);
+    } else if (type.is_int64()) {
+        return create_agg_function_histogram<Int64>(argument_types);
+    } else if (type.is_int128()) {
+        return create_agg_function_histogram<Int128>(argument_types);
+    } else if (type.is_float32()) {
+        return create_agg_function_histogram<Float32>(argument_types);
+    } else if (type.is_float64()) {
+        return create_agg_function_histogram<Float64>(argument_types);
+    } else if (type.is_decimal32()) {
+        return create_agg_function_histogram<Decimal32>(argument_types);
+    } else if (type.is_decimal64()) {
+        return create_agg_function_histogram<Decimal64>(argument_types);
+    } else if (type.is_decimal128()) {
+        return create_agg_function_histogram<Decimal128>(argument_types);
+    } else if (type.is_date()) {
+        return create_agg_function_histogram<Int64>(argument_types);
+    } else if (type.is_date_time()) {
+        return create_agg_function_histogram<Int64>(argument_types);
+    } else if (type.is_string()) {
+        return create_agg_function_histogram<StringRef>(argument_types);
     }
 
-    AggregateFunctionPtr create_aggregate_function_histogram(const std::string& name,
-                                                             const DataTypes& argument_types,
-                                                             const Array& parameters,
-                                                             const bool result_is_nullable) {
+    LOG(WARNING) << fmt::format("unsupported input type {} for aggregate function {}",
+                                argument_types[0]->get_name(), name);
+    return nullptr;
+}
 
-        WhichDataType type(argument_types[0]);
-
-        if (type.is_uint8()) {
-            return create_agg_function_histogram<UInt8>(argument_types);
-        } else if (type.is_int8()) {
-            return create_agg_function_histogram<Int8>(argument_types);
-        } else if (type.is_int16()) {
-            return create_agg_function_histogram<Int16>(argument_types);
-        } else if (type.is_int32()) {
-            return create_agg_function_histogram<Int32>(argument_types);
-        } else if (type.is_int64()) {
-            return create_agg_function_histogram<Int64>(argument_types);
-        } else if (type.is_int128()) {
-            return create_agg_function_histogram<Int128>(argument_types);
-        } else if (type.is_float32()) {
-            return create_agg_function_histogram<Float32>(argument_types);
-        } else if (type.is_float64()) {
-            return create_agg_function_histogram<Float64>(argument_types);
-        } else if (type.is_decimal32()) {
-            return create_agg_function_histogram<Decimal32>(argument_types);
-        } else if (type.is_decimal64()) {
-            return create_agg_function_histogram<Decimal64>(argument_types);
-        } else if (type.is_decimal128()) {
-            return create_agg_function_histogram<Decimal128>(argument_types);
-        } else if (type.is_date()) {
-            return create_agg_function_histogram<Int64>(argument_types);
-        } else if (type.is_date_time()) {
-            return create_agg_function_histogram<Int64>(argument_types);
-        } else if (type.is_string()) {
-            return create_agg_function_histogram<StringRef>(argument_types);
-        }
-
-        LOG(WARNING) << fmt::format("unsupported input type {} for aggregate function {}",
-                                    argument_types[0]->get_name(), name);
-        return nullptr;
-    }
-
-    void register_aggregate_function_histogram(AggregateFunctionSimpleFactory& factory) {
-        factory.register_function("histogram", create_aggregate_function_histogram);
-    }
+void register_aggregate_function_histogram(AggregateFunctionSimpleFactory& factory) {
+    factory.register_function("histogram", create_aggregate_function_histogram);
+}
 
 } // namespace doris::vectorized
