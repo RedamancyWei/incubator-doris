@@ -123,6 +123,7 @@ public class Histogram {
 
             int bucketSize = histogramJson.getIntValue("bucket_size");
             histogram.setBucketSize(bucketSize);
+
             float sampleRate = histogramJson.getFloatValue("sample_rate");
             histogram.setSampleRate(sampleRate);
 
