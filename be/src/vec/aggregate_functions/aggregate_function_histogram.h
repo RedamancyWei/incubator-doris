@@ -31,6 +31,7 @@
 namespace doris::vectorized {
 
 const int64_t MAX_BUCKET_SIZE = 128;
+const float_t SAMPLE_RATE = 1.0;    // TODO: add sampling parameters
 
 template <typename T>
 struct Bucket {
@@ -89,14 +90,16 @@ public:
 
     template <typename T>
     static std::string build_json_from_bucket(const std::vector<Bucket<T>>& buckets,
-                                              const DataTypePtr& data_type, int64_t max_bucket_size) {
+                                              const DataTypePtr& data_type, int64_t max_bucket_size, int64_t sample_rate) {
         rapidjson::Document doc;
         doc.SetObject();
         rapidjson::Document::AllocatorType& allocator = doc.GetAllocator();
 
-        // max_bucket_size
         rapidjson::Value max_bucket_size_val(max_bucket_size);
         doc.AddMember("max_bucket_size", max_bucket_size_val, allocator);
+
+        rapidjson::Value sample_rate_val(sample_rate);
+        doc.AddMember("sample_rate", sample_rate_val, allocator);
 
         // buckets
         rapidjson::Value bucket_arr(rapidjson::kArrayType);
@@ -225,7 +228,7 @@ struct AggregateFunctionHistogramData : public AggregateFunctionHistogramBase {
 
         std::sort(vec_data.begin(), vec_data.end());
         auto buckets = build_bucket_from_data<ElementType>(vec_data, MAX_BUCKET_SIZE);
-        auto result_str = build_json_from_bucket<ElementType>(buckets, data_type, MAX_BUCKET_SIZE);
+        auto result_str = build_json_from_bucket<ElementType>(buckets, data_type, MAX_BUCKET_SIZE, SAMPLE_RATE);
 
         return result_str;
     }
@@ -287,7 +290,7 @@ struct AggregateFunctionHistogramData<StringRef> : public AggregateFunctionHisto
 
         std::sort(str_data.begin(), str_data.end());
         const auto buckets = build_bucket_from_data<std::string>(str_data, MAX_BUCKET_SIZE);
-        auto result_str = build_json_from_bucket<std::string>(buckets, data_type, MAX_BUCKET_SIZE);
+        auto result_str = build_json_from_bucket<std::string>(buckets, data_type, MAX_BUCKET_SIZE, SAMPLE_RATE);
 
         return result_str;
     }
@@ -341,6 +344,8 @@ public:
     void insert_result_into(ConstAggregateDataPtr __restrict place, IColumn& to) const override {
         const std::string bucket_json = this->data(place).get(_argument_type);
         assert_cast<ColumnString&>(to).insert_data(bucket_json.c_str(), bucket_json.length());
+        // TODO add test
+
     }
 
 private:

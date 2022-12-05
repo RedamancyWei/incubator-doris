@@ -18,24 +18,10 @@
 package org.apache.doris.statistics.util;
 
 
-import org.apache.doris.analysis.Analyzer;
-import org.apache.doris.analysis.BoolLiteral;
-import org.apache.doris.analysis.DateLiteral;
-import org.apache.doris.analysis.DecimalLiteral;
-import org.apache.doris.analysis.FloatLiteral;
-import org.apache.doris.analysis.IntLiteral;
-import org.apache.doris.analysis.LargeIntLiteral;
-import org.apache.doris.analysis.LiteralExpr;
-import org.apache.doris.analysis.StatementBase;
-import org.apache.doris.analysis.StringLiteral;
-import org.apache.doris.analysis.TableName;
-import org.apache.doris.analysis.UserIdentity;
-import org.apache.doris.catalog.DatabaseIf;
-import org.apache.doris.catalog.Env;
-import org.apache.doris.catalog.PrimitiveType;
-import org.apache.doris.catalog.ScalarType;
-import org.apache.doris.catalog.TableIf;
-import org.apache.doris.catalog.Type;
+import com.google.common.base.Preconditions;
+import org.apache.commons.text.StringSubstitutor;
+import org.apache.doris.analysis.*;
+import org.apache.doris.catalog.*;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.UserException;
 import org.apache.doris.datasource.CatalogIf;
@@ -49,9 +35,6 @@ import org.apache.doris.statistics.StatisticConstants;
 import org.apache.doris.statistics.util.InternalQueryResult.ResultRow;
 import org.apache.doris.system.SystemInfoService;
 import org.apache.doris.thrift.TUniqueId;
-
-import com.google.common.base.Preconditions;
-import org.apache.commons.text.StringSubstitutor;
 import org.apache.thrift.TException;
 
 import java.util.ArrayList;

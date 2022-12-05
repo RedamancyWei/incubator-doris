@@ -101,6 +101,7 @@ public class AnalysisJob {
             + "MIN(${colName}) AS min, "
             + "MAX(${colName}) AS max, "
             + "${dataSizeFunction} AS data_size, "
+            + "HISTOGRAM(${colName}) AS histogram, "
             + "NOW()"
             + "FROM `${dbName}`.`${tblName}` "
             + "PARTITION ${partName}";
@@ -121,6 +122,7 @@ public class AnalysisJob {
             + "         MIN(CAST(min AS ${type})) AS min, "
             + "         MAX(CAST(max AS ${type})) AS max, "
             + "         SUM(data_size_in_bytes) AS data_size, "
+            + "         HISTOGRAM(${colName}) AS histogram, "
             + "         NOW() AS update_time\n"
             + "     FROM ${internalDB}.${columnStatTbl}"
             + "     WHERE ${internalDB}.${columnStatTbl}.db_id = '${dbId}' AND "
