@@ -116,14 +116,19 @@ public class Histogram {
                 buckets.add(bucket);
             }
 
-            histogram.maxBucketSize = histogramJson.getIntValue("max_bucket_size");
-            histogram.bucketSize = histogramJson.getIntValue("bucket_size");
-            histogram.sampleRate = histogramJson.getFloatValue("sample_rate");
             histogram.setBuckets(buckets);
+
+            int maxBucketSize = histogramJson.getIntValue("max_bucket_size");
+            histogram.setMaxBucketSize(maxBucketSize);
+
+            int bucketSize = histogramJson.getIntValue("bucket_size");
+            histogram.setBucketSize(bucketSize);
+            float sampleRate = histogramJson.getFloatValue("sample_rate");
+            histogram.setSampleRate(sampleRate);
 
             return histogram;
         } catch (Throwable e) {
-            LOG.error("deserializeFromJson error ", e);
+            LOG.error("deserialize from json error.", e);
         }
 
         return null;

@@ -27,7 +27,7 @@ suite("test_aggregate_histogram") {
     sql """
 	    CREATE TABLE IF NOT EXISTS ${tableName} (
 	        c_int INT,
-	        c_string VARCHAR(10),
+            c_string VARCHAR(10),
             c_date Date,
             c_decimal DECIMAL(10, 2),
             c_string_not_null VARCHAR(10) NOT NULL
