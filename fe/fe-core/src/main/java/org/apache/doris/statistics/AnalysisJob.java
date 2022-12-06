@@ -109,7 +109,7 @@ public class AnalysisJob {
     private static final String ANALYZE_COLUMN_SQL_TEMPLATE = "INSERT INTO "
             + "${internalDB}.${columnStatTbl}"
             + "    SELECT id, catalog_id, db_id, tbl_id, col_id, part_id, row_count, "
-            + "        ndv, null_count, min, max, data_size, update_time\n"
+            + "        ndv, null_count, min, max, data_size, histogram, update_time\n"
             + "    FROM \n"
             + "     (SELECT CONCAT(${tblId}, '-', '${colId}') AS id, "
             + "         ${catalogId} AS catalog_id, "
@@ -122,7 +122,6 @@ public class AnalysisJob {
             + "         MIN(CAST(min AS ${type})) AS min, "
             + "         MAX(CAST(max AS ${type})) AS max, "
             + "         SUM(data_size_in_bytes) AS data_size, "
-            + "         HISTOGRAM(${colName}) AS histogram, "
             + "         NOW() AS update_time\n"
             + "     FROM ${internalDB}.${columnStatTbl}"
             + "     WHERE ${internalDB}.${columnStatTbl}.db_id = '${dbId}' AND "
@@ -130,7 +129,8 @@ public class AnalysisJob {
             + "     ${internalDB}.${columnStatTbl}.col_id='${colId}' AND "
             + "     ${internalDB}.${columnStatTbl}.part_id IS NOT NULL"
             + "     ) t1, \n"
-            + "     (SELECT NDV(${colName}) AS ndv FROM `${dbName}`.`${tblName}`) t2\n";
+            + "     (SELECT NDV(${colName}) AS ndv FROM `${dbName}`.`${tblName}`) t2, \n"
+            + "     (SELECT HISTOGRAM(${colName}) AS histogram FROM `${dbName}`.`${tblName}`) t3";
 
     private String getDataSizeFunction() {
         if (col.getType().isStringType()) {

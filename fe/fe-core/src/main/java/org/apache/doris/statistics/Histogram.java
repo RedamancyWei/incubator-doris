@@ -18,6 +18,7 @@
 package org.apache.doris.statistics;
 
 import org.apache.doris.analysis.LiteralExpr;
+import org.apache.doris.catalog.PrimitiveType;
 import org.apache.doris.catalog.Type;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.statistics.util.StatisticsUtil;
@@ -93,11 +94,22 @@ public class Histogram {
         return buckets;
     }
 
+    public static Histogram defaultHistogram() {
+        Type type = Type.fromPrimitiveType(PrimitiveType.INVALID_TYPE);
+        List<Bucket> buckets = Lists.newArrayList();
+        Histogram histogram = new Histogram(type);
+        histogram.setMaxBucketSize(0);
+        histogram.setBucketSize(0);
+        histogram.setSampleRate(1.0f);
+        histogram.setBuckets(buckets);
+        return histogram;
+    }
+
     /**
      * Histogram info is stored in an internal table in json format,
      * and Histogram obj can be obtained by this method.
      */
-    public static Histogram deserializeFromJson(String json, Type datatype) {
+    public static Histogram deserializeFromJson(Type datatype, String json) {
         try {
             Histogram histogram = new Histogram(datatype);
             JSONObject histogramJson = JSON.parseObject(json);
@@ -133,6 +145,35 @@ public class Histogram {
         }
 
         return null;
+    }
+
+    /**
+     * Convert to json format string
+     */
+    public static String serializeToJson(Histogram histogram) {
+        if (histogram == null) {
+            return "";
+        }
+
+        JSONObject histogramJson = new JSONObject();
+        histogramJson.put("max_bucket_size", histogram.maxBucketSize);
+        histogramJson.put("bucket_size", histogram.bucketSize);
+        histogramJson.put("sample_rate", histogram.sampleRate);
+
+        JSONArray bucketsJsonArray = new JSONArray();
+        histogramJson.put("buckets", bucketsJsonArray);
+
+        for (Bucket bucket : histogram.buckets) {
+            JSONObject bucketJson = new JSONObject();
+            bucketJson.put("count", bucket.count);
+            bucketJson.put("pre_sum", bucket.preSum);
+            bucketJson.put("ndv", bucket.ndv);
+            bucketJson.put("upper", bucket.upper.getStringValue());
+            bucketJson.put("lower", bucket.lower.getStringValue());
+            bucketsJsonArray.add(bucketJson);
+        }
+
+        return histogramJson.toJSONString();
     }
 
     /**

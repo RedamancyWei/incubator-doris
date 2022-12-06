@@ -57,12 +57,12 @@ public class HiveAnalysisJob extends HMSAnalysisJob {
     private static final String ANALYZE_PARTITION_SQL_TEMPLATE = "INSERT INTO "
             + "${internalDB}.${columnStatTbl}"
             + " values ('${id}','${catalogId}', '${dbId}', '${tblId}', '${colId}', '${partId}', "
-            + "${numRows}, ${ndv}, ${nulls}, '${min}', '${max}', ${dataSize}, '${update_time}')";
+            + "${numRows}, ${ndv}, ${nulls}, '${min}', '${max}', '', ${dataSize}, '${update_time}')";
 
     private static final String ANALYZE_TABLE_SQL_TEMPLATE = "INSERT INTO "
             + "${internalDB}.${columnStatTbl}"
             + " values ('${id}','${catalogId}', '${dbId}', '${tblId}', '${colId}', NULL, "
-            + "${numRows}, ${ndv}, ${nulls}, '${min}', '${max}', ${dataSize}, '${update_time}')";
+            + "${numRows}, ${ndv}, ${nulls}, '${min}', '${max}', '', ${dataSize}, '${update_time}')";
 
     @Override
     protected void getColumnStatsByMeta() throws Exception {

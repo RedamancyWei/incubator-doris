@@ -3,7 +3,12 @@ package org.apache.doris.statistics;
 import org.apache.doris.analysis.LiteralExpr;
 import org.apache.doris.catalog.PrimitiveType;
 import org.apache.doris.catalog.Type;
+import org.apache.doris.common.AnalysisException;
+import org.apache.doris.statistics.util.StatisticsUtil;
 
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
+import com.alibaba.fastjson2.JSONObject;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,6 +17,7 @@ import java.util.List;
 import java.util.Objects;
 
 class HistogramTest {
+    private final Type datatype = Type.fromPrimitiveType(PrimitiveType.DATETIME);
     private Histogram histogramUnderTest;
 
     @BeforeEach
@@ -27,7 +33,7 @@ class HistogramTest {
                 + "\"count\":9,\"pre_sum\":28,\"ndv\":1},"
                 + "{\"lower\":\"2022-09-25 17:30:29\",\"upper\":\"2022-09-25 22:30:29\","
                 + "\"count\":9,\"pre_sum\":37,\"ndv\":1}]}";
-        histogramUnderTest = Histogram.deserializeFromJson(json, Type.fromPrimitiveType(PrimitiveType.DATETIME));
+        histogramUnderTest = Histogram.deserializeFromJson(datatype, json);
         if (histogramUnderTest == null) {
             Assertions.fail();
         }
@@ -117,5 +123,47 @@ class HistogramTest {
                 Objects.requireNonNull(Type.fromPrimitiveType(PrimitiveType.DATETIME)));
         long count = histogramUnderTest.rangeCount(lower, false, upper, false);
         Assertions.assertEquals(28, count);
+    }
+
+    @Test
+    void testSerializeToJson() throws AnalysisException {
+        String json = Histogram.serializeToJson(histogramUnderTest);
+        JSONObject histogramJson = JSON.parseObject(json);
+
+        int maxBucketSize = histogramJson.getIntValue("max_bucket_size");
+        Assertions.assertEquals(128, maxBucketSize);
+
+        int bucketSize = histogramJson.getIntValue("bucket_size");
+        Assertions.assertEquals(5, bucketSize);
+
+        float sampleRate = histogramJson.getFloat("sample_rate");
+        Assertions.assertEquals(1.0, sampleRate);
+
+        JSONArray jsonArray = histogramJson.getJSONArray("buckets");
+        Assertions.assertEquals(5, jsonArray.size());
+
+        // test first bucket
+        LiteralExpr expectedLower = LiteralExpr.create("2022-09-21 17:30:29",
+                Objects.requireNonNull(Type.fromPrimitiveType(PrimitiveType.DATETIME)));
+        LiteralExpr expectedUpper = LiteralExpr.create("2022-09-21 22:30:29",
+                Objects.requireNonNull(Type.fromPrimitiveType(PrimitiveType.DATETIME)));
+
+        boolean flag = false;
+
+        for (int i = 0; i < jsonArray.size(); i++) {
+            JSONObject bucketJson = jsonArray.getJSONObject(i);
+            assert datatype != null;
+            LiteralExpr lower = StatisticsUtil.readableValue(datatype, bucketJson.get("lower").toString());
+            LiteralExpr upper = StatisticsUtil.readableValue(datatype, bucketJson.get("upper").toString());
+            int count = bucketJson.getIntValue("count");
+            int preSum = bucketJson.getIntValue("pre_sum");
+            int ndv = bucketJson.getIntValue("ndv");
+            if (expectedLower.equals(lower) && expectedUpper.equals(upper) && count == 9 && preSum == 0 && ndv == 1) {
+                flag = true;
+                break;
+            }
+        }
+
+        Assertions.assertTrue(flag);
     }
 }

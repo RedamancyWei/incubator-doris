@@ -40,11 +40,12 @@ public class ColumnStatistic {
 
     public static ColumnStatistic UNKNOWN = new ColumnStatisticBuilder().setCount(Double.NaN).setNdv(Double.NaN)
             .setAvgSizeByte(Double.NaN).setNumNulls(Double.NaN).setDataSize(Double.NaN)
-            .setMinValue(Double.NaN).setMaxValue(Double.NaN).setMinExpr(null).setMaxExpr(null).build();
+            .setMinValue(Double.NaN).setMaxValue(Double.NaN).setHistogram(null)
+            .setMinExpr(null).setMaxExpr(null).build();
 
     public static ColumnStatistic DEFAULT = new ColumnStatisticBuilder().setAvgSizeByte(1).setNdv(1)
             .setNumNulls(1).setCount(1).setMaxValue(Double.MAX_VALUE).setMinValue(Double.MIN_VALUE)
-            .build();
+            .setHistogram(null).build();
 
     public static final Set<Type> MAX_MIN_UNSUPPORTED_TYPE = new HashSet<>();
 
@@ -63,6 +64,7 @@ public class ColumnStatistic {
     public final double avgSizeByte;
     public final double minValue;
     public final double maxValue;
+    public final Histogram histogram;
     /*
     selectivity of Column T1.A:
     if T1.A = T2.B is the inner join condition, for a given `b` in B, b in
@@ -82,8 +84,8 @@ public class ColumnStatistic {
     public final LiteralExpr maxExpr;
 
     public ColumnStatistic(double count, double ndv, double avgSizeByte,
-            double numNulls, double dataSize, double minValue, double maxValue, double selectivity, LiteralExpr minExpr,
-            LiteralExpr maxExpr) {
+                           double numNulls, double dataSize, double minValue, double maxValue, Histogram histogram, double selectivity, LiteralExpr minExpr,
+                           LiteralExpr maxExpr) {
         this.count = count;
         this.ndv = ndv;
         this.avgSizeByte = avgSizeByte;
@@ -91,6 +93,7 @@ public class ColumnStatistic {
         this.dataSize = dataSize;
         this.minValue = minValue;
         this.maxValue = maxValue;
+        this.histogram = histogram;
         this.selectivity = selectivity;
         this.minExpr = minExpr;
         this.maxExpr = maxExpr;
@@ -122,8 +125,10 @@ public class ColumnStatistic {
             }
             String min = resultRow.getColumnValue("min");
             String max = resultRow.getColumnValue("max");
+            String histogram = resultRow.getColumnValue("histogram");
             columnStatisticBuilder.setMinValue(StatisticsUtil.convertToDouble(col.getType(), min));
             columnStatisticBuilder.setMaxValue(StatisticsUtil.convertToDouble(col.getType(), max));
+            columnStatisticBuilder.setHistogram(Histogram.deserializeFromJson(col.getType(), histogram));
             columnStatisticBuilder.setMaxExpr(StatisticsUtil.readableValue(col.getType(), max));
             columnStatisticBuilder.setMinExpr(StatisticsUtil.readableValue(col.getType(), min));
             columnStatisticBuilder.setSelectivity(1.0);
@@ -137,8 +142,9 @@ public class ColumnStatistic {
 
     public ColumnStatistic copy() {
         return new ColumnStatisticBuilder().setCount(count).setNdv(ndv).setAvgSizeByte(avgSizeByte)
-                .setNumNulls(numNulls).setDataSize(dataSize).setMinValue(minValue)
-                .setMaxValue(maxValue).setMinExpr(minExpr).setMaxExpr(maxExpr).setSelectivity(selectivity).build();
+                .setNumNulls(numNulls).setDataSize(dataSize).setMinValue(minValue).setMaxValue(maxValue)
+                .setHistogram(histogram).setMinExpr(minExpr).setMaxExpr(maxExpr)
+                .setSelectivity(selectivity).build();
     }
 
     public ColumnStatistic multiply(double d) {
@@ -150,6 +156,7 @@ public class ColumnStatistic {
                 .setDataSize(Math.ceil(dataSize * d))
                 .setMinValue(minValue)
                 .setMaxValue(maxValue)
+                .setHistogram(histogram)
                 .setMinExpr(minExpr)
                 .setMaxExpr(maxExpr)
                 .setSelectivity(selectivity)

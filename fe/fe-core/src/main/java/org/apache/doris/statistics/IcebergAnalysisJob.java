@@ -50,7 +50,7 @@ public class IcebergAnalysisJob extends HMSAnalysisJob {
     private static final String INSERT_TABLE_SQL_TEMPLATE = "INSERT INTO "
             + "${internalDB}.${columnStatTbl}"
             + " values ('${id}','${catalogId}', '${dbId}', '${tblId}', '${colId}', NULL, "
-            + "${numRows}, 0, ${nulls}, '0', '0', ${dataSize}, '${update_time}')";
+            + "${numRows}, 0, ${nulls}, '0', '0', '', ${dataSize}, '${update_time}')";
 
 
     @Override
