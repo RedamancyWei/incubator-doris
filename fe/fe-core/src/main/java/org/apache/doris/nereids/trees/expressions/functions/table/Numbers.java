@@ -63,7 +63,7 @@ public class Numbers extends TableValuedFunction {
 
             Map<Id, ColumnStatistic> columnToStatistics = Maps.newHashMap();
             ColumnStatistic columnStat = new ColumnStatistic(rowNum, rowNum, 8, 0, 8, 0, rowNum - 1,
-                    1.0 / rowNum, new IntLiteral(0, Type.BIGINT), new IntLiteral(rowNum - 1, Type.BIGINT));
+                    null, 1.0 / rowNum, new IntLiteral(0, Type.BIGINT), new IntLiteral(rowNum - 1, Type.BIGINT));
             columnToStatistics.put(slots.get(0).getExprId(), columnStat);
             return new StatsDeriveResult(rowNum, columnToStatistics);
         } catch (Exception t) {

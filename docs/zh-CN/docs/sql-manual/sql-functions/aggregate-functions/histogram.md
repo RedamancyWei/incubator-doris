@@ -28,6 +28,8 @@ under the License.
 ### description
 #### Syntax
 
+仅支持向量
+
 `histogram(expr[, DOUBLE sample_rate][, INT max_bucket_size])`
 
 histogram(直方图)函数用于描述数据分布情况，它使用“等高”的分桶策略，并按照数据的值大小进行分桶，并用一些简单的数据来描述每个桶，比如落在桶里的值的个数。主要用于优化器进行区间查询的估算。

@@ -30,8 +30,9 @@
 
 namespace doris::vectorized {
 
+// TODO: support input parameters and statistics of sampling
 const int64_t MAX_BUCKET_SIZE = 128;
-const float_t SAMPLE_RATE = 1.0;    // TODO: add sampling parameters
+const float_t SAMPLE_RATE = 1.0;
 
 template <typename T>
 struct Bucket {
@@ -308,10 +309,6 @@ public:
                       argument_types_, {}),
               _argument_type(argument_types_[0]) {}
 
-    using ColVecType = std::conditional_t<
-            std::is_same_v<T, StringRef>, ColumnString,
-            std::conditional_t<IsDecimalNumber<T>, ColumnDecimal<T>, ColumnVector<T>>>;
-
     std::string get_name() const override { return "histogram"; }
 
     DataTypePtr get_return_type() const override { return std::make_shared<DataTypeString>(); }
@@ -344,8 +341,6 @@ public:
     void insert_result_into(ConstAggregateDataPtr __restrict place, IColumn& to) const override {
         const std::string bucket_json = this->data(place).get(_argument_type);
         assert_cast<ColumnString&>(to).insert_data(bucket_json.c_str(), bucket_json.length());
-        // TODO add test
-
     }
 
 private:
