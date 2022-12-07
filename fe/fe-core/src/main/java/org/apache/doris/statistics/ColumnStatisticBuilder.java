@@ -161,7 +161,7 @@ public class ColumnStatisticBuilder {
     }
 
     public ColumnStatistic build() {
-        return new ColumnStatistic(count, ndv, avgSizeByte, numNulls, dataSize, minValue, maxValue, histogram, selectivity,
-                minExpr, maxExpr, isUnknown);
+        return new ColumnStatistic(count, ndv, avgSizeByte, numNulls,
+            dataSize, minValue, maxValue, histogram, selectivity, minExpr, maxExpr, isUnknown);
     }
 }
