@@ -32,35 +32,60 @@ under the License.
 
 The histogram function is used to describe the distribution of the data. It uses an "equal height" bucking strategy, and divides the data into buckets according to the value of the data. It describes each bucket with some simple data, such as the number of values that fall in the bucket. It is mainly used by the optimizer to estimate the range query.
 
-There are two optional parameters：
-
-- sample_rate：This value is used to set the sampling ratio, the default value is 0.2。
-
-- max_bucket_size：This value is used to set the maximum number of buckets, the default value is 128。
-
 ### example
 
 ```
-MySQL [test]> select histogram(imp_time) from dev_table;
+MySQL [test]> select histogram(login_time) from dev_table;
 +------------------------------------------------------------------------------------------------------------+
-| histogram(`imp_time`)                                                                                       |
+| histogram(`login_time`)                                                                                       |
 +------------------------------------------------------------------------------------------------------------+
-| a:157, b:138, c:133, d:133, e:131, f:127, g:124, h:122, i:117, k:117                                       |
+| {"bucket_size":5,"buckets":[{"lower":"2022-09-21 17:30:29","upper":"2022-09-21 22:30:29","count":9,"pre_sum":0,"ndv":1},{"lower":"2022-09-22 17:30:29","upper":"2022-09-22 22:30:29","count":10,"pre_sum":9,"ndv":1},{"lower":"2022-09-23 17:30:29","upper":"2022-09-23 22:30:29","count":9,"pre_sum":19,"ndv":1},{"lower":"2022-09-24 17:30:29","upper":"2022-09-24 22:30:29","count":9,"pre_sum":28,"ndv":1},{"lower":"2022-09-25 17:30:29","upper":"2022-09-25 22:30:29","count":9,"pre_sum":37,"ndv":1}]}                                       |
 +------------------------------------------------------------------------------------------------------------+
-
-MySQL [test]> select histogram(imp_time) from dev_table;;
-+------------+-----------------------------------------------------------------------------------------------+
-| date       | topn(`keyword`, 10, 100)                                                                      |
-+------------+-----------------------------------------------------------------------------------------------+
-| 2020-06-19 | a:11, b:8, c:8, d:7, e:7, f:7, g:7, h:7, i:7, j:7                                             |
-| 2020-06-18 | a:10, b:8, c:7, f:7, g:7, i:7, k:7, l:7, m:6, d:6                                             |
-| 2020-06-17 | a:9, b:8, c:8, j:8, d:7, e:7, f:7, h:7, i:7, k:7                                              |
-+------------+-----------------------------------------------------------------------------------------------+
 ```
 Query result description：
 
->
-
+```
+{
+    "bucket_size": 5, 
+    "buckets": [
+        {
+            "lower": "2022-09-21 17:30:29", 
+            "upper": "2022-09-21 22:30:29", 
+            "count": 9, 
+            "pre_sum": 0, 
+            "ndv": 1
+        }, 
+        {
+            "lower": "2022-09-22 17:30:29", 
+            "upper": "2022-09-22 22:30:29", 
+            "count": 10, 
+            "pre_sum": 9, 
+            "ndv": 1
+        }, 
+        {
+            "lower": "2022-09-23 17:30:29", 
+            "upper": "2022-09-23 22:30:29", 
+            "count": 9, 
+            "pre_sum": 19, 
+            "ndv": 1
+        }, 
+        {
+            "lower": "2022-09-24 17:30:29", 
+            "upper": "2022-09-24 22:30:29", 
+            "count": 9, 
+            "pre_sum": 28, 
+            "ndv": 1
+        }, 
+        {
+            "lower": "2022-09-25 17:30:29", 
+            "upper": "2022-09-25 22:30:29", 
+            "count": 9, 
+            "pre_sum": 37, 
+            "ndv": 1
+        }
+    ]
+}
+```
 
 
 ### keywords
