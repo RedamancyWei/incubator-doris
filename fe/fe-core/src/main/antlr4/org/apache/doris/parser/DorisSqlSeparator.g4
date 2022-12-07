@@ -15,29 +15,38 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#pragma once
+grammar DorisSqlSeparator;
 
-#include "operator.h"
-#include "vec/exec/vempty_set_node.h"
+statements : statement (SEPARATOR statement)* EOF ;
 
-namespace doris {
+statement
+    : (comment | string | quoteIdentifier | ws | someText)+
+    | // empty statement
+    ;
 
-namespace pipeline {
+quoteIdentifier
+    : '`' (~('`') | '``')* '`'
+    ;
 
-class EmptySetSourceOperatorBuilder final : public OperatorBuilder<vectorized::VEmptySetNode> {
-public:
-    EmptySetSourceOperatorBuilder(int32_t id, ExecNode* empty_set_node);
+string
+    : SINGLE_QUOTE_STRING
+    | DOUBLE_QUOTE_STRING
+    ;
 
-    bool is_source() const override { return true; }
+comment
+    : TRADITIONAL_COMMENT
+    | END_OF_LINE_COMMENT
+    ;
 
-    OperatorPtr build_operator() override;
-};
+ws: WHITESPACE+;
+someText: NON_SEPARATOR+;
 
-class EmptySetSourceOperator final : public Operator<EmptySetSourceOperatorBuilder> {
-public:
-    EmptySetSourceOperator(OperatorBuilderBase* operator_builder, ExecNode* empty_set_node);
-    bool can_read() override { return true; };
-};
+WHITESPACE: ' ' | '\t' | '\f' | LINE_TERMINATOR;
+SINGLE_QUOTE_STRING: '\'' ( ~('\''|'\\') | ('\\' .) )* '\'';
+DOUBLE_QUOTE_STRING: '"' ( ~('"'|'\\') | ('\\' .) )* '"';
+TRADITIONAL_COMMENT: '/*' .*? '*/' ;
+END_OF_LINE_COMMENT: '--' (~[\r\n])* LINE_TERMINATOR? ;
+NON_SEPARATOR: (~';');
+SEPARATOR: ';';
 
-} // namespace pipeline
-} // namespace doris
+fragment LINE_TERMINATOR: '\r' | '\n' | '\r\n';

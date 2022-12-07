@@ -15,29 +15,21 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#pragma once
+package org.apache.doris.common.util;
 
-#include "operator.h"
-#include "vec/exec/vempty_set_node.h"
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
-namespace doris {
+import java.util.List;
 
-namespace pipeline {
+public class SqlUtilsTest {
 
-class EmptySetSourceOperatorBuilder final : public OperatorBuilder<vectorized::VEmptySetNode> {
-public:
-    EmptySetSourceOperatorBuilder(int32_t id, ExecNode* empty_set_node);
-
-    bool is_source() const override { return true; }
-
-    OperatorPtr build_operator() override;
-};
-
-class EmptySetSourceOperator final : public Operator<EmptySetSourceOperatorBuilder> {
-public:
-    EmptySetSourceOperator(OperatorBuilderBase* operator_builder, ExecNode* empty_set_node);
-    bool can_read() override { return true; };
-};
-
-} // namespace pipeline
-} // namespace doris
+    @Test
+    public void testSplitMultiStmts() {
+        List<String> stmtList = SqlUtils.splitMultiStmts("select `AD``D` from t1 where a = 1;"
+                + "explain graph select `AD``D` from t1 where a = 1;");
+        Assertions.assertTrue(stmtList.size() == 2);
+        Assertions.assertTrue("select `AD``D` from t1 where a = 1".equals(stmtList.get(0)));
+        Assertions.assertTrue("explain graph select `AD``D` from t1 where a = 1".equals(stmtList.get(1)));
+    }
+}
