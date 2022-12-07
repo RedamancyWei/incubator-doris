@@ -34,11 +34,10 @@ ParquetReader::ParquetReader(RuntimeProfile* profile, const TFileScanRangeParams
         : _profile(profile),
           _scan_params(params),
           _scan_range(range),
+          _batch_size(batch_size),
           _range_start_offset(range.start_offset),
           _range_size(range.size),
           _ctz(ctz) {
-    // ColumnSelectVector use uint16_t to save row index
-    _batch_size = std::min(batch_size, (size_t)USHRT_MAX);
     _init_profile();
 }
 
@@ -72,6 +71,10 @@ void ParquetReader::_init_profile() {
                 ADD_CHILD_TIMER(_profile, "ColumnReadTime", parquet_profile);
         _parquet_profile.parse_meta_time =
                 ADD_CHILD_TIMER(_profile, "ParseMetaTime", parquet_profile);
+        _parquet_profile.page_index_filter_time =
+                ADD_CHILD_TIMER(_profile, "PageIndexFilterTime", parquet_profile);
+        _parquet_profile.row_group_filter_time =
+                ADD_CHILD_TIMER(_profile, "RowGroupFilterTime", parquet_profile);
 
         _parquet_profile.file_read_time = ADD_TIMER(_profile, "FileReadTime");
         _parquet_profile.file_read_calls = ADD_COUNTER(_profile, "FileReadCalls", TUnit::UNIT);

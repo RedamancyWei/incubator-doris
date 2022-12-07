@@ -1271,17 +1271,21 @@ public class FunctionSet<T> {
 
             return false;
         }
+        final ScalarType descArgType = (ScalarType) descArgTypes[0];
+        final ScalarType candicateArgType = (ScalarType) candicateArgTypes[0];
         if (functionName.equalsIgnoreCase("hex")
                 || functionName.equalsIgnoreCase("greast")
                 || functionName.equalsIgnoreCase("least")
                 || functionName.equalsIgnoreCase("lead")
                 || functionName.equalsIgnoreCase("lag")) {
-            final ScalarType descArgType = (ScalarType) descArgTypes[0];
-            final ScalarType candicateArgType = (ScalarType) candicateArgTypes[0];
             if (!descArgType.isStringType() && candicateArgType.isStringType()) {
                 // The implementations of hex for string and int are different.
                 return false;
             }
+        }
+        if ((descArgType.isDecimalV3() && candicateArgType.isDecimalV2())
+                || (descArgType.isDecimalV2() && candicateArgType.isDecimalV3())) {
+            return false;
         }
         return true;
     }
@@ -1477,7 +1481,8 @@ public class FunctionSet<T> {
         // retention vectorization
         addBuiltin(AggregateFunction.createBuiltin(FunctionSet.RETENTION,
                 Lists.newArrayList(Type.BOOLEAN),
-                Type.ARRAY,
+                // Type.BOOLEAN will return non-numeric results so we use Type.TINYINT
+                new ArrayType(Type.TINYINT),
                 Type.VARCHAR,
                 true,
                 "",
@@ -2314,14 +2319,14 @@ public class FunctionSet<T> {
                     prefix + "10sum_removeIN9doris_udf12DecimalV2ValES3_EEvPNS2_15FunctionContextERKT_PT0_",
                     null, false, true, false, true));
             addBuiltin(AggregateFunction.createBuiltin(name,
-                    Lists.<Type>newArrayList(Type.DECIMAL32), Type.DECIMAL32, Type.DECIMAL32, initNull,
+                    Lists.<Type>newArrayList(Type.DECIMAL32), ScalarType.DECIMAL128, Type.DECIMAL128, initNull,
                     prefix + "3sumIN9doris_udf12DecimalV2ValES3_EEvPNS2_15FunctionContextERKT_PT0_",
                     prefix + "3sumIN9doris_udf12DecimalV2ValES3_EEvPNS2_15FunctionContextERKT_PT0_",
                     null, null,
                     prefix + "10sum_removeIN9doris_udf12DecimalV2ValES3_EEvPNS2_15FunctionContextERKT_PT0_",
                     null, false, true, false, true));
             addBuiltin(AggregateFunction.createBuiltin(name,
-                    Lists.<Type>newArrayList(Type.DECIMAL64), Type.DECIMAL64, Type.DECIMAL64, initNull,
+                    Lists.<Type>newArrayList(Type.DECIMAL64), Type.DECIMAL128, Type.DECIMAL128, initNull,
                     prefix + "3sumIN9doris_udf12DecimalV2ValES3_EEvPNS2_15FunctionContextERKT_PT0_",
                     prefix + "3sumIN9doris_udf12DecimalV2ValES3_EEvPNS2_15FunctionContextERKT_PT0_",
                     null, null,
@@ -2480,6 +2485,18 @@ public class FunctionSet<T> {
                 "",
                 "",
                 true, false, true, true));
+        //group_bit_function
+        for (Type t : Type.getIntegerTypes()) {
+            addBuiltin(AggregateFunction.createBuiltin("group_bit_or",
+                    Lists.newArrayList(t), t, t, "", "", "", "", "",
+                    false, true, false, true));
+            addBuiltin(AggregateFunction.createBuiltin("group_bit_and",
+                    Lists.newArrayList(t), t, t, "", "", "", "", "",
+                    false, true, false, true));
+            addBuiltin(AggregateFunction.createBuiltin("group_bit_xor",
+                    Lists.newArrayList(t), t, t, "", "", "", "", "",
+                    false, true, false, true));
+        }
         //quantile_state
         addBuiltin(AggregateFunction.createBuiltin(QUANTILE_UNION, Lists.newArrayList(Type.QUANTILE_STATE),
                 Type.QUANTILE_STATE,
@@ -2671,11 +2688,11 @@ public class FunctionSet<T> {
                 "", "", "", "", "", "", "",
                 false, true, false, true));
         addBuiltin(AggregateFunction.createBuiltin("avg",
-                Lists.<Type>newArrayList(Type.DECIMAL32), Type.DECIMAL32, Type.DECIMAL32,
+                Lists.<Type>newArrayList(Type.DECIMAL32), Type.DECIMAL128, Type.DECIMAL128,
                 "", "", "", "", "", "", "",
                 false, true, false, true));
         addBuiltin(AggregateFunction.createBuiltin("avg",
-                Lists.<Type>newArrayList(Type.DECIMAL64), Type.DECIMAL64, Type.DECIMAL64,
+                Lists.<Type>newArrayList(Type.DECIMAL64), Type.DECIMAL128, Type.DECIMAL128,
                 "", "", "", "", "", "", "",
                 false, true, false, true));
         addBuiltin(AggregateFunction.createBuiltin("avg",

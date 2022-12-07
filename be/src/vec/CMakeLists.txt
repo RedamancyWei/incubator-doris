@@ -34,6 +34,7 @@ set(VEC_FILES
   aggregate_functions/aggregate_function_null.cpp
   aggregate_functions/aggregate_function_uniq.cpp
   aggregate_functions/aggregate_function_hll_union_agg.cpp
+  aggregate_functions/aggregate_function_bit.cpp
   aggregate_functions/aggregate_function_bitmap.cpp
   aggregate_functions/aggregate_function_reader.cpp
   aggregate_functions/aggregate_function_window.cpp
@@ -52,7 +53,6 @@ set(VEC_FILES
   columns/column_decimal.cpp
   columns/column_nullable.cpp
   columns/column_string.cpp
-  columns/column_jsonb.cpp
   columns/column_vector.cpp
   columns/columns_common.cpp
   common/demangle.cpp
@@ -134,6 +134,7 @@ set(VEC_FILES
   exprs/varray_literal.cpp
   exprs/vin_predicate.cpp
   exprs/vbloom_predicate.cpp
+  exprs/vbitmap_predicate.cpp
   exprs/vruntimefilter_wrapper.cpp
   exprs/vtuple_is_null_predicate.cpp
   exprs/vslot_ref.cpp
@@ -163,6 +164,7 @@ set(VEC_FILES
   functions/array/function_array_range.cpp
   functions/array/function_array_compact.cpp
   functions/array/function_array_popback.cpp
+  functions/array/function_array_constructor.cpp
   functions/array/function_array_with_constant.cpp
   exprs/table_function/vexplode_json_array.cpp
   functions/math.cpp
@@ -230,6 +232,8 @@ set(VEC_FILES
   olap/vcollect_iterator.cpp
   olap/block_reader.cpp
   olap/olap_data_convertor.cpp
+  olap/vertical_merge_iterator.cpp
+  olap/vertical_block_reader.cpp
   sink/vmysql_result_writer.cpp
   sink/vresult_sink.cpp
   sink/vdata_stream_sender.cpp

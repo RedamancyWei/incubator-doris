@@ -38,14 +38,10 @@ public class ColumnStatistic {
 
     private static final Logger LOG = LogManager.getLogger(StmtExecutor.class);
 
-    public static ColumnStatistic UNKNOWN = new ColumnStatisticBuilder().setCount(Double.NaN).setNdv(Double.NaN)
-            .setAvgSizeByte(Double.NaN).setNumNulls(Double.NaN).setDataSize(Double.NaN)
-            .setMinValue(Double.NaN).setMaxValue(Double.NaN).setHistogram(null)
-            .setMinExpr(null).setMaxExpr(null).build();
-
     public static ColumnStatistic DEFAULT = new ColumnStatisticBuilder().setAvgSizeByte(1).setNdv(1)
             .setNumNulls(1).setCount(1).setMaxValue(Double.MAX_VALUE).setMinValue(Double.MIN_VALUE)
-            .setHistogram(null).build();
+            .setHistogram(Histogram.defaultHistogram()).setSelectivity(1.0).setIsUnknown(true)
+            .build();
 
     public static final Set<Type> MAX_MIN_UNSUPPORTED_TYPE = new HashSet<>();
 
@@ -65,6 +61,7 @@ public class ColumnStatistic {
     public final double minValue;
     public final double maxValue;
     public final Histogram histogram;
+    public final boolean isUnKnown;
     /*
     selectivity of Column T1.A:
     if T1.A = T2.B is the inner join condition, for a given `b` in B, b in
@@ -84,8 +81,9 @@ public class ColumnStatistic {
     public final LiteralExpr maxExpr;
 
     public ColumnStatistic(double count, double ndv, double avgSizeByte,
-                           double numNulls, double dataSize, double minValue, double maxValue, Histogram histogram, double selectivity, LiteralExpr minExpr,
-                           LiteralExpr maxExpr) {
+            double numNulls, double dataSize, double minValue, double maxValue, Histogram histogram,
+                           double selectivity, LiteralExpr minExpr,
+            LiteralExpr maxExpr, boolean isNaN) {
         this.count = count;
         this.ndv = ndv;
         this.avgSizeByte = avgSizeByte;
@@ -97,6 +95,7 @@ public class ColumnStatistic {
         this.selectivity = selectivity;
         this.minExpr = minExpr;
         this.maxExpr = maxExpr;
+        this.isUnKnown = isNaN;
     }
 
     // TODO: use thrift
@@ -113,6 +112,8 @@ public class ColumnStatistic {
             columnStatisticBuilder.setNumNulls(Double.parseDouble(resultRow.getColumnValue("null_count")));
             columnStatisticBuilder.setDataSize(Double
                     .parseDouble(resultRow.getColumnValue("data_size_in_bytes")));
+            columnStatisticBuilder.setAvgSizeByte(columnStatisticBuilder.getDataSize()
+                    / columnStatisticBuilder.getCount());
             long catalogId = Long.parseLong(resultRow.getColumnValue("catalog_id"));
             long dbID = Long.parseLong(resultRow.getColumnValue("db_id"));
             long tblId = Long.parseLong(resultRow.getColumnValue("tbl_id"));
@@ -121,7 +122,7 @@ public class ColumnStatistic {
             if (col == null) {
                 LOG.warn("Failed to deserialize column statistics, column:{}.{}.{}.{} not exists",
                         catalogId, dbID, tblId, colName);
-                return ColumnStatistic.UNKNOWN;
+                return ColumnStatistic.DEFAULT;
             }
             String min = resultRow.getColumnValue("min");
             String max = resultRow.getColumnValue("max");
@@ -136,15 +137,15 @@ public class ColumnStatistic {
         } catch (Exception e) {
             e.printStackTrace();
             LOG.warn("Failed to deserialize column statistics, column not exists", e);
-            return ColumnStatistic.UNKNOWN;
+            return ColumnStatistic.DEFAULT;
         }
     }
 
     public ColumnStatistic copy() {
         return new ColumnStatisticBuilder().setCount(count).setNdv(ndv).setAvgSizeByte(avgSizeByte)
-                .setNumNulls(numNulls).setDataSize(dataSize).setMinValue(minValue).setMaxValue(maxValue)
-                .setHistogram(histogram).setMinExpr(minExpr).setMaxExpr(maxExpr)
-                .setSelectivity(selectivity).build();
+                .setNumNulls(numNulls).setDataSize(dataSize).setMinValue(minValue)
+                .setMaxValue(maxValue).setHistogram(histogram).setMinExpr(minExpr).setMaxExpr(maxExpr)
+                .setSelectivity(selectivity).setIsUnknown(isUnKnown).build();
     }
 
     public ColumnStatistic multiply(double d) {
@@ -160,6 +161,7 @@ public class ColumnStatistic {
                 .setMinExpr(minExpr)
                 .setMaxExpr(maxExpr)
                 .setSelectivity(selectivity)
+                .setIsUnknown(isUnKnown)
                 .build();
     }
 
@@ -184,6 +186,9 @@ public class ColumnStatistic {
     }
 
     public ColumnStatistic updateBySelectivity(double selectivity, double rowCount) {
+        if (isUnKnown) {
+            return DEFAULT;
+        }
         ColumnStatisticBuilder builder = new ColumnStatisticBuilder(this);
         Double rowsAfterFilter = rowCount * selectivity;
         if (ColumnStat.isAlmostUnique(ndv, rowCount)) {
@@ -203,6 +208,9 @@ public class ColumnStatistic {
     }
 
     public double ndvIntersection(ColumnStatistic other) {
+        if (isUnKnown) {
+            return 1;
+        }
         if (maxValue == minValue) {
             if (minValue <= other.maxValue && minValue >= other.minValue) {
                 return 1;
@@ -227,6 +235,9 @@ public class ColumnStatistic {
      * @return
      */
     public double coverage(ColumnStatistic other) {
+        if (isUnKnown) {
+            return 1.0;
+        }
         if (minValue == maxValue) {
             if (other.minValue <= minValue && minValue <= other.maxValue) {
                 return 1.0;
@@ -242,7 +253,7 @@ public class ColumnStatistic {
 
     @Override
     public String toString() {
-        return String.format("ndv=%.4f, min=%f, max=%f, sel=%f, count=%.4f",
+        return isUnKnown ? "unKnown" : String.format("ndv=%.4f, min=%f, max=%f, sel=%f, count=%.4f",
                 ndv, minValue, maxValue, selectivity, count);
     }
 }
