@@ -74,17 +74,18 @@ public abstract class BaseAnalysisTask {
             + "     ) t1, \n";
 
     protected static final String INSERT_HISTOGRAM_STATISTICS = "INSERT INTO "
-            + "${internalDB}.${histogramStatTbl}"
-            + " SELECT "
-            + "CONCAT(${tblId}, '-', ${idxId}, '-', '${colId}', '-', ${partId}) AS id, "
-            + "${catalogId} AS catalog_id, "
-            + "${dbId} AS db_id, "
-            + "${tblId} AS tbl_id, "
-            + "${idxId} AS idx_id, "
-            + "'${colId}' AS col_id, "
-            + "${partId} AS part_id, "
-            + "HISTOGRAM(`${colName}`) AS histogram, "
-            + "NOW() ";
+            + "${internalDB}.${histogramStatTbl} "
+            + "SELECT "
+            + "    CONCAT(${tblId}, '-', ${idxId}, '-', '${colId}', '-', ${partId}) AS id, "
+            + "    ${catalogId} AS catalog_id, "
+            + "    ${dbId} AS db_id, "
+            + "    ${tblId} AS tbl_id, "
+            + "    ${idxId} AS idx_id, "
+            + "    ${colId} AS col_id, "
+            + "    ${type} AS col_type, "
+            + "    ${colName} AS col_name, "
+            + "    HISTOGRAM(`${colName}`) AS histogram, "
+            + "    NOW() ";
 
     protected AnalysisTaskScheduler analysisTaskScheduler;
 

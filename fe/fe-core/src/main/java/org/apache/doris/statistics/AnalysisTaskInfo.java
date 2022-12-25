@@ -69,6 +69,10 @@ public class AnalysisTaskInfo {
 
     public final AnalysisType analysisType;
 
+    public final double sampleRate;
+
+    public final int maxBucketNum;
+
     public String message;
 
     // finished or failed
@@ -96,6 +100,8 @@ public class AnalysisTaskInfo {
         this.lastExecTimeInMs = lastExecTimeInMs;
         this.state = state;
         this.scheduleType = scheduleType;
+        this.sampleRate = 0.2;
+        this.maxBucketNum = 128;
     }
 
     @Override
