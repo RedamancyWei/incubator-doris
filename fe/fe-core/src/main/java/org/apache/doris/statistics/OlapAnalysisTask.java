@@ -95,8 +95,6 @@ public class OlapAnalysisTask extends BaseAnalysisTask {
         StringSubstitutor stringSubstitutor = new StringSubstitutor(params);
         String sql = stringSubstitutor.replace(ANALYZE_COLUMN_SQL_TEMPLATE);
         execSQL(sql);
-        String histogramSql = stringSubstitutor.replace(ANALYZE_HISTOGRAM_SQL_TEMPLATE);
-        execSQL(histogramSql);
         Env.getCurrentEnv().getStatisticsCache().refreshSync(tbl.getId(), -1, col.getName());
     }
 

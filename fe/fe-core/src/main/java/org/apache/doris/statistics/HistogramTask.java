@@ -34,23 +34,21 @@ import java.util.Map;
  */
 public class HistogramTask extends BaseAnalysisTask {
 
+    /** To avoid too much data, use the following efficient sampling method */
     private static final String ANALYZE_HISTOGRAM_SQL_TEMPLATE = "INSERT INTO "
             + "${internalDB}.${histogramStatTbl} "
             + "SELECT "
-            + "    CONCAT(${tblId}, '-', ${idxId}, '-', '${colId}' AS id, "
+            + "    CONCAT(${tblId}, '-', ${idxId}, '-', '${colId}') AS id, "
             + "    ${catalogId} AS catalog_id, "
             + "    ${dbId} AS db_id, "
-            + "    ${dbName} AS db_name, "
             + "    ${tblId} AS tbl_id, "
-            + "    ${tblName} AS tbl_name, "
             + "    ${idxId} AS idx_id, "
-            + "    ${colId} AS col_id, "
-            + "    ${type} AS col_type, "
-            + "    ${colName} AS col_name, "
-            + "    HISTOGRAM(`${colName}`, 1, ${maxBucketNum}) AS histogram, "
-            + "    NOW() AS create_time"
+            + "    '${colId}' AS col_id, "
+            + "    ${sampleRate} AS sample_rate, "
+            + "    `HISTOGRAM`(`${colName}`, 1, ${maxBucketNum}) AS buckets, "
+            + "    NOW() AS create_time "
             + "FROM "
-            + "    `${dbName}`.`${tblName}` TABLESAMPLE(${sampleRate})";
+            + "    `${dbName}`.`${tblName}` TABLESAMPLE (${percentValue} PERCENT)";
 
     @VisibleForTesting
     public HistogramTask() {
@@ -68,18 +66,19 @@ public class HistogramTask extends BaseAnalysisTask {
         params.put("histogramStatTbl", StatisticConstants.HISTOGRAM_TBL_NAME);
         params.put("catalogId", String.valueOf(catalog.getId()));
         params.put("dbId", String.valueOf(db.getId()));
-        params.put("dbName", info.dbName);
         params.put("tblId", String.valueOf(tbl.getId()));
-        params.put("tblName", String.valueOf(info.tblName));
         params.put("idxId", "-1");
         params.put("colId", String.valueOf(info.colName));
-        params.put("colType", col.getType().toString());
+        params.put("dbName", info.dbName);
+        params.put("tblName", String.valueOf(info.tblName));
         params.put("colName", String.valueOf(info.colName));
         params.put("sampleRate", String.valueOf(info.sampleRate));
         params.put("maxBucketNum", String.valueOf(info.maxBucketNum));
+        params.put("percentValue", String.valueOf((int) (info.sampleRate * 100)));
 
         StringSubstitutor stringSubstitutor = new StringSubstitutor(params);
         String histogramSql = stringSubstitutor.replace(ANALYZE_HISTOGRAM_SQL_TEMPLATE);
+        LOG.info("SQL to collect the histogram:\n {}", histogramSql);
 
         try (AutoCloseConnectContext r = StatisticsUtil.buildConnectContext()) {
             this.stmtExecutor = new StmtExecutor(r.connectContext, histogramSql);

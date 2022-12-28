@@ -35,12 +35,16 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 
-public class StatisticsCacheLoader implements AsyncCacheLoader<StatisticsCacheKey, ColumnStatistic> {
+public class StatisticsCacheLoader implements AsyncCacheLoader<StatisticsCacheKey, Statistic> {
 
     private static final Logger LOG = LogManager.getLogger(StatisticsCacheLoader.class);
 
     private static final String QUERY_COLUMN_STATISTICS = "SELECT * FROM " + FeConstants.INTERNAL_DB_NAME
             + "." + StatisticConstants.STATISTIC_TBL_NAME + " WHERE "
+            + "id = CONCAT('${tblId}', '-', ${idxId}, '-', '${colId}')";
+
+    private static final String QUERY_HISTOGRAM_STATISTICS = "SELECT * FROM " + FeConstants.INTERNAL_DB_NAME
+            + "." + StatisticConstants.HISTOGRAM_TBL_NAME + " WHERE "
             + "id = CONCAT('${tblId}', '-', ${idxId}, '-', '${colId}')";
 
     private static int CUR_RUNNING_LOAD = 0;
@@ -49,7 +53,7 @@ public class StatisticsCacheLoader implements AsyncCacheLoader<StatisticsCacheKe
 
     // TODO: Maybe we should trigger a analyze job when the required ColumnStatistic doesn't exists.
     @Override
-    public @NonNull CompletableFuture<ColumnStatistic> asyncLoad(@NonNull StatisticsCacheKey key,
+    public @NonNull CompletableFuture<Statistic> asyncLoad(@NonNull StatisticsCacheKey key,
             @NonNull Executor executor) {
         synchronized (LOCK) {
             if (CUR_RUNNING_LOAD > StatisticConstants.LOAD_TASK_LIMITS) {
@@ -66,20 +70,37 @@ public class StatisticsCacheLoader implements AsyncCacheLoader<StatisticsCacheKe
                     params.put("tblId", String.valueOf(key.tableId));
                     params.put("idxId", String.valueOf(key.idxId));
                     params.put("colId", String.valueOf(key.colName));
-                    List<ResultRow> resultBatches =
+                    List<ResultRow> columnResult =
                             StatisticsUtil.execStatisticQuery(new StringSubstitutor(params)
                                     .replace(QUERY_COLUMN_STATISTICS));
-                    List<ColumnStatistic> columnStatistics = null;
+                    List<ResultRow> histogramResult =
+                            StatisticsUtil.execStatisticQuery(new StringSubstitutor(params)
+                                    .replace(QUERY_HISTOGRAM_STATISTICS));
+                    List<ColumnStatistic> columnStatistics;
+                    List<Histogram> histogramStatistics;
                     try {
-                        columnStatistics = StatisticsUtil.deserializeToColumnStatistics(resultBatches);
+                        columnStatistics = StatisticsUtil.deserializeToColumnStatistics(columnResult);
+                        histogramStatistics = StatisticsUtil.deserializeToHistogramStatistics(histogramResult);
                     } catch (Exception e) {
-                        LOG.warn("Failed to deserialize column statistics", e);
+                        LOG.warn("Failed to deserialize statistics", e);
                         throw new CompletionException(e);
                     }
+
+                    Statistic statistic = new Statistic();
+
                     if (CollectionUtils.isEmpty(columnStatistics)) {
-                        return ColumnStatistic.DEFAULT;
+                        statistic.setColumnStatistic(ColumnStatistic.DEFAULT);
+                    } else {
+                        statistic.setColumnStatistic(columnStatistics.get(0));
                     }
-                    return columnStatistics.get(0);
+
+                    if (CollectionUtils.isEmpty(histogramStatistics)) {
+                        statistic.setHistogram(Histogram.DEFAULT);
+                    } else {
+                        statistic.setHistogram(histogramStatistics.get(0));
+                    }
+
+                    return statistic;
                 } finally {
                     synchronized (LOCK) {
                         CUR_RUNNING_LOAD--;

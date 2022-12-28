@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit;
 public class StatisticConstants {
     public static final String STATISTIC_TBL_NAME = "column_statistics";
 
-    public static final String HISTOGRAM_TBL_NAME = "column_histogram";
+    public static final String HISTOGRAM_TBL_NAME = "histogram_statistics";
 
     public static final String ANALYSIS_JOB_TABLE = "analysis_jobs";
 

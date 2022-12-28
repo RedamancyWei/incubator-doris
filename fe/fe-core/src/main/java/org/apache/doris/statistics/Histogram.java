@@ -17,8 +17,9 @@
 
 package org.apache.doris.statistics;
 
-import org.apache.doris.catalog.PrimitiveType;
+import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.Type;
+import org.apache.doris.statistics.util.InternalQueryResult.ResultRow;
 import org.apache.doris.statistics.util.StatisticsUtil;
 
 import com.alibaba.fastjson2.JSON;
@@ -38,7 +39,7 @@ public class Histogram {
 
     private int maxBucketSize;
     private int bucketSize;
-    private float sampleRate;
+    private double sampleRate;
 
     private List<Bucket> buckets;
 
@@ -70,13 +71,13 @@ public class Histogram {
         this.bucketSize = bucketSize;
     }
 
-    public float getSampleRate() {
+    public double getSampleRate() {
         return sampleRate;
     }
 
-    public void setSampleRate(float sampleRate) {
-        if (sampleRate < 0f || sampleRate > 1f) {
-            this.sampleRate = 1f;
+    public void setSampleRate(double sampleRate) {
+        if (sampleRate < 0 || sampleRate > 1.0) {
+            this.sampleRate = 1.0;
         } else {
             this.sampleRate = sampleRate;
         }
@@ -90,15 +91,45 @@ public class Histogram {
         return buckets;
     }
 
-    public static Histogram defaultHistogram() {
-        Type type = Type.fromPrimitiveType(PrimitiveType.INVALID_TYPE);
-        List<Bucket> buckets = Lists.newArrayList();
-        Histogram histogram = new Histogram(type);
-        histogram.setMaxBucketSize(0);
-        histogram.setBucketSize(0);
-        histogram.setSampleRate(1.0f);
-        histogram.setBuckets(buckets);
-        return histogram;
+    public static Histogram DEFAULT = new HistogramBuilder().setMaxBucketSize(1)
+            .setBucketSize(0).setSampleRate(1.0).setBuckets(Lists.newArrayList()).build();
+
+    // TODO: use thrift
+    public static Histogram fromResultRow(ResultRow resultRow) {
+        try {
+            HistogramBuilder histogramBuilder = new HistogramBuilder();
+
+            long catalogId = Long.parseLong(resultRow.getColumnValue("catalog_id"));
+            long idxId = Long.parseLong(resultRow.getColumnValue("idx_id"));
+            long dbId = Long.parseLong(resultRow.getColumnValue("db_id"));
+            long tblId = Long.parseLong(resultRow.getColumnValue("tbl_id"));
+
+            String colName = resultRow.getColumnValue("col_id");
+            Column col = StatisticsUtil.findColumn(catalogId, dbId, tblId, idxId, colName);
+            if (col == null) {
+                LOG.warn("Failed to deserialize histogram statistics, ctlId: {} dbId: {}"
+                                + "tblId: {} column: {} not exists",
+                        catalogId, dbId, tblId, colName);
+                return Histogram.DEFAULT;
+            }
+
+            double sampleRate = Double.parseDouble(resultRow.getColumnValue("sample_rate"));
+            histogramBuilder.setSampleRate(sampleRate);
+            histogramBuilder.setDataType(col.getType());
+
+            String json = resultRow.getColumnValue("buckets");
+            JSONObject jsonObj = JSON.parseObject(json);
+            JSONArray jsonArray = jsonObj.getJSONArray("buckets");
+            List<Bucket> buckets = Bucket.deserializeFromjson(col.getType(), jsonArray);
+            histogramBuilder.setBuckets(buckets);
+            histogramBuilder.setBucketSize(buckets.size());
+
+            return histogramBuilder.build();
+        } catch (Exception e) {
+            e.printStackTrace();
+            LOG.warn("Failed to deserialize histogram statistics, column not exists", e);
+            return Histogram.DEFAULT;
+        }
     }
 
     /**
@@ -113,21 +144,9 @@ public class Histogram {
         try {
             Histogram histogram = new Histogram(datatype);
             JSONObject histogramJson = JSON.parseObject(json);
-
-            List<Bucket> buckets = Lists.newArrayList();
             JSONArray jsonArray = histogramJson.getJSONArray("buckets");
 
-            for (int i = 0; i < jsonArray.size(); i++) {
-                JSONObject bucketJson = jsonArray.getJSONObject(i);
-                Bucket bucket = new Bucket();
-                bucket.lower = StatisticsUtil.readableValue(datatype, bucketJson.get("lower").toString());
-                bucket.upper = StatisticsUtil.readableValue(datatype, bucketJson.get("upper").toString());
-                bucket.count = bucketJson.getIntValue("count");
-                bucket.preSum = bucketJson.getIntValue("pre_sum");
-                bucket.ndv = bucketJson.getIntValue("ndv");
-                buckets.add(bucket);
-            }
-
+            List<Bucket> buckets = Bucket.deserializeFromjson(datatype, jsonArray);
             histogram.setBuckets(buckets);
 
             int maxBucketSize = histogramJson.getIntValue("max_bucket_size");
@@ -136,7 +155,7 @@ public class Histogram {
             int bucketSize = histogramJson.getIntValue("bucket_size");
             histogram.setBucketSize(bucketSize);
 
-            float sampleRate = histogramJson.getFloatValue("sample_rate");
+            double sampleRate = histogramJson.getDoubleValue("sample_rate");
             histogram.setSampleRate(sampleRate);
 
             return histogram;

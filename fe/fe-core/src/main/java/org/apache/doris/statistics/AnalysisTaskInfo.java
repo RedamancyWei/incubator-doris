@@ -34,7 +34,8 @@ public class AnalysisTaskInfo {
 
     public enum AnalysisType {
         COLUMN,
-        INDEX
+        INDEX,
+        HISTOGRAM
     }
 
     public enum JobType {
@@ -69,9 +70,9 @@ public class AnalysisTaskInfo {
 
     public final AnalysisType analysisType;
 
-    public final double sampleRate;
-
-    public final int maxBucketNum;
+    // TODO: define constants or get them from configuration properties
+    public final double sampleRate = 0.2;
+    public final int maxBucketNum = 128;
 
     public String message;
 
@@ -100,8 +101,6 @@ public class AnalysisTaskInfo {
         this.lastExecTimeInMs = lastExecTimeInMs;
         this.state = state;
         this.scheduleType = scheduleType;
-        this.sampleRate = 0.2;
-        this.maxBucketNum = 128;
     }
 
     @Override

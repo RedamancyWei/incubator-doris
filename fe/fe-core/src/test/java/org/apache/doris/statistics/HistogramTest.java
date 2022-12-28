@@ -67,7 +67,7 @@ class HistogramTest {
         int bucketSize = histogramUnderTest.getBucketSize();
         Assertions.assertEquals(5, bucketSize);
 
-        float sampleRate = histogramUnderTest.getSampleRate();
+        double sampleRate = histogramUnderTest.getSampleRate();
         Assertions.assertEquals(1.0, sampleRate);
 
         List<Bucket> buckets = histogramUnderTest.getBuckets();

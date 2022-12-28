@@ -265,6 +265,7 @@ public class StatsCalculator extends DefaultPlanVisitor<StatsDeriveResult, Void>
         return computeTopN(topN);
     }
 
+    @Override
     public StatsDeriveResult visitPhysicalLocalQuickSort(PhysicalLocalQuickSort<? extends Plan> sort, Void context) {
         return groupExpression.childStatistics(0);
     }
@@ -423,7 +424,6 @@ public class StatsCalculator extends DefaultPlanVisitor<StatsDeriveResult, Void>
                             stats.dataSize < 0 ? stats.dataSize : stats.dataSize * groupingSetNum,
                             stats.minValue,
                             stats.maxValue,
-                            stats.histogram,
                             stats.selectivity,
                             stats.minExpr,
                             stats.maxExpr,
@@ -514,7 +514,6 @@ public class StatsCalculator extends DefaultPlanVisitor<StatsDeriveResult, Void>
                         leftStats.dataSize + rightStats.dataSize,
                         Math.min(leftStats.minValue, rightStats.minValue),
                         Math.max(leftStats.maxValue, rightStats.maxValue),
-                        null,
                         1.0 / (leftStats.ndv + rightStats.ndv),
                         leftStats.minExpr,
                         leftStats.maxExpr,

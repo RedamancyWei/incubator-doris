@@ -31,7 +31,7 @@ public class StatisticsCache {
 
     private static final Logger LOG = LogManager.getLogger(StatisticsCache.class);
 
-    private final AsyncLoadingCache<StatisticsCacheKey, ColumnStatistic> cache = Caffeine.newBuilder()
+    private final AsyncLoadingCache<StatisticsCacheKey, Statistic> cache = Caffeine.newBuilder()
             .maximumSize(StatisticConstants.STATISTICS_RECORDS_CACHE_SIZE)
             .expireAfterAccess(Duration.ofHours(StatisticConstants.STATISTICS_CACHE_VALID_DURATION_IN_HOURS))
             .refreshAfterWrite(Duration.ofHours(StatisticConstants.STATISTICS_CACHE_REFRESH_INTERVAL))
@@ -47,9 +47,9 @@ public class StatisticsCache {
         }
         StatisticsCacheKey k = new StatisticsCacheKey(tblId, idxId, colName);
         try {
-            CompletableFuture<ColumnStatistic> f = cache.get(k);
+            CompletableFuture<Statistic> f = cache.get(k);
             if (f.isDone()) {
-                return f.get();
+                return f.get().getColumnStatistic();
             }
         } catch (Exception e) {
             LOG.warn("Unexpected exception while returning ColumnStatistic", e);
@@ -58,12 +58,29 @@ public class StatisticsCache {
         return ColumnStatistic.DEFAULT;
     }
 
+    public Histogram getHistogram(long tblId, long idxId, String colName) {
+        if (ConnectContext.get().getSessionVariable().internalSession) {
+            return Histogram.DEFAULT;
+        }
+        StatisticsCacheKey k = new StatisticsCacheKey(tblId, idxId, colName);
+        try {
+            CompletableFuture<Statistic> f = cache.get(k);
+            if (f.isDone()) {
+                return f.get().getHistogram();
+            }
+        } catch (Exception e) {
+            LOG.warn("Unexpected exception while returning Histogram", e);
+            return Histogram.DEFAULT;
+        }
+        return Histogram.DEFAULT;
+    }
+
     // TODO: finish this method.
     public void eraseExpiredCache(long tblId, long idxId, String colName) {
         cache.synchronous().invalidate(new StatisticsCacheKey(tblId, idxId, colName));
     }
 
-    public void updateCache(long tblId, long idxId, String colName, ColumnStatistic statistic) {
+    public void updateCache(long tblId, long idxId, String colName, Statistic statistic) {
 
         cache.synchronous().put(new StatisticsCacheKey(tblId, idxId, colName), statistic);
     }

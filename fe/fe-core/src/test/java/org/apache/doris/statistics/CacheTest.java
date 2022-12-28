@@ -91,7 +91,6 @@ public class CacheTest extends TestWithFeService {
                 colNames.add("col_id");
                 colNames.add("min");
                 colNames.add("max");
-                colNames.add("histogram");
                 List<PrimitiveType> primitiveTypes = new ArrayList<>();
                 primitiveTypes.add(PrimitiveType.BIGINT);
                 primitiveTypes.add(PrimitiveType.BIGINT);
@@ -115,7 +114,6 @@ public class CacheTest extends TestWithFeService {
                 values.add("8");
                 values.add("9");
                 values.add("10");
-                values.add("");
                 ResultRow resultRow = new ResultRow(colNames, primitiveTypes, values);
                 return Arrays.asList(resultRow);
             }
