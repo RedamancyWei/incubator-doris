@@ -19,13 +19,16 @@ package org.apache.doris.statistics;
 
 import org.apache.doris.catalog.Type;
 
+import java.util.Comparator;
 import java.util.List;
 
 public class HistogramBuilder {
     private Type dataType;
 
-    private int maxBucketSize;
-    private int bucketSize;
+    private int maxBucketNum;
+
+    private int bucketNum;
+
     private double sampleRate;
 
     private List<Bucket> buckets;
@@ -34,11 +37,11 @@ public class HistogramBuilder {
     }
 
     public HistogramBuilder(Histogram histogram) {
-        this.dataType = histogram.getDataType();
-        this.maxBucketSize = histogram.getMaxBucketSize();
-        this.bucketSize = histogram.getBucketSize();
-        this.sampleRate = histogram.getSampleRate();
-        this.buckets = histogram.getBuckets();
+        this.dataType = histogram.dataType;
+        this.maxBucketNum = histogram.maxBucketNum;
+        this.bucketNum = histogram.bucketNum;
+        this.sampleRate = histogram.sampleRate;
+        this.buckets = histogram.buckets;
     }
 
     public HistogramBuilder setDataType(Type dataType) {
@@ -46,22 +49,27 @@ public class HistogramBuilder {
         return this;
     }
 
-    public HistogramBuilder setMaxBucketSize(int maxBucketSize) {
-        this.maxBucketSize = maxBucketSize;
+    public HistogramBuilder setMaxBucketNum(int maxBucketNum) {
+        this.maxBucketNum = maxBucketNum;
         return this;
     }
 
-    public HistogramBuilder setBucketSize(int bucketSize) {
-        this.bucketSize = bucketSize;
+    public HistogramBuilder setBucketNum(int bucketNum) {
+        this.bucketNum = bucketNum;
         return this;
     }
 
     public HistogramBuilder setSampleRate(double sampleRate) {
-        this.sampleRate = sampleRate;
+        if (sampleRate < 0 || sampleRate > 1.0) {
+            this.sampleRate = 1.0;
+        } else {
+            this.sampleRate = sampleRate;
+        }
         return this;
     }
 
     public HistogramBuilder setBuckets(List<Bucket> buckets) {
+        buckets.sort(Comparator.comparing(Bucket::getLower));
         this.buckets = buckets;
         return this;
     }
@@ -70,12 +78,12 @@ public class HistogramBuilder {
         return dataType;
     }
 
-    public int getMaxBucketSize() {
-        return maxBucketSize;
+    public int getMaxBucketNum() {
+        return maxBucketNum;
     }
 
-    public int getBucketSize() {
-        return bucketSize;
+    public int getBucketNum() {
+        return bucketNum;
     }
 
     public double getSampleRate() {
@@ -87,11 +95,6 @@ public class HistogramBuilder {
     }
 
     public Histogram build() {
-        Histogram histogram = new Histogram(dataType);
-        histogram.setMaxBucketSize(maxBucketSize);
-        histogram.setBucketSize(bucketSize);
-        histogram.setSampleRate(sampleRate);
-        histogram.setBuckets(buckets);
-        return histogram;
+        return new Histogram(dataType, maxBucketNum, bucketNum, sampleRate, buckets);
     }
 }

@@ -46,9 +46,6 @@ public class OlapAnalysisTask extends BaseAnalysisTask {
             + "     (SELECT NDV(`${colName}`) AS ndv "
             + "     FROM `${dbName}`.`${tblName}`) t2\n";
 
-    private static final String ANALYZE_HISTOGRAM_SQL_TEMPLATE = INSERT_HISTOGRAM_STATISTICS
-            + "FROM `${dbName}`.`${tblName}`";
-
     @VisibleForTesting
     public OlapAnalysisTask() {
         super();
@@ -62,7 +59,6 @@ public class OlapAnalysisTask extends BaseAnalysisTask {
         Map<String, String> params = new HashMap<>();
         params.put("internalDB", FeConstants.INTERNAL_DB_NAME);
         params.put("columnStatTbl", StatisticConstants.STATISTIC_TBL_NAME);
-        params.put("histogramStatTbl", StatisticConstants.HISTOGRAM_TBL_NAME);
         params.put("catalogId", String.valueOf(catalog.getId()));
         params.put("dbId", String.valueOf(db.getId()));
         params.put("tblId", String.valueOf(tbl.getId()));

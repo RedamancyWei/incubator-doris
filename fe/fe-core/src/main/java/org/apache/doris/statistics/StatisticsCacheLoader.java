@@ -65,48 +65,53 @@ public class StatisticsCacheLoader implements AsyncCacheLoader<StatisticsCacheKe
             }
             CUR_RUNNING_LOAD++;
             return CompletableFuture.supplyAsync(() -> {
+                Statistic statistic = new Statistic();
+
                 try {
                     Map<String, String> params = new HashMap<>();
                     params.put("tblId", String.valueOf(key.tableId));
                     params.put("idxId", String.valueOf(key.idxId));
                     params.put("colId", String.valueOf(key.colName));
+
+                    List<ColumnStatistic> columnStatistics;
                     List<ResultRow> columnResult =
                             StatisticsUtil.execStatisticQuery(new StringSubstitutor(params)
                                     .replace(QUERY_COLUMN_STATISTICS));
-                    List<ResultRow> histogramResult =
-                            StatisticsUtil.execStatisticQuery(new StringSubstitutor(params)
-                                    .replace(QUERY_HISTOGRAM_STATISTICS));
-                    List<ColumnStatistic> columnStatistics;
-                    List<Histogram> histogramStatistics;
                     try {
                         columnStatistics = StatisticsUtil.deserializeToColumnStatistics(columnResult);
-                        histogramStatistics = StatisticsUtil.deserializeToHistogramStatistics(histogramResult);
                     } catch (Exception e) {
-                        LOG.warn("Failed to deserialize statistics", e);
+                        LOG.warn("Failed to deserialize column statistics", e);
                         throw new CompletionException(e);
                     }
-
-                    Statistic statistic = new Statistic();
-
                     if (CollectionUtils.isEmpty(columnStatistics)) {
                         statistic.setColumnStatistic(ColumnStatistic.DEFAULT);
                     } else {
                         statistic.setColumnStatistic(columnStatistics.get(0));
                     }
 
+                    List<Histogram> histogramStatistics;
+                    List<ResultRow> histogramResult =
+                            StatisticsUtil.execStatisticQuery(new StringSubstitutor(params)
+                                    .replace(QUERY_HISTOGRAM_STATISTICS));
+                    try {
+                        histogramStatistics = StatisticsUtil.deserializeToHistogramStatistics(histogramResult);
+                    } catch (Exception e) {
+                        LOG.warn("Failed to deserialize histogram statistics", e);
+                        throw new CompletionException(e);
+                    }
                     if (CollectionUtils.isEmpty(histogramStatistics)) {
                         statistic.setHistogram(Histogram.DEFAULT);
                     } else {
                         statistic.setHistogram(histogramStatistics.get(0));
                     }
-
-                    return statistic;
                 } finally {
                     synchronized (LOCK) {
                         CUR_RUNNING_LOAD--;
                         LOCK.notify();
                     }
                 }
+
+                return statistic;
             });
         }
     }

@@ -22,9 +22,9 @@ import org.apache.doris.catalog.Type;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.statistics.util.StatisticsUtil;
 
-import com.alibaba.fastjson2.JSONArray;
-import com.alibaba.fastjson2.JSONObject;
 import com.google.common.collect.Lists;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 
 import java.util.List;
 
@@ -75,17 +75,17 @@ public class Bucket {
         this.ndv = ndv;
     }
 
-    public static List<Bucket> deserializeFromjson(Type datatype, JSONArray jsonArray)
+    public static List<Bucket> deserializeFromjson(Type datatype, JsonArray jsonArray)
             throws AnalysisException {
         List<Bucket> buckets = Lists.newArrayList();
         for (int i = 0; i < jsonArray.size(); i++) {
-            JSONObject bucketJson = jsonArray.getJSONObject(i);
+            JsonObject bucketJson = jsonArray.get(i).getAsJsonObject();
             Bucket bucket = new Bucket();
-            bucket.lower = StatisticsUtil.readableValue(datatype, bucketJson.get("lower").toString());
-            bucket.upper = StatisticsUtil.readableValue(datatype, bucketJson.get("upper").toString());
-            bucket.count = bucketJson.getIntValue("count");
-            bucket.preSum = bucketJson.getIntValue("pre_sum");
-            bucket.ndv = bucketJson.getIntValue("ndv");
+            bucket.lower = StatisticsUtil.readableValue(datatype, bucketJson.get("lower").getAsString());
+            bucket.upper = StatisticsUtil.readableValue(datatype, bucketJson.get("upper").getAsString());
+            bucket.count = bucketJson.get("count").getAsInt();
+            bucket.preSum = bucketJson.get("pre_sum").getAsInt();
+            bucket.ndv = bucketJson.get("ndv").getAsInt();
             buckets.add(bucket);
         }
         return buckets;

@@ -53,9 +53,12 @@ public class StatisticsCache {
             }
         } catch (Exception e) {
             LOG.warn("Unexpected exception while returning ColumnStatistic", e);
-            return ColumnStatistic.DEFAULT;
         }
         return ColumnStatistic.DEFAULT;
+    }
+
+    public Histogram getHistogram(long tblId, String colName) {
+        return getHistogram(tblId, -1, colName);
     }
 
     public Histogram getHistogram(long tblId, long idxId, String colName) {
@@ -70,7 +73,6 @@ public class StatisticsCache {
             }
         } catch (Exception e) {
             LOG.warn("Unexpected exception while returning Histogram", e);
-            return Histogram.DEFAULT;
         }
         return Histogram.DEFAULT;
     }
