@@ -56,7 +56,7 @@ public class AnalysisManager {
     private static final String SHOW_JOB_STATE_SQL_TEMPLATE = "SELECT "
             + "job_id, db_name, tbl_name, col_name, job_type, state, schedule_type, last_exec_time_in_ms,message "
             + "FROM " + FeConstants.INTERNAL_DB_NAME + "." + StatisticConstants.ANALYSIS_JOB_TABLE + " "
-            + "WHERE ";
+            + "WHERE ${whereClause}";
 
     private final ConcurrentMap<Long, Map<Long, AnalysisTaskInfo>> analysisJobIdToTaskMap;
 
@@ -154,26 +154,20 @@ public class AnalysisManager {
     }
 
     public void showAnalysisJob(String jobId, String tblName, String state) {
-        String whereClause = "";
+        StringBuilder whereClause = new StringBuilder();
+
         if (!Strings.isNullOrEmpty(jobId)) {
-            whereClause = "job_Id = " + jobId;
+            whereClause.append("job_Id = ").append(jobId);
         }
-
         if (!Strings.isNullOrEmpty(tblName)) {
-            if (Strings.isNullOrEmpty(whereClause)) {
-                whereClause = "tbl_name = " + "\"" + tblName + "\"";
-            } else {
-                whereClause = whereClause + " AND tbl_name = " + "\"" + tblName + "\"";
-            }
+            whereClause.append(whereClause.length() > 0 ? " AND " : "")
+                    .append("tbl_name = ").append("\"").append(tblName).append("\"");
+        }
+        if (!Strings.isNullOrEmpty(state)) {
+            whereClause.append(whereClause.length() > 0 ? " AND " : "")
+                    .append("state = ").append("\"").append(state).append("\"");
         }
 
-        if (!Strings.isNullOrEmpty(state)) {
-            if (Strings.isNullOrEmpty(whereClause)) {
-                whereClause = "`state` = " + "\"" + state + "\"";
-            } else {
-                whereClause = whereClause + " AND state = " + "\"" + state + "\"";
-            }
-        }
 
         List<ResultRow> resultRows = StatisticsUtil
                 .execStatisticQuery(SHOW_JOB_STATE_SQL_TEMPLATE + whereClause);
