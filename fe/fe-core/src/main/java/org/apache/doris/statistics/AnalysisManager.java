@@ -28,8 +28,10 @@ import org.apache.doris.statistics.AnalysisTaskInfo.AnalysisMethod;
 import org.apache.doris.statistics.AnalysisTaskInfo.AnalysisType;
 import org.apache.doris.statistics.AnalysisTaskInfo.JobType;
 import org.apache.doris.statistics.AnalysisTaskInfo.ScheduleType;
+import org.apache.doris.statistics.util.InternalQueryResult.ResultRow;
 import org.apache.doris.statistics.util.StatisticsUtil;
 
+import com.google.common.base.Strings;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.apache.log4j.LogManager;
@@ -51,6 +53,11 @@ public class AnalysisManager {
             + FeConstants.INTERNAL_DB_NAME + "." + StatisticConstants.ANALYSIS_JOB_TABLE + " "
             + "SET state = '${jobState}' ${message} ${updateExecTime} WHERE job_id = ${jobId}";
 
+    private static final String SHOW_JOB_STATE_SQL_TEMPLATE = "SELECT "
+            + "job_id, db_name, tbl_name, col_name, job_type, state, schedule_type, last_exec_time_in_ms,message "
+            + "FROM " + FeConstants.INTERNAL_DB_NAME + "." + StatisticConstants.ANALYSIS_JOB_TABLE + " "
+            + "WHERE ";
+
     private final ConcurrentMap<Long, Map<Long, AnalysisTaskInfo>> analysisJobIdToTaskMap;
 
     private StatisticsCache statisticsCache;
@@ -63,6 +70,10 @@ public class AnalysisManager {
         taskExecutor = new AnalysisTaskExecutor(taskScheduler);
         this.statisticsCache = new StatisticsCache();
         taskExecutor.start();
+    }
+
+    public StatisticsCache getStatisticsCache() {
+        return statisticsCache;
     }
 
     public void createAnalysisJob(AnalyzeStmt analyzeStmt) {
@@ -142,7 +153,48 @@ public class AnalysisManager {
         }
     }
 
-    public StatisticsCache getStatisticsCache() {
-        return statisticsCache;
+    public void showAnalysisJob(String jobId, String tblName, String state) {
+        String whereClause = "";
+        if (!Strings.isNullOrEmpty(jobId)) {
+            whereClause = "job_Id = " + jobId;
+        }
+
+        if (!Strings.isNullOrEmpty(tblName)) {
+            if (Strings.isNullOrEmpty(whereClause)) {
+                whereClause = "tbl_name = " + "\"" + tblName + "\"";
+            } else {
+                whereClause = whereClause + " AND tbl_name = " + "\"" + tblName + "\"";
+            }
+        }
+
+        if (!Strings.isNullOrEmpty(state)) {
+            if (Strings.isNullOrEmpty(whereClause)) {
+                whereClause = "`state` = " + "\"" + state + "\"";
+            } else {
+                whereClause = whereClause + " AND state = " + "\"" + state + "\"";
+            }
+        }
+
+        List<ResultRow> resultRows = StatisticsUtil
+                .execStatisticQuery(SHOW_JOB_STATE_SQL_TEMPLATE + whereClause);
+
+
+
+
+
+        // columnDefs.add(new ColumnDef("job_id", TypeDef.create(PrimitiveType.BIGINT)));
+        // columnDefs.add(new ColumnDef("task_id", TypeDef.create(PrimitiveType.BIGINT)));
+        // columnDefs.add(new ColumnDef("catalog_name", TypeDef.createVarchar(1024)));
+        // columnDefs.add(new ColumnDef("db_name", TypeDef.createVarchar(1024)));
+        // columnDefs.add(new ColumnDef("tbl_name", TypeDef.createVarchar(1024)));
+        // columnDefs.add(new ColumnDef("col_name", TypeDef.createVarchar(1024)));
+        // columnDefs.add(new ColumnDef("index_id", TypeDef.create(PrimitiveType.BIGINT)));
+        // columnDefs.add(new ColumnDef("job_type", TypeDef.createVarchar(32)));
+        // columnDefs.add(new ColumnDef("analysis_type", TypeDef.createVarchar(32)));
+        // columnDefs.add(new ColumnDef("message", TypeDef.createVarchar(1024)));
+        // columnDefs.add(new ColumnDef("last_exec_time_in_ms", TypeDef.create(PrimitiveType.BIGINT)));
+        // columnDefs.add(new ColumnDef("state", TypeDef.createVarchar(32)));
+        // columnDefs.add(new ColumnDef("schedule_type", TypeDef.createVarchar(32)));
     }
+
 }
