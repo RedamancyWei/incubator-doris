@@ -18,11 +18,13 @@
 package org.apache.doris.statistics;
 
 import org.apache.doris.analysis.AnalyzeStmt;
+import org.apache.doris.analysis.ShowAnalyzeStmt;
 import org.apache.doris.analysis.TableName;
 import org.apache.doris.catalog.Env;
 import org.apache.doris.catalog.MaterializedIndexMeta;
 import org.apache.doris.catalog.OlapTable;
 import org.apache.doris.catalog.TableIf.TableType;
+import org.apache.doris.common.DdlException;
 import org.apache.doris.common.FeConstants;
 import org.apache.doris.statistics.AnalysisTaskInfo.AnalysisMethod;
 import org.apache.doris.statistics.AnalysisTaskInfo.AnalysisType;
@@ -32,6 +34,8 @@ import org.apache.doris.statistics.util.InternalQueryResult.ResultRow;
 import org.apache.doris.statistics.util.StatisticsUtil;
 
 import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.apache.log4j.LogManager;
@@ -55,8 +59,7 @@ public class AnalysisManager {
 
     private static final String SHOW_JOB_STATE_SQL_TEMPLATE = "SELECT "
             + "job_id, db_name, tbl_name, col_name, job_type, state, schedule_type, last_exec_time_in_ms,message "
-            + "FROM " + FeConstants.INTERNAL_DB_NAME + "." + StatisticConstants.ANALYSIS_JOB_TABLE + " "
-            + "WHERE ${whereClause}";
+            + "FROM " + FeConstants.INTERNAL_DB_NAME + "." + StatisticConstants.ANALYSIS_JOB_TABLE + " ";
 
     private final ConcurrentMap<Long, Map<Long, AnalysisTaskInfo>> analysisJobIdToTaskMap;
 
@@ -153,10 +156,15 @@ public class AnalysisManager {
         }
     }
 
-    public void showAnalysisJob(String jobId, String tblName, String state) {
+    public List<List<Comparable>> showAnalysisJob(ShowAnalyzeStmt stmt) throws DdlException {
+
+        Long jobId = stmt.getJobId();
+        String tblName = "stmt.getTblName";
+        String state = stmt.getStateValue();
+
         StringBuilder whereClause = new StringBuilder();
 
-        if (!Strings.isNullOrEmpty(jobId)) {
+        if (jobId != null) {
             whereClause.append("job_Id = ").append(jobId);
         }
         if (!Strings.isNullOrEmpty(tblName)) {
@@ -168,13 +176,27 @@ public class AnalysisManager {
                     .append("state = ").append("\"").append(state).append("\"");
         }
 
+        String executeSQL = SHOW_JOB_STATE_SQL_TEMPLATE;
 
-        List<ResultRow> resultRows = StatisticsUtil
-                .execStatisticQuery(SHOW_JOB_STATE_SQL_TEMPLATE + whereClause);
+        if (whereClause.length() > 0) {
+            executeSQL = executeSQL + "WHERE " +  whereClause;
+        }
 
+        List<ResultRow> resultRows = StatisticsUtil.execStatisticQuery(executeSQL);
 
+        List<List<Comparable>> results = Lists.newArrayList();
+        ImmutableList<String> titleNames = stmt.getTitleNames();
 
+        for (ResultRow resultRow : resultRows) {
+            List<Comparable> result = Lists.newArrayList();
+            for (String column : titleNames) {
+                String columnValue = resultRow.getColumnValue(column);
+                result.add(columnValue);
+            }
+            results.add(result);
+        }
 
+        return results;
 
         // columnDefs.add(new ColumnDef("job_id", TypeDef.create(PrimitiveType.BIGINT)));
         // columnDefs.add(new ColumnDef("task_id", TypeDef.create(PrimitiveType.BIGINT)));

@@ -67,7 +67,7 @@ public class ShowAnalyzeStmt extends ShowStmt {
             .add("state")
             .build();
 
-    private List<Long> jobIds;
+    private Long jobId;
     private TableName dbTableName;
     private Expr whereClause;
     private LimitElement limitElement;
@@ -83,8 +83,8 @@ public class ShowAnalyzeStmt extends ShowStmt {
     public ShowAnalyzeStmt() {
     }
 
-    public ShowAnalyzeStmt(List<Long> jobIds) {
-        this.jobIds = jobIds;
+    public ShowAnalyzeStmt(Long jobId) {
+        this.jobId = jobId;
     }
 
     public ShowAnalyzeStmt(TableName dbTableName,
@@ -97,8 +97,12 @@ public class ShowAnalyzeStmt extends ShowStmt {
         this.limitElement = limitElement;
     }
 
-    public List<Long> getJobIds() {
-        return jobIds;
+    public ImmutableList<String> getTitleNames() {
+        return TITLE_NAMES;
+    }
+
+    public Long getJobId() {
+        return jobId;
     }
 
     public long getDbId() {

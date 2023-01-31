@@ -2329,7 +2329,39 @@ public class ShowExecutor {
 
 
     private void handleShowAnalyze() throws AnalysisException {
-        // TODO: Support later
+        ShowAnalyzeStmt showStmt = (ShowAnalyzeStmt) stmt;
+
+        List<List<Comparable>> results;
+        List<List<String>> resultRows = Lists.newArrayList();
+
+        try {
+            results = Env.getCurrentEnv().getAnalysisManager()
+                    .showAnalysisJob(showStmt);
+        } catch (DdlException e) {
+            resultSet = new ShowResultSet(showStmt.getMetaData(), resultRows);
+            return;
+        }
+
+        // step2: order the result
+        ListComparator<List<Comparable>> comparator;
+        List<OrderByPair> orderByPairs = showStmt.getOrderByPairs();
+        if (orderByPairs == null) {
+            // sort by id asc
+            comparator = new ListComparator<>(0);
+        } else {
+            OrderByPair[] orderByPairArr = new OrderByPair[orderByPairs.size()];
+            comparator = new ListComparator<>(orderByPairs.toArray(orderByPairArr));
+        }
+        results.sort(comparator);
+
+        // step4: convert to result and return it
+        for (List<Comparable> result : results) {
+            List<String> row = result.stream().map(Object::toString)
+                    .collect(Collectors.toList());
+            resultRows.add(row);
+        }
+
+        resultSet = new ShowResultSet(showStmt.getMetaData(), resultRows);;
     }
 
     private void handleCopyTablet() throws AnalysisException {
