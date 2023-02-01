@@ -2327,8 +2327,7 @@ public class ShowExecutor {
         resultSet = Env.getCurrentEnv().getCatalogMgr().showCreateCatalog(showStmt);
     }
 
-
-    private void handleShowAnalyze() throws AnalysisException {
+    private void handleShowAnalyze() {
         ShowAnalyzeStmt showStmt = (ShowAnalyzeStmt) stmt;
 
         List<List<Comparable>> results;
@@ -2342,7 +2341,7 @@ public class ShowExecutor {
             return;
         }
 
-        // step2: order the result
+        // order the result
         ListComparator<List<Comparable>> comparator;
         List<OrderByPair> orderByPairs = showStmt.getOrderByPairs();
         if (orderByPairs == null) {
@@ -2354,14 +2353,13 @@ public class ShowExecutor {
         }
         results.sort(comparator);
 
-        // step4: convert to result and return it
+        // convert to result and return it
         for (List<Comparable> result : results) {
-            List<String> row = result.stream().map(Object::toString)
-                    .collect(Collectors.toList());
+            List<String> row = result.stream().map(Object::toString).collect(Collectors.toList());
             resultRows.add(row);
         }
 
-        resultSet = new ShowResultSet(showStmt.getMetaData(), resultRows);;
+        resultSet = new ShowResultSet(showStmt.getMetaData(), resultRows);
     }
 
     private void handleCopyTablet() throws AnalysisException {
