@@ -55,12 +55,10 @@ public class ShowAnalyzeStmt extends ShowStmt {
     private static final String STATE_NAME = "state";
     private static final ImmutableList<String> TITLE_NAMES = new ImmutableList.Builder<String>()
             .add("job_id")
-            .add("task_id")
             .add("catalog_name")
             .add("db_name")
             .add("tbl_name")
             .add("col_name")
-            .add("index_id")
             .add("job_type")
             .add("analysis_type")
             .add("message")

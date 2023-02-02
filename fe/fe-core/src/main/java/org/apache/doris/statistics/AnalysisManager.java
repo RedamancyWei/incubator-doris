@@ -40,6 +40,8 @@ import org.apache.commons.text.StringSubstitutor;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,7 +59,7 @@ public class AnalysisManager {
             + "SET state = '${jobState}' ${message} ${updateExecTime} WHERE job_id = ${jobId}";
 
     private static final String SHOW_JOB_STATE_SQL_TEMPLATE = "SELECT "
-            + "job_id, task_id, catalog_name, db_name, tbl_name, col_name, index_id, job_type, "
+            + "job_id, catalog_name, db_name, tbl_name, col_name, job_type, "
             + "analysis_type, message, last_exec_time_in_ms, state, schedule_type "
             + "FROM " + FeConstants.INTERNAL_DB_NAME + "." + StatisticConstants.ANALYSIS_JOB_TABLE;
 
@@ -167,10 +169,17 @@ public class AnalysisManager {
         ImmutableList<String> titleNames = stmt.getTitleNames();
         List<ResultRow> resultRows = StatisticsUtil.execStatisticQuery(executeSql);
 
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+
         for (ResultRow resultRow : resultRows) {
             List<Comparable> result = Lists.newArrayList();
             for (String column : titleNames) {
-                result.add(resultRow.getColumnValue(column));
+                String value = resultRow.getColumnValue(column);
+                if ("last_exec_time_in_ms".equals(column)) {
+                    long timeMillis = Long.parseLong(value);
+                    value = dateFormat.format(new Date(timeMillis));
+                }
+                result.add(value);
             }
             results.add(result);
         }
