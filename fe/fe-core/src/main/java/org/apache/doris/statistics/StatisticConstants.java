@@ -17,6 +17,9 @@
 
 package org.apache.doris.statistics;
 
+import org.apache.doris.common.FeConstants;
+import org.apache.doris.system.SystemInfoService;
+
 import java.util.concurrent.TimeUnit;
 
 public class StatisticConstants {
@@ -25,6 +28,18 @@ public class StatisticConstants {
     public static final String HISTOGRAM_TBL_NAME = "histogram_statistics";
 
     public static final String ANALYSIS_JOB_TABLE = "analysis_jobs";
+
+    /**
+     * Fully qualified DB names in the system.
+     */
+    public static final String INTERNAL_DB_FULL_NAME = "`" + SystemInfoService.DEFAULT_CLUSTER + ":"
+            + FeConstants.INTERNAL_DB_NAME + "`";
+
+    /**
+     * Fully qualified statistics table names.
+     */
+    public static final String STATISTIC_TBL_FULL_NAME = INTERNAL_DB_FULL_NAME + "."
+            + "`" + StatisticConstants.STATISTIC_TBL_NAME + "`";
 
     public static final int MAX_NAME_LEN = 64;
 

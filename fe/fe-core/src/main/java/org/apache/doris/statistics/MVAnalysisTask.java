@@ -50,12 +50,56 @@ import java.util.Map;
  */
 public class MVAnalysisTask extends BaseAnalysisTask {
 
-    private static final String ANALYZE_MV_PART = INSERT_PART_STATISTICS
-            + " FROM (${sql}) mv";
+    private static final String ANALYZE_MV_PARTITION_STATISTIC_TEMPLATE = "INSERT INTO "
+            + StatisticConstants.STATISTIC_TBL_FULL_NAME
+            + "SELECT "
+            + "    CONCAT(${tblId}, '-', ${idxId}, '-', '${colId}', '-', ${partId}) AS id, "
+            + "    ${catalogId} AS catalog_id, "
+            + "    ${dbId} AS db_id, "
+            + "    ${tblId} AS tbl_id, "
+            + "    ${idxId} AS idx_id, "
+            + "    '${colId}' AS col_id, "
+            + "    ${partId} AS part_id, "
+            + "    COUNT(1) AS row_count, "
+            + "    NDV(`${colName}`) AS ndv, "
+            + "    SUM(CASE WHEN `${colName}` IS NULL THEN 1 ELSE 0 END) AS null_count, "
+            + "    MIN(`${colName}`) AS min, "
+            + "    MAX(`${colName}`) AS max, "
+            + "    ${dataSizeFunction} AS data_size, "
+            + "    NOW() "
+            + "FROM "
+            + "    (${sql}) mv";
 
-    private static final String ANALYZE_MV_COL = INSERT_COL_STATISTICS
-            + "     (SELECT NDV(`${colName}`) AS ndv "
-            + "     FROM (${sql}) mv) t2\n";
+    private static final String ANALYZE_MV_COL =  "INSERT INTO "
+            + StatisticConstants.STATISTIC_TBL_FULL_NAME
+            + "SELECT "
+            + "    id, catalog_id, db_id, tbl_id, idx_id, col_id, part_id, "
+            + "    row_count, ndv, null_count, min, max, data_size, update_time "
+            + "FROM "
+            + "    (SELECT "
+            + "        CONCAT(${tblId}, '-', ${idxId}, '-', '${colId}') AS id, "
+            + "        ${catalogId} AS catalog_id, ${dbId} AS db_id, "
+            + "        ${tblId} AS tbl_id, ${idxId} AS idx_id, "
+            + "        '${colId}' AS col_id, NULL AS part_id, "
+            + "        SUM(count) AS row_count, "
+            + "        SUM(null_count) AS null_count, "
+            + "        MIN(CAST(min AS ${type})) AS min, "
+            + "        MAX(CAST(max AS ${type})) AS max, "
+            + "        SUM(data_size_in_bytes) AS data_size, "
+            + "        NOW() AS update_time "
+            + "     FROM "
+            + "        ${internalDB}.${columnStatTbl}"
+            + "     WHERE "
+            + "        ${internalDB}.${columnStatTbl}.db_id = '${dbId}' "
+            + "        AND ${internalDB}.${columnStatTbl}.tbl_id='${tblId}' "
+            + "        AND ${internalDB}.${columnStatTbl}.col_id='${colId}' "
+            + "        AND ${internalDB}.${columnStatTbl}.idx_id='${idxId}' "
+            + "        AND ${internalDB}.${columnStatTbl}.part_id IS NOT NULL "
+            + "    ) t1, "
+            + "    (SELECT "
+            + "        NDV(`${colName}`) AS ndv "
+            + "    FROM "
+            + "        (${sql}) mv) t2";
 
     private MaterializedIndexMeta meta;
 
@@ -118,7 +162,7 @@ public class MVAnalysisTask extends BaseAnalysisTask {
                 params.put("colName", colName);
                 params.put("tblName", String.valueOf(info.tblName));
                 params.put("sql", sql);
-                StatisticsUtil.execUpdate(ANALYZE_MV_PART, params);
+                StatisticsUtil.execUpdate(ANALYZE_MV_PARTITION_STATISTIC_TEMPLATE, params);
             }
             params.remove("partId");
             params.put("type", column.getType().toString());

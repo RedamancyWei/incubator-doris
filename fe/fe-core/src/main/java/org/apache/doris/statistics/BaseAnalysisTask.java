@@ -21,61 +21,22 @@ import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.DatabaseIf;
 import org.apache.doris.catalog.Env;
 import org.apache.doris.catalog.TableIf;
+import org.apache.doris.common.FeConstants;
 import org.apache.doris.datasource.CatalogIf;
 import org.apache.doris.qe.StmtExecutor;
 import org.apache.doris.statistics.AnalysisTaskInfo.AnalysisType;
+import org.apache.doris.system.SystemInfoService;
 
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public abstract class BaseAnalysisTask {
 
     public static final Logger LOG = LogManager.getLogger(BaseAnalysisTask.class);
-
-    protected static final String INSERT_PART_STATISTICS = "INSERT INTO "
-            + "${internalDB}.${columnStatTbl}"
-            + " SELECT "
-            + "CONCAT(${tblId}, '-', ${idxId}, '-', '${colId}', '-', ${partId}) AS id, "
-            + "${catalogId} AS catalog_id, "
-            + "${dbId} AS db_id, "
-            + "${tblId} AS tbl_id, "
-            + "${idxId} AS idx_id, "
-            + "'${colId}' AS col_id, "
-            + "${partId} AS part_id, "
-            + "COUNT(1) AS row_count, "
-            + "NDV(`${colName}`) AS ndv, "
-            + "SUM(CASE WHEN `${colName}` IS NULL THEN 1 ELSE 0 END) AS null_count, "
-            + "MIN(`${colName}`) AS min, "
-            + "MAX(`${colName}`) AS max, "
-            + "${dataSizeFunction} AS data_size, "
-            + "NOW() ";
-
-    protected static final String INSERT_COL_STATISTICS = "INSERT INTO "
-            + "${internalDB}.${columnStatTbl}"
-            + "    SELECT id, catalog_id, db_id, tbl_id, idx_id, col_id, part_id, row_count, "
-            + "        ndv, null_count, min, max, data_size, update_time\n"
-            + "    FROM \n"
-            + "     (SELECT CONCAT(${tblId}, '-', ${idxId}, '-', '${colId}') AS id, "
-            + "         ${catalogId} AS catalog_id, "
-            + "         ${dbId} AS db_id, "
-            + "         ${tblId} AS tbl_id, "
-            + "         ${idxId} AS idx_id, "
-            + "         '${colId}' AS col_id, "
-            + "         NULL AS part_id, "
-            + "         SUM(count) AS row_count, \n"
-            + "         SUM(null_count) AS null_count, "
-            + "         MIN(CAST(min AS ${type})) AS min, "
-            + "         MAX(CAST(max AS ${type})) AS max, "
-            + "         SUM(data_size_in_bytes) AS data_size, "
-            + "         NOW() AS update_time\n"
-            + "     FROM ${internalDB}.${columnStatTbl}"
-            + "     WHERE ${internalDB}.${columnStatTbl}.db_id = '${dbId}' AND "
-            + "     ${internalDB}.${columnStatTbl}.tbl_id='${tblId}' AND "
-            + "     ${internalDB}.${columnStatTbl}.col_id='${colId}' AND "
-            + "     ${internalDB}.${columnStatTbl}.idx_id='${idxId}' AND "
-            + "     ${internalDB}.${columnStatTbl}.part_id IS NOT NULL"
-            + "     ) t1, \n";
 
     protected AnalysisTaskScheduler analysisTaskScheduler;
 
@@ -132,7 +93,6 @@ public abstract class BaseAnalysisTask {
                         System.currentTimeMillis());
             }
         }
-
     }
 
     public abstract void execute() throws Exception;
@@ -152,6 +112,21 @@ public abstract class BaseAnalysisTask {
 
     public long getJobId() {
         return info.jobId;
+    }
+
+    public Map<String, String> getBaseParams() {
+        Map<String, String> params = new HashMap<>();
+        params.put("catalogId", String.valueOf(catalog.getId()));
+        params.put("dbId", String.valueOf(db.getId()));
+        params.put("tblId", String.valueOf(tbl.getId()));
+        params.put("idxId", info.indexId == null ?
+                "-1" : String.valueOf(info.indexId));
+        params.put("colId", String.valueOf(info.colName));
+        params.put("dbName", info.dbName);
+        params.put("tblName", String.valueOf(info.tblName));
+        params.put("colName", String.valueOf(info.colName));
+        params.put("dataSizeFunction", getDataSizeFunction(col));
+        return params;
     }
 
     public AnalysisState getAnalysisState() {
