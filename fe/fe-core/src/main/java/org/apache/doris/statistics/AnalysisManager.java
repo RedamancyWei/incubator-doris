@@ -89,75 +89,107 @@ public class AnalysisManager {
     }
 
     public void createAnalysisJob(AnalyzeStmt analyzeStmt) {
+        Map<Long, AnalysisTaskInfo> analysisTaskInfos = new HashMap<>();
+        AnalysisTaskInfoBuilder taskInfoBuilder = new AnalysisTaskInfoBuilder();
+
         String catalogName = analyzeStmt.getCatalogName();
         String db = analyzeStmt.getDBName();
         TableName tbl = analyzeStmt.getTblName();
         StatisticsUtil.convertTableNameToObjects(tbl);
+        String tblName = tbl.getTbl();
         Set<String> colNames = analyzeStmt.getColumnNames();
         Set<String> partitionNames = analyzeStmt.getPartitionNames();
-        Map<Long, AnalysisTaskInfo> analysisTaskInfos = new HashMap<>();
+        boolean isIncrement = analyzeStmt.isIncrement;
+        int periodInMin = analyzeStmt.getPeriodInMin();
+        double sampleRate = analyzeStmt.getSampleRate();
         long jobId = Env.getCurrentEnv().getNextId();
 
-        // If the analysis is not incremental, need to delete existing statistics.
-        // we cannot collect histograms incrementally and do not support it
-        if (!analyzeStmt.isIncrement && !analyzeStmt.isHistogram) {
-            long dbId = analyzeStmt.getDbId();
-            TableIf table = analyzeStmt.getTable();
-            Set<Long> tblIds = Sets.newHashSet(table.getId());
-            Set<Long> partIds = partitionNames.stream()
-                    .map(p -> table.getPartition(p).getId())
-                    .collect(Collectors.toSet());
-            StatisticsRepository.dropStatistics(dbId, tblIds, colNames, partIds);
+        taskInfoBuilder.setJobId(jobId);
+        taskInfoBuilder.setCatalogName(catalogName);
+        taskInfoBuilder.setDbName(db);
+        taskInfoBuilder.setTblName(tblName);
+        taskInfoBuilder.setPartitionNames(partitionNames);
+        taskInfoBuilder.setJobType(JobType.MANUAL);
+        taskInfoBuilder.setState(AnalysisState.PENDING);
+        taskInfoBuilder.setIncrement(isIncrement);
+
+        if (periodInMin > 0) {
+            taskInfoBuilder.setPeriodInMin(periodInMin);
+            taskInfoBuilder.setScheduleType(ScheduleType.PERIOD);
+        } else {
+            taskInfoBuilder.setScheduleType(ScheduleType.ONCE);
         }
 
-        if (colNames != null) {
-            for (String colName : colNames) {
-                long taskId = Env.getCurrentEnv().getNextId();
-                AnalysisType analType = analyzeStmt.isHistogram ? AnalysisType.HISTOGRAM : AnalysisType.COLUMN;
-                AnalysisTaskInfo analysisTaskInfo = new AnalysisTaskInfoBuilder().setJobId(jobId)
-                        .setTaskId(taskId).setCatalogName(catalogName).setDbName(db)
-                        .setTblName(tbl.getTbl()).setColName(colName)
-                        .setPartitionNames(partitionNames).setJobType(JobType.MANUAL)
-                        .setAnalysisMethod(AnalysisMethod.FULL).setAnalysisType(analType)
-                        .setState(AnalysisState.PENDING)
-                        .setScheduleType(ScheduleType.ONCE).build();
-                try {
-                    StatisticsRepository.createAnalysisTask(analysisTaskInfo);
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to create analysis job", e);
-                }
-                analysisTaskInfos.put(taskId, analysisTaskInfo);
+        if (sampleRate > 0 && sampleRate < 1) {
+            taskInfoBuilder.setAnalysisMethod(AnalysisMethod.SAMPLE);
+        } else {
+            taskInfoBuilder.setAnalysisMethod(AnalysisMethod.FULL);
+        }
+
+        if (analyzeStmt.isHistogram) {
+            // analyze column histogram
+            taskInfoBuilder.setAnalysisType(AnalysisType.HISTOGRAM);
+            int numBuckets = analyzeStmt.getNumBuckets();
+            int maxBucketNum = numBuckets > 0 ? numBuckets
+                    : StatisticConstants.HISTOGRAM_MAX_BUCKET_NUM;
+            taskInfoBuilder.setMaxBucketNum(maxBucketNum);
+            buildColumnTaskInfo(colNames, taskInfoBuilder, analysisTaskInfos);
+        }
+
+        if (!analyzeStmt.isHistogram) {
+            // If the analysis is not incremental, need to delete existing statistics.
+            // we cannot collect histograms incrementally and do not support it
+            if (!analyzeStmt.isIncrement) {
+                Env.getCurrentEnv().getAnalysisHelper().asyncExecute(() -> {
+                    long dbId = analyzeStmt.getDbId();
+                    TableIf table = analyzeStmt.getTable();
+                    Set<Long> tblIds = Sets.newHashSet(table.getId());
+                    Set<Long> partIds = partitionNames.stream()
+                            .map(p -> table.getPartition(p).getId())
+                            .collect(Collectors.toSet());
+                    StatisticsRepository.dropStatistics(dbId, tblIds, colNames, partIds);
+                });
+            }
+
+            // analyze column statistics
+            taskInfoBuilder.setAnalysisType(AnalysisType.COLUMN);
+            buildColumnTaskInfo(colNames, taskInfoBuilder, analysisTaskInfos);
+
+            // TODO Do need to control the collection of INDEX through syntax？
+            TableType tableType = analyzeStmt.getTable().getType();
+            if (analyzeStmt.isWholeTbl && tableType.equals(TableType.OLAP)) {
+                // analyze index statistics
+                taskInfoBuilder.setAnalysisType(AnalysisType.INDEX);
+                OlapTable olapTable = (OlapTable) analyzeStmt.getTable();
+                buildIndexTaskInfo(taskInfoBuilder, analysisTaskInfos, olapTable);
             }
         }
-        if (analyzeStmt.isWholeTbl && analyzeStmt.getTable().getType().equals(TableType.OLAP)) {
-            OlapTable olapTable = (OlapTable) analyzeStmt.getTable();
-            try {
-                olapTable.readLock();
-                for (MaterializedIndexMeta meta : olapTable.getIndexIdToMeta().values()) {
-                    if (meta.getDefineStmt() == null) {
+
+        // start scheduling analysis tasks
+        scheduleAnalysisJob(jobId, analysisTaskInfos);
+    }
+
+    public void scheduleAnalysisJob(long jobId, Map<Long, AnalysisTaskInfo> analysisJobInfos) {
+        Map<Long, AnalysisTaskInfo> existingAnalysisJobInfos = analysisJobIdToTaskMap.get(jobId);
+        if (existingAnalysisJobInfos == null) {
+            analysisJobIdToTaskMap.put(jobId, analysisJobInfos);
+            analysisJobInfos.values().forEach(taskScheduler::schedule);
+        } else {
+            Map<Long, AnalysisTaskInfo> analysisTaskInfoToRun = new HashMap<>();
+            for (Map.Entry<Long, AnalysisTaskInfo> entry : analysisJobInfos.entrySet()) {
+                Long taskId = entry.getKey();
+                AnalysisTaskInfo taskInfo = entry.getValue();
+                if (existingAnalysisJobInfos.containsKey(taskId)) {
+                    AnalysisState state = taskInfo.state;
+                    if (state == AnalysisState.PENDING || state == AnalysisState.RUNNING) {
                         continue;
                     }
-                    long taskId = Env.getCurrentEnv().getNextId();
-                    AnalysisTaskInfo analysisTaskInfo = new AnalysisTaskInfoBuilder().setJobId(
-                                    jobId).setTaskId(taskId)
-                            .setCatalogName(catalogName).setDbName(db)
-                            .setTblName(tbl.getTbl()).setPartitionNames(partitionNames)
-                            .setIndexId(meta.getIndexId()).setJobType(JobType.MANUAL)
-                            .setAnalysisMethod(AnalysisMethod.FULL).setAnalysisType(AnalysisType.INDEX)
-                            .setScheduleType(ScheduleType.ONCE).build();
-                    try {
-                        StatisticsRepository.createAnalysisTask(analysisTaskInfo);
-                    } catch (Exception e) {
-                        throw new RuntimeException("Failed to create analysis job", e);
-                    }
-                    analysisTaskInfos.put(taskId, analysisTaskInfo);
+                    analysisTaskInfoToRun.put(taskId, taskInfo);
                 }
-            } finally {
-                olapTable.readUnlock();
             }
+            analysisJobIdToTaskMap.get(jobId).putAll(analysisTaskInfoToRun);
+            analysisTaskInfoToRun.values().forEach(taskScheduler::schedule);
         }
-        analysisJobIdToTaskMap.put(jobId, analysisTaskInfos);
-        analysisTaskInfos.values().forEach(taskScheduler::schedule);
     }
 
     public void updateTaskStatus(AnalysisTaskInfo info, AnalysisState jobState, String message, long time) {
@@ -210,4 +242,47 @@ public class AnalysisManager {
         return results;
     }
 
+    private void buildColumnTaskInfo(Set<String> colNames, AnalysisTaskInfoBuilder taskInfoBuilder,
+            Map<Long, AnalysisTaskInfo> analysisTaskInfos) {
+        if (colNames == null || colNames.isEmpty()) {
+            return;
+        }
+
+        for (String colName : colNames) {
+            AnalysisTaskInfoBuilder colTaskInfoBuilder = taskInfoBuilder.deepCopy();
+            long taskId = Env.getCurrentEnv().getNextId();
+            AnalysisTaskInfo analysisTaskInfo = colTaskInfoBuilder.setTaskId(taskId)
+                    .setColName(colName).build();
+            try {
+                StatisticsRepository.createAnalysisTask(analysisTaskInfo);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to create analysis job", e);
+            }
+            analysisTaskInfos.put(taskId, analysisTaskInfo);
+        }
+    }
+
+    private void buildIndexTaskInfo(AnalysisTaskInfoBuilder taskInfoBuilder,
+            Map<Long, AnalysisTaskInfo> analysisTaskInfos, OlapTable olapTable) {
+        try {
+            olapTable.readLock();
+            for (MaterializedIndexMeta meta : olapTable.getIndexIdToMeta().values()) {
+                if (meta.getDefineStmt() == null) {
+                    continue;
+                }
+                AnalysisTaskInfoBuilder indexTaskInfoBuilder = taskInfoBuilder.deepCopy();
+                long taskId = Env.getCurrentEnv().getNextId();
+                AnalysisTaskInfo analysisTaskInfo = indexTaskInfoBuilder.setTaskId(taskId)
+                        .setIndexId(meta.getIndexId()).build();
+                try {
+                    StatisticsRepository.createAnalysisTask(analysisTaskInfo);
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to create analysis job", e);
+                }
+                analysisTaskInfos.put(taskId, analysisTaskInfo);
+            }
+        } finally {
+            olapTable.readUnlock();
+        }
+    }
 }

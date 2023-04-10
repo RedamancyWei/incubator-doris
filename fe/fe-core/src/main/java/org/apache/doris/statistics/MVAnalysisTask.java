@@ -33,6 +33,7 @@ import org.apache.doris.catalog.MaterializedIndexMeta;
 import org.apache.doris.catalog.OlapTable;
 import org.apache.doris.common.FeConstants;
 import org.apache.doris.common.util.SqlParserUtils;
+import org.apache.doris.statistics.AnalysisTaskInfo.AnalysisMethod;
 import org.apache.doris.statistics.util.StatisticsUtil;
 
 import com.google.common.base.Preconditions;
@@ -52,9 +53,15 @@ public class MVAnalysisTask extends BaseAnalysisTask {
     private static final String ANALYZE_MV_PART = INSERT_PART_STATISTICS
             + " FROM (${sql}) mv";
 
+    private static final String SAMPLE_ANALYZE_MV_PART = ANALYZE_MV_PART
+            + "    TABLESAMPLE(${percentValue} PERCENT)";
+
     private static final String ANALYZE_MV_COL = INSERT_COL_STATISTICS
             + "     (SELECT NDV(`${colName}`) AS ndv "
-            + "     FROM (${sql}) mv) t2\n";
+            + "     FROM (${sql}) mv) t2";
+
+    private static final String SAMPLE_ANALYZE_MV_COL = ANALYZE_MV_COL
+            + "    TABLESAMPLE(${percentValue} PERCENT)";
 
     private MaterializedIndexMeta meta;
 
@@ -118,11 +125,24 @@ public class MVAnalysisTask extends BaseAnalysisTask {
                 params.put("colName", colName);
                 params.put("tblName", String.valueOf(info.tblName));
                 params.put("sql", sql);
-                StatisticsUtil.execUpdate(ANALYZE_MV_PART, params);
+                String updateTime = info.isIncrement
+                        ? String.valueOf(info.lastExecTimeInMs) : "0";
+                params.put("updateTime", updateTime);
+                if (info.analysisMethod == AnalysisMethod.FULL) {
+                    StatisticsUtil.execUpdate(ANALYZE_MV_PART, params);
+                } else {
+                    int percentValue = (int) (100 * info.sampleRate);
+                    params.put("percentValue", String.valueOf(percentValue));
+                    StatisticsUtil.execUpdate(SAMPLE_ANALYZE_MV_PART, params);
+                }
             }
             params.remove("partId");
             params.put("type", column.getType().toString());
-            StatisticsUtil.execUpdate(ANALYZE_MV_COL, params);
+            if (info.analysisMethod == AnalysisMethod.FULL) {
+                StatisticsUtil.execUpdate(ANALYZE_MV_COL, params);
+            } else {
+                StatisticsUtil.execUpdate(SAMPLE_ANALYZE_MV_COL, params);
+            }
             Env.getCurrentEnv().getStatisticsCache()
                     .refreshSync(meta.getIndexId(), meta.getIndexId(), column.getName());
         }

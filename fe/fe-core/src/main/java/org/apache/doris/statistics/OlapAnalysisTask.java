@@ -22,6 +22,7 @@ import org.apache.doris.catalog.Partition;
 import org.apache.doris.common.FeConstants;
 import org.apache.doris.qe.AutoCloseConnectContext;
 import org.apache.doris.qe.StmtExecutor;
+import org.apache.doris.statistics.AnalysisTaskInfo.AnalysisMethod;
 import org.apache.doris.statistics.util.StatisticsUtil;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -42,11 +43,17 @@ public class OlapAnalysisTask extends BaseAnalysisTask {
             + "FROM `${dbName}`.`${tblName}` "
             + "PARTITION ${partName}";
 
+    private static final String SAMPLE_ANALYZE_PARTITION_SQL_TEMPLATE = ANALYZE_PARTITION_SQL_TEMPLATE
+            + "    TABLESAMPLE(${percentValue} PERCENT)";
+
     // TODO Currently, NDV is computed for the full table; in fact,
     //  NDV should only be computed for the relevant partition.
     private static final String ANALYZE_COLUMN_SQL_TEMPLATE = INSERT_COL_STATISTICS
             + "     (SELECT NDV(`${colName}`) AS ndv "
-            + "     FROM `${dbName}`.`${tblName}`) t2\n";
+            + "     FROM `${dbName}`.`${tblName}`) t2";
+
+    private static final String SAMPLE_ANALYZE_COLUMN_SQL_TEMPLATE = INSERT_COL_STATISTICS
+            + "     TABLESAMPLE(${percentValue} PERCENT)";
 
     @VisibleForTesting
     public OlapAnalysisTask() {
@@ -70,6 +77,14 @@ public class OlapAnalysisTask extends BaseAnalysisTask {
         params.put("dbName", info.dbName);
         params.put("colName", String.valueOf(info.colName));
         params.put("tblName", String.valueOf(info.tblName));
+        String updateTime = info.isIncrement
+                ? String.valueOf(info.lastExecTimeInMs) : "0";
+        params.put("updateTime", updateTime);
+        if (info.analysisMethod == AnalysisMethod.SAMPLE) {
+            int percentValue = (int) (100 * info.sampleRate);
+            params.put("percentValue", String.valueOf(percentValue));
+        }
+
         List<String> partitionAnalysisSQLs = new ArrayList<>();
         try {
             tbl.readLock();
@@ -83,7 +98,11 @@ public class OlapAnalysisTask extends BaseAnalysisTask {
                 // Avoid error when get the default partition
                 params.put("partName", "`" + partName + "`");
                 StringSubstitutor stringSubstitutor = new StringSubstitutor(params);
-                partitionAnalysisSQLs.add(stringSubstitutor.replace(ANALYZE_PARTITION_SQL_TEMPLATE));
+                if (info.analysisMethod == AnalysisMethod.FULL) {
+                    partitionAnalysisSQLs.add(stringSubstitutor.replace(ANALYZE_PARTITION_SQL_TEMPLATE));
+                } else {
+                    partitionAnalysisSQLs.add(stringSubstitutor.replace(SAMPLE_ANALYZE_PARTITION_SQL_TEMPLATE));
+                }
             }
         } finally {
             tbl.readUnlock();
@@ -92,8 +111,11 @@ public class OlapAnalysisTask extends BaseAnalysisTask {
         params.remove("partId");
         params.put("type", col.getType().toString());
         StringSubstitutor stringSubstitutor = new StringSubstitutor(params);
-        String sql = stringSubstitutor.replace(ANALYZE_COLUMN_SQL_TEMPLATE);
-        execSQL(sql);
+        if (info.analysisMethod == AnalysisMethod.FULL) {
+            execSQL(stringSubstitutor.replace(ANALYZE_COLUMN_SQL_TEMPLATE));
+        } else {
+            execSQL(stringSubstitutor.replace(SAMPLE_ANALYZE_COLUMN_SQL_TEMPLATE));
+        }
         Env.getCurrentEnv().getStatisticsCache().refreshSync(tbl.getId(), -1, col.getName());
     }
 

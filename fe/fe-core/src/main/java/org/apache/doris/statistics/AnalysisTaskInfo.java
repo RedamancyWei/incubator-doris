@@ -73,9 +73,12 @@ public class AnalysisTaskInfo {
 
     public final AnalysisType analysisType;
 
-    // TODO: define constants or get them from configuration properties
-    public final double sampleRate = 1.0;
-    public final int maxBucketNum = 128;
+    public final boolean isIncrement;
+
+    public final int periodInMin;
+
+    public final int maxBucketNum;
+    public final double sampleRate;
 
     public String message;
 
@@ -87,9 +90,9 @@ public class AnalysisTaskInfo {
     public final ScheduleType scheduleType;
 
     public AnalysisTaskInfo(long jobId, long taskId, String catalogName, String dbName, String tblName,
-            String colName, Set<String> partitionNames, Long indexId, JobType jobType,
-            AnalysisMethod analysisMethod, AnalysisType analysisType, String message,
-            int lastExecTimeInMs, AnalysisState state, ScheduleType scheduleType) {
+            String colName, Set<String> partitionNames, Long indexId, JobType jobType, AnalysisMethod analysisMethod,
+            AnalysisType analysisType, boolean isIncrement, int periodInMin, int maxBucketNum, double sampleRate,
+            String message, int lastExecTimeInMs, AnalysisState state, ScheduleType scheduleType) {
         this.jobId = jobId;
         this.taskId = taskId;
         this.catalogName = catalogName;
@@ -101,6 +104,10 @@ public class AnalysisTaskInfo {
         this.jobType = jobType;
         this.analysisMethod = analysisMethod;
         this.analysisType = analysisType;
+        this.isIncrement = isIncrement;
+        this.periodInMin = periodInMin;
+        this.maxBucketNum = maxBucketNum;
+        this.sampleRate = sampleRate;
         this.message = message;
         this.lastExecTimeInMs = lastExecTimeInMs;
         this.state = state;

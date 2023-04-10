@@ -24,6 +24,7 @@ import org.apache.doris.catalog.Env;
 import org.apache.doris.catalog.OlapTable;
 import org.apache.doris.catalog.Partition;
 import org.apache.doris.catalog.TableIf;
+import org.apache.doris.catalog.TableIf.TableType;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.Config;
 import org.apache.doris.common.ErrorCode;
@@ -74,6 +75,11 @@ public class AnalyzeStmt extends DdlStmt {
     private final TableName tableName;
     private final PartitionNames partitionNames;
     private final List<String> columnNames;
+
+    private int periodInMin;
+    private int numBuckets;
+    private double sampleRate;
+
     private final Map<String, String> properties;
 
     // after analyzed
@@ -81,19 +87,25 @@ public class AnalyzeStmt extends DdlStmt {
     private TableIf table;
 
     public AnalyzeStmt(TableName tableName,
-                       List<String> columnNames,
-                       PartitionNames partitionNames,
-                       Map<String, String> properties,
-                       Boolean isWholeTbl,
-                       Boolean isHistogram,
-                       Boolean isIncrement) {
+            List<String> columnNames,
+            PartitionNames partitionNames,
+            Boolean isWholeTbl,
+            Boolean isHistogram,
+            Boolean isIncrement,
+            int periodInMin,
+            int numBuckets,
+            double sampleRate,
+            Map<String, String> properties) {
         this.tableName = tableName;
         this.columnNames = columnNames;
         this.partitionNames = partitionNames;
-        this.properties = properties;
         this.isWholeTbl = isWholeTbl;
         this.isHistogram = isHistogram;
         this.isIncrement = isIncrement;
+        this.periodInMin = periodInMin;
+        this.numBuckets = numBuckets;
+        this.sampleRate = sampleRate;
+        this.properties = properties;
     }
 
     @Override
@@ -131,6 +143,23 @@ public class AnalyzeStmt extends DdlStmt {
         }
 
         checkPartitionNames();
+
+        if (periodInMin != 0 && periodInMin < 1) {
+            throw new AnalysisException("The period interval should not be less than 1.");
+        }
+
+        if (numBuckets != 0 && numBuckets < 1) {
+            throw new AnalysisException("The num buckets should not be less than 1.");
+        }
+
+        if (sampleRate >= 1 || sampleRate < 0) {
+            throw new AnalysisException("The sample rate should range from greater than 0 to less than 1");
+        }
+
+        // TODO support external table
+        if (sampleRate > 0 && !table.getType().equals(TableType.OLAP)) {
+            throw new AnalysisException("Only OLAP table is supported for sampling to collect statistics");
+        }
 
         checkProperties();
     }
@@ -225,6 +254,18 @@ public class AnalyzeStmt extends DdlStmt {
                 : Sets.newHashSet(partitionNames.getPartitionNames());
     }
 
+    public int getPeriodInMin() {
+        return periodInMin;
+    }
+
+    public int getNumBuckets() {
+        return numBuckets;
+    }
+
+    public double getSampleRate() {
+        return sampleRate;
+    }
+
     public Map<String, String> getProperties() {
         // TODO add default properties
         return properties != null ? properties : Maps.newHashMap();
@@ -259,6 +300,21 @@ public class AnalyzeStmt extends DdlStmt {
         if (partitionNames != null) {
             sb.append(" ");
             sb.append(partitionNames.toSql());
+        }
+
+        if (periodInMin > 0) {
+            sb.append(" ");
+            sb.append("WITH PERIOD ").append(periodInMin);
+        }
+
+        if (numBuckets > 0) {
+            sb.append(" ");
+            sb.append("WITH BUCKETS ").append(numBuckets);
+        }
+
+        if (sampleRate > 0) {
+            sb.append(" ");
+            sb.append("WITH SAMPLE ").append(sampleRate);
         }
 
         if (properties != null) {

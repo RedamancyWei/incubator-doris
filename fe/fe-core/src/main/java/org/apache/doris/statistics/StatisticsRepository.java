@@ -25,6 +25,7 @@ import org.apache.doris.catalog.Env;
 import org.apache.doris.catalog.Partition;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.FeConstants;
+import org.apache.doris.statistics.AnalysisTaskInfo.ScheduleType;
 import org.apache.doris.statistics.util.DBObjects;
 import org.apache.doris.statistics.util.InternalQueryResult.ResultRow;
 import org.apache.doris.statistics.util.StatisticsUtil;
@@ -41,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringJoiner;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -81,10 +83,15 @@ public class StatisticsRepository {
             + FULL_QUALIFIED_COLUMN_HISTOGRAM_NAME
             + " WHERE `id` = '${id}'";
 
+    private static final String FETCH_NEED_RUN_ANALYSIS_TASK_SQL = "SELECT * FROM "
+            + FULL_QUALIFIED_ANALYSIS_JOB_TABLE_NAME
+            + " WHERE schedule_type = 'PERIOD' AND state != 'FINISHED'"
+            + " AND (NOW() - last_exec_time_in_ms >= period_in_ms)";
+
     private static final String PERSIST_ANALYSIS_TASK_SQL_TEMPLATE = "INSERT INTO "
             + FULL_QUALIFIED_ANALYSIS_JOB_TABLE_NAME + " VALUES(${jobId}, ${taskId}, '${catalogName}', '${dbName}',"
             + "'${tblName}','${colName}', '${indexId}','${jobType}', '${analysisType}', "
-            + "'${message}', '${lastExecTimeInMs}',"
+            + "'${message}', '${periodTimeInMs}', '${lastExecTimeInMs}',"
             + "'${state}', '${scheduleType}')";
 
     private static final String INSERT_INTO_COLUMN_STATISTICS = "INSERT INTO "
@@ -179,6 +186,10 @@ public class StatisticsRepository {
         return Histogram.fromResultRow(resultRow);
     }
 
+    public static List<ResultRow> queryNeedRunAnalysisTasks() {
+        return StatisticsUtil.execStatisticQuery(FETCH_PARTITIONS_STATISTIC_TEMPLATE);
+    }
+
     private static String constructId(Object... params) {
         StringJoiner stringJoiner = new StringJoiner("-");
         for (Object param : params) {
@@ -255,6 +266,13 @@ public class StatisticsRepository {
         params.put("lastExecTimeInMs", "0");
         params.put("state", AnalysisState.PENDING.toString());
         params.put("scheduleType", analysisTaskInfo.scheduleType.toString());
+        if (analysisTaskInfo.scheduleType == ScheduleType.ONCE) {
+            params.put("periodTimeInMs", "NULL");
+        } else {
+            int periodInMin = analysisTaskInfo.periodInMin;
+            long periodInMs = TimeUnit.MINUTES.toMillis(periodInMin);
+            params.put("periodTimeInMs", String.valueOf(periodInMs));
+        }
         StatisticsUtil.execUpdate(
                 new StringSubstitutor(params).replace(PERSIST_ANALYSIS_TASK_SQL_TEMPLATE));
     }

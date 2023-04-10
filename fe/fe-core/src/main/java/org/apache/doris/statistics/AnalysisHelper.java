@@ -27,6 +27,8 @@ import org.apache.doris.catalog.TableIf;
 import org.apache.doris.cluster.ClusterNamespace;
 import org.apache.doris.common.Config;
 import org.apache.doris.common.FeConstants;
+import org.apache.doris.common.ThreadPoolManager;
+import org.apache.doris.common.ThreadPoolManager.BlockedPolicy;
 import org.apache.doris.common.util.MasterDaemon;
 import org.apache.doris.datasource.CatalogIf;
 import org.apache.doris.datasource.CatalogMgr;
@@ -34,9 +36,11 @@ import org.apache.doris.statistics.util.InternalQueryResult.ResultRow;
 import org.apache.doris.statistics.util.StatisticsUtil;
 
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import org.apache.commons.text.StringSubstitutor;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.thrift.TException;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -45,8 +49,12 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.StringJoiner;
+import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -63,12 +71,15 @@ public class AnalysisHelper extends MasterDaemon {
     private static final String VALUES_DELIMITER = ",";
     private static final String DATE_FORMAT = "yyyy-MM-dd HH:mm:ss";
 
+    private static final String AUTOMATIC_JOB_TYPE = "AUTO";
+    private static final String PERIODIC_JOB_TYPE = "PERIOD";
+
     private static final Logger LOG = LogManager.getLogger(AnalysisHelper.class);
 
-    private static final String COLUMN_STATS_FULL_NAME =
+    private static final String COLUMN_STATS_TABLE_FULL_NAME =
             FeConstants.INTERNAL_DB_NAME + "." + StatisticConstants.COL_STATISTIC_TBL_NAME;
 
-    private static final String TABLES_STATS_FULL_NAME =
+    private static final String TABLES_STATS_TABLE_FULL_NAME =
             FeConstants.INTERNAL_DB_NAME + "." + StatisticConstants.TBL_STATISTIC_TBL_NAME;
 
     private static final String FETCH_LATEST_PART_STATISTICS = "SELECT\n"
@@ -99,16 +110,66 @@ public class AnalysisHelper extends MasterDaemon {
             FeConstants.INTERNAL_DB_NAME
     );
 
+    private final Map<String, Future<?>> helperJobs = Maps.newConcurrentMap();
+
+    private final ThreadPoolExecutor executors = ThreadPoolManager.newDaemonThreadPool(
+            Config.statistics_helper_running_task_num,
+            Config.statistics_helper_running_task_num, 0,
+            TimeUnit.DAYS, new LinkedBlockingQueue<>(),
+            new BlockedPolicy("AnalysisHelper Executor", Integer.MAX_VALUE),
+            "AnalysisHelper Executor", true);
+
     public AnalysisHelper() {
-        super("Analysis Helper", TimeUnit.MINUTES.toMillis(Config.auto_check_statistics_in_min));
+        // super("Analysis Helper", TimeUnit.MINUTES.toMillis(Config.auto_check_statistics_in_min));
+        super("Analysis Helper", TimeUnit.MINUTES.toMillis(1));
+    }
+
+    public Future<?> asyncExecute(Runnable runnable) {
+        return executors.submit(runnable);
     }
 
     @Override
     protected void runAfterCatalogReady() {
-        if (!Config.enable_auto_collect_statistics) {
-            return;
+        if (!Config.enable_period_collect_statistics) {
+            Future<?> booleanFuture = helperJobs.get(PERIODIC_JOB_TYPE);
+            if (booleanFuture == null || booleanFuture.isDone()) {
+                // periodic collection
+                Future<?> periodicJob = asyncExecute(this::periodicCollectStats);
+                helperJobs.put(PERIODIC_JOB_TYPE, periodicJob);
+            }
         }
 
+        if (!Config.enable_auto_collect_statistics) {
+            Future<?> booleanFuture = helperJobs.get(AUTOMATIC_JOB_TYPE);
+            if (booleanFuture == null || booleanFuture.isDone()) {
+                // automatic collection
+                Future<?> automaticJob = executors.submit(this::automaticCollectStats);
+                helperJobs.put(AUTOMATIC_JOB_TYPE, automaticJob);
+            }
+        }
+    }
+
+    private void periodicCollectStats() {
+        List<ResultRow> resultRows = StatisticsRepository.queryNeedRunAnalysisTasks();
+        Map<Long, Map<Long, AnalysisTaskInfo>> analysisJobInfos = new HashMap<>();
+        try {
+            List<AnalysisTaskInfo> analysisTaskInfos = StatisticsUtil.deserializeToAnalysisJob(resultRows);
+            for (AnalysisTaskInfo taskInfo : analysisTaskInfos) {
+                long jobId = taskInfo.jobId;
+                Map<Long, AnalysisTaskInfo> taskInfos = analysisJobInfos.computeIfAbsent(jobId, k -> new HashMap<>());
+                taskInfos.put(taskInfo.taskId, taskInfo);
+            }
+        } catch (TException e) {
+            LOG.warn("The periodic collection of statistics failed." + e);
+        }
+
+        AnalysisManager analysisManager = Env.getCurrentEnv().getAnalysisManager();
+        for (Entry<Long, Map<Long, AnalysisTaskInfo>> idToTaskInfos : analysisJobInfos.entrySet()) {
+            analysisManager.scheduleAnalysisJob(idToTaskInfos.getKey(), idToTaskInfos.getValue());
+        }
+    }
+
+    private void automaticCollectStats() {
         CatalogMgr catalogMgr = Env.getCurrentEnv().getCatalogMgr();
         catalogMgr.getCatalogIds().forEach(catalogId -> {
             CatalogIf catalog = catalogMgr.getCatalog(catalogId);
@@ -127,8 +188,7 @@ public class AnalysisHelper extends MasterDaemon {
                                 try {
                                     updateTableStatistics(catalogId, dbId, table);
                                 } catch (Exception e) {
-                                    LOG.info("Failed to update table granularity statistics.");
-                                    e.printStackTrace();
+                                    LOG.info("Failed to update table granularity statistics." + e);
                                 }
                             });
                         }
@@ -278,7 +338,7 @@ public class AnalysisHelper extends MasterDaemon {
                 String valuesStr = getCommaJoinerStr(values, VALUES_DELIMITER);
                 insertParams.put("values", valuesStr);
 
-                insertParams.put("tableFullName", TABLES_STATS_FULL_NAME);
+                insertParams.put("tableFullName", TABLES_STATS_TABLE_FULL_NAME);
                 StatisticsUtil.execUpdate(INSERT_TABLE_STATISTICS_TEMPLATE, insertParams);
             }
         }
@@ -288,7 +348,7 @@ public class AnalysisHelper extends MasterDaemon {
 
     private List<ResultRow> getStatsTableInfo(long catalogId, long dbId, long tableId) {
         Map<String, String> queryParams = getCommonParams(catalogId, dbId, tableId);
-        queryParams.put("tableFullName", COLUMN_STATS_FULL_NAME);
+        queryParams.put("tableFullName", COLUMN_STATS_TABLE_FULL_NAME);
         return StatisticsUtil.executeQuery(FETCH_LATEST_PART_STATISTICS, queryParams);
     }
 

@@ -75,6 +75,7 @@ public abstract class BaseAnalysisTask {
             + "     ${internalDB}.${columnStatTbl}.col_id='${colId}' AND "
             + "     ${internalDB}.${columnStatTbl}.idx_id='${idxId}' AND "
             + "     ${internalDB}.${columnStatTbl}.part_id IS NOT NULL"
+            + "     ${internalDB}.${columnStatTbl}.update_time >= ${updateTime}"
             + "     ) t1, \n";
 
     protected AnalysisTaskScheduler analysisTaskScheduler;

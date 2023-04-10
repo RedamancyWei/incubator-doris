@@ -66,4 +66,5 @@ public class StatisticConstants {
 
     public static final double DEFAULT_INNER_JOIN_FACTOR = 0.1;
 
+    public static final int HISTOGRAM_MAX_BUCKET_NUM = 128;
 }

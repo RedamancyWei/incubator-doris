@@ -36,6 +36,10 @@ public class AnalysisTaskInfoBuilder {
     private JobType jobType;
     private AnalysisMethod analysisMethod;
     private AnalysisType analysisType;
+    private boolean isIncrement;
+    private int periodInMin;
+    private int maxBucketNum;
+    private double sampleRate;
     private String message;
     private int lastExecTimeInMs;
     private AnalysisState state;
@@ -96,6 +100,26 @@ public class AnalysisTaskInfoBuilder {
         return this;
     }
 
+    public AnalysisTaskInfoBuilder setIncrement(boolean increment) {
+        isIncrement = increment;
+        return this;
+    }
+
+    public AnalysisTaskInfoBuilder setPeriodInMin(int periodInMin) {
+        this.periodInMin = periodInMin;
+        return this;
+    }
+
+    public AnalysisTaskInfoBuilder setMaxBucketNum(int maxBucketNum) {
+        this.maxBucketNum = maxBucketNum;
+        return this;
+    }
+
+    public AnalysisTaskInfoBuilder setSampleRate(double sampleRate) {
+        this.sampleRate = sampleRate;
+        return this;
+    }
+
     public AnalysisTaskInfoBuilder setMessage(String message) {
         this.message = message;
         return this;
@@ -116,8 +140,31 @@ public class AnalysisTaskInfoBuilder {
         return this;
     }
 
+    public AnalysisTaskInfoBuilder deepCopy() {
+        return new AnalysisTaskInfoBuilder()
+                .setJobId(jobId)
+                .setTaskId(taskId)
+                .setCatalogName(catalogName)
+                .setDbName(dbName)
+                .setTblName(tblName)
+                .setColName(colName)
+                .setPartitionNames(partitionNames)
+                .setIndexId(indexId)
+                .setJobType(jobType)
+                .setAnalysisMethod(analysisMethod)
+                .setAnalysisType(analysisType)
+                .setPeriodInMin(periodInMin)
+                .setMaxBucketNum(maxBucketNum)
+                .setSampleRate(sampleRate)
+                .setMessage(message)
+                .setLastExecTimeInMs(lastExecTimeInMs)
+                .setState(state)
+                .setScheduleType(scheduleType);
+    }
+
     public AnalysisTaskInfo build() {
         return new AnalysisTaskInfo(jobId, taskId, catalogName, dbName, tblName, colName, partitionNames,
-                indexId, jobType, analysisMethod, analysisType, message, lastExecTimeInMs, state, scheduleType);
+                indexId, jobType, analysisMethod, analysisType, isIncrement, periodInMin, maxBucketNum,
+                sampleRate, message, lastExecTimeInMs, state, scheduleType);
     }
 }

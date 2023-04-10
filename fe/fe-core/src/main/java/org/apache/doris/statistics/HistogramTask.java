@@ -21,6 +21,7 @@ import org.apache.doris.catalog.Env;
 import org.apache.doris.common.FeConstants;
 import org.apache.doris.qe.AutoCloseConnectContext;
 import org.apache.doris.qe.StmtExecutor;
+import org.apache.doris.statistics.AnalysisTaskInfo.AnalysisMethod;
 import org.apache.doris.statistics.util.StatisticsUtil;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -51,8 +52,14 @@ public class HistogramTask extends BaseAnalysisTask {
             + "FROM "
             + "    `${dbName}`.`${tblName}`";
 
+    private static final String SAMPLE_ANALYZE_HISTOGRAM_SQL_TEMPLATE_TABLE = ANALYZE_HISTOGRAM_SQL_TEMPLATE_TABLE
+            + "    TABLESAMPLE(${percentValue} PERCENT)";
+
     private static final String ANALYZE_HISTOGRAM_SQL_TEMPLATE_PART = ANALYZE_HISTOGRAM_SQL_TEMPLATE_TABLE
             + "    PARTITION (${partName})";
+
+    private static final String SAMPLE_ANALYZE_HISTOGRAM_SQL_TEMPLATE_PART = ANALYZE_HISTOGRAM_SQL_TEMPLATE_TABLE
+            + "    PARTITION (${partName}) TABLESAMPLE(${percentValue} PERCENT)";
 
     @VisibleForTesting
     public HistogramTask() {
@@ -76,16 +83,26 @@ public class HistogramTask extends BaseAnalysisTask {
         params.put("dbName", info.dbName);
         params.put("tblName", String.valueOf(info.tblName));
         params.put("colName", String.valueOf(info.colName));
-        params.put("sampleRate", String.valueOf(info.sampleRate));
+
         params.put("maxBucketNum", String.valueOf(info.maxBucketNum));
-        params.put("percentValue", String.valueOf((int) (info.sampleRate * 100)));
+        if (info.analysisMethod == AnalysisMethod.SAMPLE) {
+            params.put("sampleRate", String.valueOf(info.sampleRate));
+            int percentValue = (int) (100 * info.sampleRate);
+            params.put("percentValue", String.valueOf(percentValue));
+        } else {
+            params.put("sampleRate", "NULL");
+        }
 
         String histogramSql;
         Set<String> partitionNames = info.partitionNames;
 
         if (partitionNames.isEmpty()) {
             StringSubstitutor stringSubstitutor = new StringSubstitutor(params);
-            histogramSql = stringSubstitutor.replace(ANALYZE_HISTOGRAM_SQL_TEMPLATE_TABLE);
+            if (info.analysisMethod == AnalysisMethod.FULL) {
+                histogramSql = stringSubstitutor.replace(ANALYZE_HISTOGRAM_SQL_TEMPLATE_TABLE);
+            } else {
+                histogramSql = stringSubstitutor.replace(SAMPLE_ANALYZE_HISTOGRAM_SQL_TEMPLATE_TABLE);
+            }
         } else {
             try {
                 tbl.readLock();
@@ -95,7 +112,11 @@ public class HistogramTask extends BaseAnalysisTask {
                         .collect(Collectors.joining(","));
                 params.put("partName", partNames);
                 StringSubstitutor stringSubstitutor = new StringSubstitutor(params);
-                histogramSql = stringSubstitutor.replace(ANALYZE_HISTOGRAM_SQL_TEMPLATE_PART);
+                if (info.analysisMethod == AnalysisMethod.FULL) {
+                    histogramSql = stringSubstitutor.replace(ANALYZE_HISTOGRAM_SQL_TEMPLATE_PART);
+                } else {
+                    histogramSql = stringSubstitutor.replace(SAMPLE_ANALYZE_HISTOGRAM_SQL_TEMPLATE_PART);
+                }
             } finally {
                 tbl.readUnlock();
             }

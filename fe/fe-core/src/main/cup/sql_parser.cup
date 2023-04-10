@@ -490,6 +490,7 @@ terminal String
     KW_PASSWORD_REUSE,
     KW_PATH,
     KW_PAUSE,
+    KW_PERIOD,
     KW_PIPE,
     KW_PLUGIN,
     KW_PLUGINS,
@@ -538,6 +539,7 @@ terminal String
     KW_ROW,
     KW_ROWS,
     KW_S3,
+    KW_SAMPLE,
     KW_SCHEMA,
     KW_SCHEMAS,
     KW_SECOND,
@@ -833,6 +835,9 @@ nonterminal DataDescription data_desc, mysql_data_desc;
 nonterminal List<DataDescription> data_desc_list;
 nonterminal LabelName job_label;
 nonterminal String opt_with_label;
+nonterminal Integer opt_with_period;
+nonterminal Integer opt_with_buckets;
+nonterminal Double opt_with_sample;
 nonterminal String opt_system;
 nonterminal BrokerDesc opt_broker;
 nonterminal ResourceDesc resource_desc;
@@ -2789,30 +2794,32 @@ show_create_load_stmt ::=
 
 // analyze statment
 analyze_stmt ::=
-    KW_ANALYZE KW_TABLE table_name:tbl opt_col_list:cols opt_partition_names:partitionNames opt_properties:properties
+    KW_ANALYZE KW_TABLE table_name:tbl opt_col_list:cols opt_partition_names:partitionNames opt_with_period:periodInMin
+     opt_with_sample:sampleRate opt_properties:properties
     {:
         boolean is_whole_tbl = (cols == null);
         boolean is_histogram = false;
         boolean is_increment = false;
-        RESULT = new AnalyzeStmt(tbl, cols, partitionNames, properties, is_whole_tbl, is_histogram, is_increment);
+        RESULT = new AnalyzeStmt(tbl, cols, partitionNames, is_whole_tbl, is_histogram, is_increment,
+          periodInMin, 0, sampleRate, properties);
     :}
-    | KW_ANALYZE KW_INCREMENTAL KW_TABLE table_name:tbl opt_col_list:cols opt_partition_names:partitionNames opt_properties:properties
+    | KW_ANALYZE KW_INCREMENTAL KW_TABLE table_name:tbl opt_col_list:cols opt_partition_names:partitionNames
+        opt_with_period:periodInMin opt_with_sample:sampleRate opt_properties:properties
     {:
         boolean is_whole_tbl = (cols == null);
         boolean is_histogram = false;
         boolean is_increment = true;
-        RESULT = new AnalyzeStmt(tbl, cols, partitionNames, properties, is_whole_tbl, is_histogram, is_increment);
+        RESULT = new AnalyzeStmt(tbl, cols, partitionNames, is_whole_tbl, is_histogram, is_increment,
+          periodInMin, 0, sampleRate, properties);
     :}
-    | KW_ANALYZE KW_TABLE table_name:tbl KW_UPDATE KW_HISTOGRAM KW_ON ident_list:cols opt_partition_names:partitionNames opt_properties:properties
+    | KW_ANALYZE KW_TABLE table_name:tbl opt_col_list:cols KW_UPDATE KW_HISTOGRAM opt_partition_names:partitionNames
+        opt_with_period:periodInMin opt_with_buckets:numBuckets opt_with_sample:sampleRate opt_properties:properties
     {:
-        boolean is_whole_tbl = false;
+        boolean is_whole_tbl = true;
         boolean is_histogram = true;
         boolean is_increment = false;
-        RESULT = new AnalyzeStmt(tbl, cols, partitionNames, properties, is_whole_tbl, is_histogram, is_increment);
-    :}
-    | KW_ANALYZE KW_TABLE table_name:tbl KW_UPDATE KW_HISTOGRAM
-    {:
-        RESULT = new AnalyzeStmt(tbl, null, null, new HashMap<>(), true, true, false);
+        RESULT = new AnalyzeStmt(tbl, cols, partitionNames, is_whole_tbl, is_histogram, is_increment,
+          periodInMin, numBuckets, sampleRate, properties);
     :}
     ;
 
@@ -4518,6 +4525,39 @@ opt_with_label ::=
     | KW_WITH KW_LABEL ident:label
     {:
         RESULT = label;
+    :}
+    ;
+
+opt_with_period ::=
+    /* empty */
+    {:
+        RESULT = 0;
+    :}
+    | KW_WITH KW_PERIOD INTEGER_LITERAL:periodInMin
+    {:
+        RESULT = periodInMin.intValue();
+    :}
+    ;
+
+opt_with_buckets ::=
+    /* empty */
+    {:
+        RESULT = 0;
+    :}
+    | KW_WITH KW_BUCKETS INTEGER_LITERAL:numBuckets
+    {:
+        RESULT = numBuckets.intValue();
+    :}
+    ;
+
+opt_with_sample ::=
+    /* empty */
+    {:
+        RESULT = 0.0;
+    :}
+    | KW_WITH KW_SAMPLE FLOATINGPOINT_LITERAL:sampleRate
+    {:
+        RESULT = sampleRate.doubleValue();
     :}
     ;
 
@@ -7325,6 +7365,10 @@ keyword ::=
     | KW_HISTOGRAM:id
     {: RESULT = id; :}
     | KW_CURRENT_CATALOG:id
+    {: RESULT = id; :}
+    | KW_SAMPLE:id
+    {: RESULT = id; :}
+    | KW_PERIOD:id
     {: RESULT = id; :}
     ;
 

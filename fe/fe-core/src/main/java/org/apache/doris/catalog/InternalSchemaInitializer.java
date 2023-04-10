@@ -191,7 +191,9 @@ public class InternalSchemaInitializer extends Thread {
         columnDefs.add(new ColumnDef("tbl_id", TypeDef.createVarchar(StatisticConstants.MAX_NAME_LEN)));
         columnDefs.add(new ColumnDef("idx_id", TypeDef.createVarchar(StatisticConstants.MAX_NAME_LEN)));
         columnDefs.add(new ColumnDef("col_id", TypeDef.createVarchar(StatisticConstants.MAX_NAME_LEN)));
-        columnDefs.add(new ColumnDef("sample_rate", TypeDef.create(PrimitiveType.DOUBLE)));
+        ColumnDef sampleRate = new ColumnDef("sample_rate", TypeDef.create(PrimitiveType.DOUBLE));
+        sampleRate.setAllowNull(true);
+        columnDefs.add(sampleRate);
         columnDefs.add(new ColumnDef("buckets", TypeDef.createVarchar(ScalarType.MAX_VARCHAR_LENGTH)));
         columnDefs.add(new ColumnDef("update_time", TypeDef.create(PrimitiveType.DATETIME)));
         String engineName = "olap";
@@ -228,6 +230,9 @@ public class InternalSchemaInitializer extends Thread {
         columnDefs.add(new ColumnDef("job_type", TypeDef.createVarchar(32)));
         columnDefs.add(new ColumnDef("analysis_type", TypeDef.createVarchar(32)));
         columnDefs.add(new ColumnDef("message", TypeDef.createVarchar(1024)));
+        ColumnDef periodTimeInMs = new ColumnDef("period_time_in_ms", TypeDef.create(PrimitiveType.BIGINT));
+        periodTimeInMs.setAllowNull(true);
+        columnDefs.add(periodTimeInMs);
         columnDefs.add(new ColumnDef("last_exec_time_in_ms", TypeDef.create(PrimitiveType.BIGINT)));
         columnDefs.add(new ColumnDef("state", TypeDef.createVarchar(32)));
         columnDefs.add(new ColumnDef("schedule_type", TypeDef.createVarchar(32)));

@@ -1696,6 +1696,12 @@ public class Config extends ConfigBase {
     public static boolean enable_auto_collect_statistics = false;
 
     /*
+     * collect statistics periodically can be stressful on the cluster
+     */
+    @ConfField(mutable = true, masterOnly = true)
+    public static boolean enable_period_collect_statistics = false;
+
+    /*
      * the system automatically checks the time interval for statistical information
      */
     @ConfField(mutable = true, masterOnly = true)
@@ -1920,6 +1926,12 @@ public class Config extends ConfigBase {
      */
     @ConfField
     public static int statistics_simultaneously_running_task_num = 10;
+
+    /**
+     * Used to handle statistics tasks, such as removal, automatic updates, etc.
+     */
+    @ConfField
+    public static int statistics_helper_running_task_num = 5;
 
     /**
      * Internal table replica num, once set, user should promise the avaible BE is greater than this value,
