@@ -37,11 +37,11 @@ public class AnalysisTaskInfoBuilder {
     private AnalysisMethod analysisMethod;
     private AnalysisType analysisType;
     private boolean isIncrement;
-    private int periodInMin;
-    private int maxBucketNum;
-    private int samplePercent;
+    private Long periodIntervalInMs;
+    private Integer maxBucketNum;
+    private Integer samplePercent;
     private String message;
-    private int lastExecTimeInMs;
+    private Long lastExecTimeInMs;
     private AnalysisState state;
     private ScheduleType scheduleType;
 
@@ -105,17 +105,17 @@ public class AnalysisTaskInfoBuilder {
         return this;
     }
 
-    public AnalysisTaskInfoBuilder setPeriodInMin(int periodInMin) {
-        this.periodInMin = periodInMin;
+    public AnalysisTaskInfoBuilder setperiodIntervalInMs(Long periodIntervalInMs) {
+        this.periodIntervalInMs = periodIntervalInMs;
         return this;
     }
 
-    public AnalysisTaskInfoBuilder setMaxBucketNum(int maxBucketNum) {
+    public AnalysisTaskInfoBuilder setMaxBucketNum(Integer maxBucketNum) {
         this.maxBucketNum = maxBucketNum;
         return this;
     }
 
-    public AnalysisTaskInfoBuilder setSamplePercent(int samplePercent) {
+    public AnalysisTaskInfoBuilder setSamplePercent(Integer samplePercent) {
         this.samplePercent = samplePercent;
         return this;
     }
@@ -125,7 +125,7 @@ public class AnalysisTaskInfoBuilder {
         return this;
     }
 
-    public AnalysisTaskInfoBuilder setLastExecTimeInMs(int lastExecTimeInMs) {
+    public AnalysisTaskInfoBuilder setLastExecTimeInMs(Long lastExecTimeInMs) {
         this.lastExecTimeInMs = lastExecTimeInMs;
         return this;
     }
@@ -153,9 +153,10 @@ public class AnalysisTaskInfoBuilder {
                 .setJobType(jobType)
                 .setAnalysisMethod(analysisMethod)
                 .setAnalysisType(analysisType)
-                .setPeriodInMin(periodInMin)
-                .setMaxBucketNum(maxBucketNum)
+                .setIncrement(isIncrement)
+                .setperiodIntervalInMs(periodIntervalInMs)
                 .setSamplePercent(samplePercent)
+                .setMaxBucketNum(maxBucketNum)
                 .setMessage(message)
                 .setLastExecTimeInMs(lastExecTimeInMs)
                 .setState(state)
@@ -163,8 +164,8 @@ public class AnalysisTaskInfoBuilder {
     }
 
     public AnalysisTaskInfo build() {
-        return new AnalysisTaskInfo(jobId, taskId, catalogName, dbName, tblName, colName, partitionNames,
-                indexId, jobType, analysisMethod, analysisType, isIncrement, periodInMin, maxBucketNum,
-                samplePercent, message, lastExecTimeInMs, state, scheduleType);
+        return new AnalysisTaskInfo(jobId, taskId, catalogName, dbName, tblName, colName, partitionNames, indexId,
+                jobType, analysisMethod, analysisType, isIncrement, periodIntervalInMs, samplePercent, maxBucketNum,
+                message, lastExecTimeInMs, state, scheduleType);
     }
 }

@@ -52,9 +52,6 @@ public class OlapAnalysisTask extends BaseAnalysisTask {
             + "     (SELECT NDV(`${colName}`) AS ndv "
             + "     FROM `${dbName}`.`${tblName}`) t2";
 
-    private static final String SAMPLE_ANALYZE_COLUMN_SQL_TEMPLATE = INSERT_COL_STATISTICS
-            + "     TABLESAMPLE(${samplePercent} PERCENT)";
-
     @VisibleForTesting
     public OlapAnalysisTask() {
         super();
@@ -110,11 +107,8 @@ public class OlapAnalysisTask extends BaseAnalysisTask {
         params.remove("partId");
         params.put("type", col.getType().toString());
         StringSubstitutor stringSubstitutor = new StringSubstitutor(params);
-        if (info.analysisMethod == AnalysisMethod.FULL) {
-            execSQL(stringSubstitutor.replace(ANALYZE_COLUMN_SQL_TEMPLATE));
-        } else {
-            execSQL(stringSubstitutor.replace(SAMPLE_ANALYZE_COLUMN_SQL_TEMPLATE));
-        }
+        // TODO check if need sample
+        execSQL(stringSubstitutor.replace(ANALYZE_COLUMN_SQL_TEMPLATE));
         Env.getCurrentEnv().getStatisticsCache().refreshSync(tbl.getId(), -1, col.getName());
     }
 

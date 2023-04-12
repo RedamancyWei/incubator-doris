@@ -76,7 +76,7 @@ public class AnalyzeStmt extends DdlStmt {
     private final PartitionNames partitionNames;
     private final List<String> columnNames;
 
-    private int periodInMin;
+    private int periodIntervalInMin;
     private int samplePercent;
     private int numBuckets;
 
@@ -106,7 +106,7 @@ public class AnalyzeStmt extends DdlStmt {
             boolean isAnalysisMv,
             boolean isIncrement,
             boolean isHistogram,
-            int periodInMin,
+            int periodIntervalInMin,
             int samplePercent,
             int numBuckets,
             Map<String, String> properties) {
@@ -116,7 +116,7 @@ public class AnalyzeStmt extends DdlStmt {
         this.isAnalysisMv = isAnalysisMv;
         this.isIncrement = isIncrement;
         this.isHistogram = isHistogram;
-        this.periodInMin = periodInMin;
+        this.periodIntervalInMin = periodIntervalInMin;
         this.samplePercent = samplePercent;
         this.numBuckets = numBuckets;
         this.properties = properties;
@@ -181,7 +181,7 @@ public class AnalyzeStmt extends DdlStmt {
     }
 
     private void checkParams() throws AnalysisException {
-        if (periodInMin != 0 && periodInMin < 1) {
+        if (periodIntervalInMin != 0 && periodIntervalInMin < 1) {
             throw new AnalysisException("The period interval should not be less than 1.");
         }
         if (numBuckets != 0 && numBuckets < 1) {
@@ -269,8 +269,8 @@ public class AnalyzeStmt extends DdlStmt {
                 : Sets.newHashSet(partitionNames.getPartitionNames());
     }
 
-    public int getPeriodInMin() {
-        return periodInMin;
+    public int getPeriodIntervalInMin() {
+        return periodIntervalInMin;
     }
 
     public int getNumBuckets() {
@@ -317,9 +317,9 @@ public class AnalyzeStmt extends DdlStmt {
             sb.append(partitionNames.toSql());
         }
 
-        if (periodInMin > 0) {
+        if (periodIntervalInMin > 0) {
             sb.append(" ");
-            sb.append("WITH PERIOD ").append(periodInMin);
+            sb.append("WITH PERIOD ").append(periodIntervalInMin);
         }
 
         if (numBuckets > 0) {

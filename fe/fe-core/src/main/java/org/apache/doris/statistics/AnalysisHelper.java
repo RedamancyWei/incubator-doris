@@ -51,7 +51,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
-import java.util.StringJoiner;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -151,21 +150,25 @@ public class AnalysisHelper extends MasterDaemon {
 
     private void periodicCollectStats() {
         List<ResultRow> resultRows = StatisticsRepository.queryNeedRunAnalysisTasks();
-        Map<Long, Map<Long, AnalysisTaskInfo>> analysisJobInfos = new HashMap<>();
-        try {
-            List<AnalysisTaskInfo> analysisTaskInfos = StatisticsUtil.deserializeToAnalysisJob(resultRows);
-            for (AnalysisTaskInfo taskInfo : analysisTaskInfos) {
-                long jobId = taskInfo.jobId;
-                Map<Long, AnalysisTaskInfo> taskInfos = analysisJobInfos.computeIfAbsent(jobId, k -> new HashMap<>());
-                taskInfos.put(taskInfo.taskId, taskInfo);
-            }
-        } catch (TException e) {
-            LOG.warn("The periodic collection of statistics failed." + e);
-        }
 
-        AnalysisManager analysisManager = Env.getCurrentEnv().getAnalysisManager();
-        for (Entry<Long, Map<Long, AnalysisTaskInfo>> idToTaskInfos : analysisJobInfos.entrySet()) {
-            analysisManager.scheduleAnalysisJob(idToTaskInfos.getKey(), idToTaskInfos.getValue());
+        if (resultRows != null && !resultRows.isEmpty()) {
+            Map<Long, Map<Long, AnalysisTaskInfo>> analysisJobInfos = new HashMap<>();
+            try {
+                List<AnalysisTaskInfo> analysisTaskInfos = StatisticsUtil.deserializeToAnalysisJob(resultRows);
+                for (AnalysisTaskInfo taskInfo : analysisTaskInfos) {
+                    long jobId = taskInfo.jobId;
+                    Map<Long, AnalysisTaskInfo> taskInfos = analysisJobInfos.computeIfAbsent(jobId,
+                            k -> new HashMap<>());
+                    taskInfos.put(taskInfo.taskId, taskInfo);
+                }
+            } catch (TException e) {
+                LOG.warn("The periodic collection of statistics failed." + e);
+            }
+
+            AnalysisManager analysisManager = Env.getCurrentEnv().getAnalysisManager();
+            for (Entry<Long, Map<Long, AnalysisTaskInfo>> idToTaskInfos : analysisJobInfos.entrySet()) {
+                analysisManager.scheduleAnalysisJob(idToTaskInfos.getKey(), idToTaskInfos.getValue());
+            }
         }
     }
 
@@ -335,7 +338,7 @@ public class AnalysisHelper extends MasterDaemon {
                 StringSubstitutor stringSubstitutor = new StringSubstitutor(tblValueParams);
                 values.add(stringSubstitutor.replace(TABLE_STATISTICS_VALUES_TEMPLATE));
 
-                String valuesStr = getCommaJoinerStr(values, VALUES_DELIMITER);
+                String valuesStr = StatisticsUtil.getCommaJoinerStr(values, VALUES_DELIMITER);
                 insertParams.put("values", valuesStr);
 
                 insertParams.put("tableFullName", TABLES_STATS_TABLE_FULL_NAME);
@@ -359,7 +362,7 @@ public class AnalysisHelper extends MasterDaemon {
         List<String> idElements = Arrays.stream(items)
                 .mapToObj(String::valueOf)
                 .collect(Collectors.toList());
-        return getCommaJoinerStr(idElements, ID_DELIMITER);
+        return StatisticsUtil.getCommaJoinerStr(idElements, ID_DELIMITER);
     }
 
     private Map<String, String> getCommonParams(long catalogId, long dbId, long tableId) {
@@ -378,12 +381,6 @@ public class AnalysisHelper extends MasterDaemon {
                 .map(table::getPartition)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toMap(Partition::getId, Function.identity()));
-    }
-
-    private String getCommaJoinerStr(List<String> values, String delimiter) {
-        StringJoiner builder = new StringJoiner(delimiter);
-        values.forEach(builder::add);
-        return builder.toString();
     }
 
     private static long getTimestampFromStr(String dateString) {

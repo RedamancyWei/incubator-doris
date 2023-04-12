@@ -50,6 +50,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 public class AnalysisManager {
@@ -100,7 +101,7 @@ public class AnalysisManager {
         Set<String> colNames = analyzeStmt.getColumnNames();
         Set<String> partitionNames = analyzeStmt.getPartitionNames();
         boolean isIncrement = analyzeStmt.isIncrement;
-        int periodInMin = analyzeStmt.getPeriodInMin();
+        int periodInMin = analyzeStmt.getPeriodIntervalInMin();
         int samplePercent = analyzeStmt.getSamplePercent();
         long jobId = Env.getCurrentEnv().getNextId();
 
@@ -114,7 +115,8 @@ public class AnalysisManager {
         taskInfoBuilder.setIncrement(isIncrement);
 
         if (periodInMin > 0) {
-            taskInfoBuilder.setPeriodInMin(periodInMin);
+            long periodIntervalInMs = TimeUnit.MINUTES.toMillis(periodInMin);
+            taskInfoBuilder.setperiodIntervalInMs(periodIntervalInMs);
             taskInfoBuilder.setScheduleType(ScheduleType.PERIOD);
         } else {
             taskInfoBuilder.setScheduleType(ScheduleType.ONCE);

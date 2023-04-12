@@ -25,12 +25,15 @@ import org.apache.doris.catalog.Env;
 import org.apache.doris.catalog.Partition;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.FeConstants;
+import org.apache.doris.statistics.AnalysisTaskInfo.AnalysisMethod;
+import org.apache.doris.statistics.AnalysisTaskInfo.AnalysisType;
 import org.apache.doris.statistics.AnalysisTaskInfo.ScheduleType;
 import org.apache.doris.statistics.util.DBObjects;
 import org.apache.doris.statistics.util.InternalQueryResult.ResultRow;
 import org.apache.doris.statistics.util.StatisticsUtil;
 import org.apache.doris.system.SystemInfoService;
 
+import com.clearspring.analytics.util.Lists;
 import org.apache.commons.text.StringSubstitutor;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -42,13 +45,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringJoiner;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
  * All the logic that interacts with internal statistics table should be placed here.
  */
 public class StatisticsRepository {
+
+    private static final String VALUES_DELIMITER = ",";
 
     private static final Logger LOG = LogManager.getLogger(StatisticsRepository.class);
 
@@ -85,14 +89,14 @@ public class StatisticsRepository {
 
     private static final String FETCH_NEED_RUN_ANALYSIS_TASK_SQL = "SELECT * FROM "
             + FULL_QUALIFIED_ANALYSIS_JOB_TABLE_NAME
-            + " WHERE schedule_type = 'PERIOD' AND state != 'FINISHED'"
-            + " AND (NOW() - last_exec_time_in_ms >= period_in_ms)";
+            + " WHERE schedule_type = 'PERIOD' AND state = 'FINISHED'"
+            + " AND (NOW() - last_exec_time_in_ms >= period_interval_in_ms)";
 
     private static final String PERSIST_ANALYSIS_TASK_SQL_TEMPLATE = "INSERT INTO "
             + FULL_QUALIFIED_ANALYSIS_JOB_TABLE_NAME + " VALUES(${jobId}, ${taskId}, '${catalogName}', '${dbName}',"
-            + "'${tblName}','${colName}', '${indexId}','${jobType}', '${analysisType}', "
-            + "'${message}', '${periodTimeInMs}', '${lastExecTimeInMs}',"
-            + "'${state}', '${scheduleType}')";
+            + "'${tblName}', '${indexId}', '${colName}', '${partitionNames}', '${jobType}', '${analysisType}', "
+            + "'${analysisMethod}', '${isIncrement}',  '${periodIntervalInMs}', '${samplePercent}', '${maxBucketNum}', "
+            + "'${message}', '${lastExecTimeInMs}', '${scheduleType}', '${state}')";
 
     private static final String INSERT_INTO_COLUMN_STATISTICS = "INSERT INTO "
             + FULL_QUALIFIED_COLUMN_STATISTICS_NAME + " VALUES('${id}', ${catalogId}, ${dbId}, ${tblId}, '${idxId}',"
@@ -258,21 +262,39 @@ public class StatisticsRepository {
         params.put("catalogName", analysisTaskInfo.catalogName);
         params.put("dbName", analysisTaskInfo.dbName);
         params.put("tblName", analysisTaskInfo.tblName);
-        params.put("colName", analysisTaskInfo.colName);
         params.put("indexId", analysisTaskInfo.indexId == null ? "-1" : String.valueOf(analysisTaskInfo.indexId));
+        params.put("colName", analysisTaskInfo.colName);
+        Set<String> partitionNames = analysisTaskInfo.partitionNames;
+        if (partitionNames == null || partitionNames.isEmpty()) {
+            params.put("partitionNames", "NULL");
+        } else {
+            String names = StatisticsUtil.getCommaJoinerStr(Lists.newArrayList(partitionNames),
+                    VALUES_DELIMITER);
+            params.put("partitionNames", names);
+        }
         params.put("jobType", analysisTaskInfo.jobType.toString());
-        params.put("analysisType", analysisTaskInfo.analysisMethod.toString());
+        params.put("analysisType", analysisTaskInfo.analysisType.toString());
+        params.put("analysisMethod", analysisTaskInfo.analysisMethod.toString());
+        params.put("isIncrement", String.valueOf(analysisTaskInfo.isIncrement));
+        if (analysisTaskInfo.scheduleType == ScheduleType.ONCE) {
+            params.put("periodIntervalInMs", String.valueOf(Long.MAX_VALUE));
+        } else {
+            params.put("periodIntervalInMs", String.valueOf(analysisTaskInfo.periodIntervalInMs));
+        }
+        if (analysisTaskInfo.analysisMethod == AnalysisMethod.FULL) {
+            params.put("samplePercent", "0");
+        } else {
+            params.put("samplePercent", String.valueOf(analysisTaskInfo.samplePercent));
+        }
+        if (analysisTaskInfo.analysisType != AnalysisType.HISTOGRAM) {
+            params.put("maxBucketNum", "0");
+        } else {
+            params.put("maxBucketNum", String.valueOf(analysisTaskInfo.maxBucketNum));
+        }
         params.put("message", "");
         params.put("lastExecTimeInMs", "0");
+        params.put("scheduleType", String.valueOf(analysisTaskInfo.scheduleType));
         params.put("state", AnalysisState.PENDING.toString());
-        params.put("scheduleType", analysisTaskInfo.scheduleType.toString());
-        if (analysisTaskInfo.scheduleType == ScheduleType.ONCE) {
-            params.put("periodTimeInMs", "NULL");
-        } else {
-            int periodInMin = analysisTaskInfo.periodInMin;
-            long periodInMs = TimeUnit.MINUTES.toMillis(periodInMin);
-            params.put("periodTimeInMs", String.valueOf(periodInMs));
-        }
         StatisticsUtil.execUpdate(
                 new StringSubstitutor(params).replace(PERSIST_ANALYSIS_TASK_SQL_TEMPLATE));
     }

@@ -225,24 +225,31 @@ public class InternalSchemaInitializer extends Thread {
         columnDefs.add(new ColumnDef("catalog_name", TypeDef.createVarchar(1024)));
         columnDefs.add(new ColumnDef("db_name", TypeDef.createVarchar(1024)));
         columnDefs.add(new ColumnDef("tbl_name", TypeDef.createVarchar(1024)));
-        columnDefs.add(new ColumnDef("col_name", TypeDef.createVarchar(1024)));
         columnDefs.add(new ColumnDef("index_id", TypeDef.create(PrimitiveType.BIGINT)));
+        columnDefs.add(new ColumnDef("col_name", TypeDef.createVarchar(1024)));
+        // TODO partition_names use array type
+        ColumnDef partitionNames = new ColumnDef("partition_names",
+                TypeDef.createVarchar(StatisticConstants.MAX_NAME_LEN));
+        partitionNames.setAllowNull(true);
+        columnDefs.add(partitionNames);
         columnDefs.add(new ColumnDef("job_type", TypeDef.createVarchar(32)));
         columnDefs.add(new ColumnDef("analysis_type", TypeDef.createVarchar(32)));
+        columnDefs.add(new ColumnDef("analysis_method", TypeDef.createVarchar(32)));
+        columnDefs.add(new ColumnDef("is_increment", TypeDef.createVarchar(32)));
+        columnDefs.add(new ColumnDef("period_interval_in_ms", TypeDef.create(PrimitiveType.BIGINT)));
+        columnDefs.add(new ColumnDef("sample_percent", TypeDef.create(PrimitiveType.BIGINT)));
+        columnDefs.add(new ColumnDef("max_bucket_num", TypeDef.create(PrimitiveType.BIGINT)));
         columnDefs.add(new ColumnDef("message", TypeDef.createVarchar(1024)));
-        ColumnDef periodTimeInMs = new ColumnDef("period_time_in_ms", TypeDef.create(PrimitiveType.BIGINT));
-        periodTimeInMs.setAllowNull(true);
-        columnDefs.add(periodTimeInMs);
         columnDefs.add(new ColumnDef("last_exec_time_in_ms", TypeDef.create(PrimitiveType.BIGINT)));
-        columnDefs.add(new ColumnDef("state", TypeDef.createVarchar(32)));
         columnDefs.add(new ColumnDef("schedule_type", TypeDef.createVarchar(32)));
+        columnDefs.add(new ColumnDef("state", TypeDef.createVarchar(32)));
         String engineName = "olap";
-        KeysDesc keysDesc = new KeysDesc(KeysType.UNIQUE_KEYS,
-                Lists.newArrayList("job_id"));
-
+        ArrayList<String> uniqueKeys = Lists.newArrayList("job_id", "task_id", "catalog_name",
+                "db_name", "tbl_name", "index_id", "col_name", "partition_names");
+        KeysDesc keysDesc = new KeysDesc(KeysType.UNIQUE_KEYS, uniqueKeys);
         DistributionDesc distributionDesc = new HashDistributionDesc(
                 StatisticConstants.STATISTIC_TABLE_BUCKET_COUNT,
-                Lists.newArrayList("job_id"));
+                Lists.newArrayList("job_id", "task_id"));
         Map<String, String> properties = new HashMap<String, String>() {
             {
                 put("replication_num", String.valueOf(Config.statistic_internal_table_replica_num));

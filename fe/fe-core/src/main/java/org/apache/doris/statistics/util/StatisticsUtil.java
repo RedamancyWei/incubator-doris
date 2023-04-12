@@ -60,11 +60,11 @@ import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.apache.thrift.TException;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.StringJoiner;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -294,5 +294,11 @@ public class StatisticsUtil {
                 .map(String::toLowerCase)
                 .map(s -> "null".equalsIgnoreCase(s) || s.isEmpty())
                 .orElse(true);
+    }
+
+    public static String getCommaJoinerStr(List<String> values, String delimiter) {
+        StringJoiner builder = new StringJoiner(delimiter);
+        values.forEach(builder::add);
+        return builder.toString();
     }
 }
