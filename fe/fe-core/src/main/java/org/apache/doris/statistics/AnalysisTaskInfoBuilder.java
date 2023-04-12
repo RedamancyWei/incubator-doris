@@ -39,7 +39,7 @@ public class AnalysisTaskInfoBuilder {
     private boolean isIncrement;
     private int periodInMin;
     private int maxBucketNum;
-    private double sampleRate;
+    private int samplePercent;
     private String message;
     private int lastExecTimeInMs;
     private AnalysisState state;
@@ -115,8 +115,8 @@ public class AnalysisTaskInfoBuilder {
         return this;
     }
 
-    public AnalysisTaskInfoBuilder setSampleRate(double sampleRate) {
-        this.sampleRate = sampleRate;
+    public AnalysisTaskInfoBuilder setSamplePercent(int samplePercent) {
+        this.samplePercent = samplePercent;
         return this;
     }
 
@@ -155,7 +155,7 @@ public class AnalysisTaskInfoBuilder {
                 .setAnalysisType(analysisType)
                 .setPeriodInMin(periodInMin)
                 .setMaxBucketNum(maxBucketNum)
-                .setSampleRate(sampleRate)
+                .setSamplePercent(samplePercent)
                 .setMessage(message)
                 .setLastExecTimeInMs(lastExecTimeInMs)
                 .setState(state)
@@ -165,6 +165,6 @@ public class AnalysisTaskInfoBuilder {
     public AnalysisTaskInfo build() {
         return new AnalysisTaskInfo(jobId, taskId, catalogName, dbName, tblName, colName, partitionNames,
                 indexId, jobType, analysisMethod, analysisType, isIncrement, periodInMin, maxBucketNum,
-                sampleRate, message, lastExecTimeInMs, state, scheduleType);
+                samplePercent, message, lastExecTimeInMs, state, scheduleType);
     }
 }

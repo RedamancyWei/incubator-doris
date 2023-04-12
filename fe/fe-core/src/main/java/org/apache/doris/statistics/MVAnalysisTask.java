@@ -54,14 +54,14 @@ public class MVAnalysisTask extends BaseAnalysisTask {
             + " FROM (${sql}) mv";
 
     private static final String SAMPLE_ANALYZE_MV_PART = ANALYZE_MV_PART
-            + "    TABLESAMPLE(${percentValue} PERCENT)";
+            + "    TABLESAMPLE(${samplePercent} PERCENT)";
 
     private static final String ANALYZE_MV_COL = INSERT_COL_STATISTICS
             + "     (SELECT NDV(`${colName}`) AS ndv "
             + "     FROM (${sql}) mv) t2";
 
     private static final String SAMPLE_ANALYZE_MV_COL = ANALYZE_MV_COL
-            + "    TABLESAMPLE(${percentValue} PERCENT)";
+            + "    TABLESAMPLE(${samplePercent} PERCENT)";
 
     private MaterializedIndexMeta meta;
 
@@ -131,8 +131,7 @@ public class MVAnalysisTask extends BaseAnalysisTask {
                 if (info.analysisMethod == AnalysisMethod.FULL) {
                     StatisticsUtil.execUpdate(ANALYZE_MV_PART, params);
                 } else {
-                    int percentValue = (int) (100 * info.sampleRate);
-                    params.put("percentValue", String.valueOf(percentValue));
+                    params.put("samplePercent", String.valueOf(info.samplePercent));
                     StatisticsUtil.execUpdate(SAMPLE_ANALYZE_MV_PART, params);
                 }
             }

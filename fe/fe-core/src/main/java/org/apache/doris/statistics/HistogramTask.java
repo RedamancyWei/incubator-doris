@@ -53,13 +53,13 @@ public class HistogramTask extends BaseAnalysisTask {
             + "    `${dbName}`.`${tblName}`";
 
     private static final String SAMPLE_ANALYZE_HISTOGRAM_SQL_TEMPLATE_TABLE = ANALYZE_HISTOGRAM_SQL_TEMPLATE_TABLE
-            + "    TABLESAMPLE(${percentValue} PERCENT)";
+            + "    TABLESAMPLE(${samplePercent} PERCENT)";
 
     private static final String ANALYZE_HISTOGRAM_SQL_TEMPLATE_PART = ANALYZE_HISTOGRAM_SQL_TEMPLATE_TABLE
             + "    PARTITION (${partName})";
 
     private static final String SAMPLE_ANALYZE_HISTOGRAM_SQL_TEMPLATE_PART = ANALYZE_HISTOGRAM_SQL_TEMPLATE_TABLE
-            + "    PARTITION (${partName}) TABLESAMPLE(${percentValue} PERCENT)";
+            + "    PARTITION (${partName}) TABLESAMPLE(${samplePercent} PERCENT)";
 
     @VisibleForTesting
     public HistogramTask() {
@@ -86,11 +86,11 @@ public class HistogramTask extends BaseAnalysisTask {
 
         params.put("maxBucketNum", String.valueOf(info.maxBucketNum));
         if (info.analysisMethod == AnalysisMethod.SAMPLE) {
-            params.put("sampleRate", String.valueOf(info.sampleRate));
-            int percentValue = (int) (100 * info.sampleRate);
-            params.put("percentValue", String.valueOf(percentValue));
+            params.put("samplePercent", String.valueOf(info.samplePercent));
+            params.put("sampleRate", String.valueOf(info.samplePercent / 100.0));
         } else {
-            params.put("sampleRate", "NULL");
+            params.put("samplePercent", "NULL");
+            params.put("sampleRate", "1");
         }
 
         String histogramSql;

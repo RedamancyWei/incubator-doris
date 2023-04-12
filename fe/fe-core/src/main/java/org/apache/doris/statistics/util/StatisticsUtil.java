@@ -100,8 +100,12 @@ public class StatisticsUtil {
     }
 
     // TODO: finish this.
-    public static List<AnalysisTaskInfo> deserializeToAnalysisJob(List<ResultRow> resultBatches) throws TException {
-        return new ArrayList<>();
+    public static List<AnalysisTaskInfo> deserializeToAnalysisJob(List<ResultRow> resultBatches)
+            throws TException {
+        if (CollectionUtils.isEmpty(resultBatches)) {
+            return Collections.emptyList();
+        }
+        return resultBatches.stream().map(AnalysisTaskInfo::fromResultRow).collect(Collectors.toList());
     }
 
     public static List<ColumnStatistic> deserializeToColumnStatistics(List<ResultRow> resultBatches)

@@ -101,7 +101,7 @@ public class AnalysisManager {
         Set<String> partitionNames = analyzeStmt.getPartitionNames();
         boolean isIncrement = analyzeStmt.isIncrement;
         int periodInMin = analyzeStmt.getPeriodInMin();
-        double sampleRate = analyzeStmt.getSampleRate();
+        int samplePercent = analyzeStmt.getSamplePercent();
         long jobId = Env.getCurrentEnv().getNextId();
 
         taskInfoBuilder.setJobId(jobId);
@@ -120,7 +120,8 @@ public class AnalysisManager {
             taskInfoBuilder.setScheduleType(ScheduleType.ONCE);
         }
 
-        if (sampleRate > 0 && sampleRate < 1) {
+        if (samplePercent > 0) {
+            taskInfoBuilder.setSamplePercent(samplePercent);
             taskInfoBuilder.setAnalysisMethod(AnalysisMethod.SAMPLE);
         } else {
             taskInfoBuilder.setAnalysisMethod(AnalysisMethod.FULL);
@@ -155,9 +156,8 @@ public class AnalysisManager {
             taskInfoBuilder.setAnalysisType(AnalysisType.COLUMN);
             buildColumnTaskInfo(colNames, taskInfoBuilder, analysisTaskInfos);
 
-            // TODO Do need to control the collection of INDEX through syntax？
             TableType tableType = analyzeStmt.getTable().getType();
-            if (analyzeStmt.isWholeTbl && tableType.equals(TableType.OLAP)) {
+            if (analyzeStmt.isAnalysisMv && tableType.equals(TableType.OLAP)) {
                 // analyze index statistics
                 taskInfoBuilder.setAnalysisType(AnalysisType.INDEX);
                 OlapTable olapTable = (OlapTable) analyzeStmt.getTable();

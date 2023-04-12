@@ -44,7 +44,7 @@ public class OlapAnalysisTask extends BaseAnalysisTask {
             + "PARTITION ${partName}";
 
     private static final String SAMPLE_ANALYZE_PARTITION_SQL_TEMPLATE = ANALYZE_PARTITION_SQL_TEMPLATE
-            + "    TABLESAMPLE(${percentValue} PERCENT)";
+            + "    TABLESAMPLE(${samplePercent} PERCENT)";
 
     // TODO Currently, NDV is computed for the full table; in fact,
     //  NDV should only be computed for the relevant partition.
@@ -53,7 +53,7 @@ public class OlapAnalysisTask extends BaseAnalysisTask {
             + "     FROM `${dbName}`.`${tblName}`) t2";
 
     private static final String SAMPLE_ANALYZE_COLUMN_SQL_TEMPLATE = INSERT_COL_STATISTICS
-            + "     TABLESAMPLE(${percentValue} PERCENT)";
+            + "     TABLESAMPLE(${samplePercent} PERCENT)";
 
     @VisibleForTesting
     public OlapAnalysisTask() {
@@ -81,8 +81,7 @@ public class OlapAnalysisTask extends BaseAnalysisTask {
                 ? String.valueOf(info.lastExecTimeInMs) : "0";
         params.put("updateTime", updateTime);
         if (info.analysisMethod == AnalysisMethod.SAMPLE) {
-            int percentValue = (int) (100 * info.sampleRate);
-            params.put("percentValue", String.valueOf(percentValue));
+            params.put("samplePercent", String.valueOf(info.samplePercent));
         }
 
         List<String> partitionAnalysisSQLs = new ArrayList<>();

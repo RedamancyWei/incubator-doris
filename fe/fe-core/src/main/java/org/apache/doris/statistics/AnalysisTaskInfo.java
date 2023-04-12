@@ -17,11 +17,21 @@
 
 package org.apache.doris.statistics;
 
+import org.apache.doris.catalog.Column;
+import org.apache.doris.catalog.Env;
+import org.apache.doris.statistics.util.InternalQueryResult.ResultRow;
+import org.apache.doris.statistics.util.StatisticsUtil;
+
+import com.clearspring.analytics.util.Lists;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.glassfish.jersey.internal.guava.Sets;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Set;
 import java.util.StringJoiner;
+import java.util.stream.Collectors;
 
 public class AnalysisTaskInfo {
 
@@ -78,7 +88,7 @@ public class AnalysisTaskInfo {
     public final int periodInMin;
 
     public final int maxBucketNum;
-    public final double sampleRate;
+    public final int samplePercent;
 
     public String message;
 
@@ -90,8 +100,8 @@ public class AnalysisTaskInfo {
     public final ScheduleType scheduleType;
 
     public AnalysisTaskInfo(long jobId, long taskId, String catalogName, String dbName, String tblName,
-            String colName, Set<String> partitionNames, Long indexId, JobType jobType, AnalysisMethod analysisMethod,
-            AnalysisType analysisType, boolean isIncrement, int periodInMin, int maxBucketNum, double sampleRate,
+            String colName, Set<String> partitionNames, long indexId, JobType jobType, AnalysisMethod analysisMethod,
+            AnalysisType analysisType, boolean isIncrement, int periodInMin, int maxBucketNum, int samplePercent,
             String message, int lastExecTimeInMs, AnalysisState state, ScheduleType scheduleType) {
         this.jobId = jobId;
         this.taskId = taskId;
@@ -107,7 +117,7 @@ public class AnalysisTaskInfo {
         this.isIncrement = isIncrement;
         this.periodInMin = periodInMin;
         this.maxBucketNum = maxBucketNum;
-        this.sampleRate = sampleRate;
+        this.samplePercent = samplePercent;
         this.message = message;
         this.lastExecTimeInMs = lastExecTimeInMs;
         this.state = state;
@@ -133,5 +143,61 @@ public class AnalysisTaskInfo {
 
     public AnalysisState getState() {
         return state;
+    }
+
+    // TODO: use thrift
+    public static AnalysisTaskInfo fromResultRow(ResultRow resultRow) {
+        try {
+            AnalysisTaskInfoBuilder analysisTaskInfoBuilder = new AnalysisTaskInfoBuilder();
+            long jobId = Long.parseLong(resultRow.getColumnValue("job_id"));
+            analysisTaskInfoBuilder.setJobId(jobId);
+            long taskId = Long.parseLong(resultRow.getColumnValue("task_id"));
+            analysisTaskInfoBuilder.setTaskId(taskId);
+            String catalogName = resultRow.getColumnValue("catalog_name");
+            analysisTaskInfoBuilder.setCatalogName(catalogName);
+            String dbName = resultRow.getColumnValue("db_name");
+            analysisTaskInfoBuilder.setDbName(dbName);
+            String tblName = resultRow.getColumnValue("tbl_name");
+            analysisTaskInfoBuilder.setTblName(tblName);
+            String colName = resultRow.getColumnValue("col_name");
+            analysisTaskInfoBuilder.setColName(colName);
+            String partitionNames = resultRow.getColumnValue("partitionNames");
+            if (partitionNames != null) {
+                String[] arr = partitionNames.split(",");
+                Set<String> names = Arrays.stream(arr).collect(Collectors.toSet());
+                analysisTaskInfoBuilder.setPartitionNames(names);
+            } else {
+                analysisTaskInfoBuilder.setPartitionNames(Collections.singleton(tblName));
+            }
+            long indexId = Long.parseLong(resultRow.getColumnValue("index_id"));
+            analysisTaskInfoBuilder.setIndexId(indexId);
+            String jobType = resultRow.getColumnValue("job_type");
+            analysisTaskInfoBuilder.setJobType(JobType.valueOf(jobType));
+            String analysisMethod = resultRow.getColumnValue("analysis_method");
+            analysisTaskInfoBuilder.setAnalysisMethod(AnalysisMethod.valueOf(analysisMethod));
+            String analysisType = resultRow.getColumnValue("analysis_type");
+            analysisTaskInfoBuilder.setAnalysisType(AnalysisType.valueOf(analysisType));
+            boolean isIncrement = Boolean.parseBoolean(resultRow.getColumnValue("is_increment"));
+            analysisTaskInfoBuilder.setIncrement(isIncrement);
+            int periodInMin = Integer.parseInt(resultRow.getColumnValue("period_in_min"));
+            analysisTaskInfoBuilder.setPeriodInMin(periodInMin);
+            int maxBucketNum = Integer.parseInt(resultRow.getColumnValue("max_bucket_num"));
+            analysisTaskInfoBuilder.setMaxBucketNum(maxBucketNum);
+            int samplePercent = Integer.parseInt(resultRow.getColumnValue("sample_percent"));
+            analysisTaskInfoBuilder.setSamplePercent(samplePercent);
+
+            String message = resultRow.getColumnValue("message");
+            analysisTaskInfoBuilder.setMessage(message);
+
+            int lastExecTimeInMs = Integer.parseInt(resultRow.getColumnValue("last_exec_time_in_ms"));
+            analysisTaskInfoBuilder.setLastExecTimeInMs(lastExecTimeInMs);
+
+            String scheduleType = resultRow.getColumnValue("schedule_type");
+            analysisTaskInfoBuilder.setScheduleType(ScheduleType.valueOf(scheduleType));
+            return analysisTaskInfoBuilder.build();
+        } catch (Exception e) {
+            LOG.warn("Failed to deserialize column statistics, column not exists", e);
+            return null;
+        }
     }
 }

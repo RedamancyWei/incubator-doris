@@ -68,7 +68,7 @@ public class AnalyzeStmt extends DdlStmt {
 
     private static final Predicate<Long> DESIRED_TASK_TIMEOUT_SEC = (v) -> v > 0L;
 
-    public boolean isWholeTbl;
+    public boolean isAnalysisMv;
     public boolean isHistogram;
     public boolean isIncrement;
 
@@ -77,8 +77,8 @@ public class AnalyzeStmt extends DdlStmt {
     private final List<String> columnNames;
 
     private int periodInMin;
+    private int samplePercent;
     private int numBuckets;
-    private double sampleRate;
 
     private final Map<String, String> properties;
 
@@ -89,22 +89,36 @@ public class AnalyzeStmt extends DdlStmt {
     public AnalyzeStmt(TableName tableName,
             List<String> columnNames,
             PartitionNames partitionNames,
-            Boolean isWholeTbl,
-            Boolean isHistogram,
-            Boolean isIncrement,
-            int periodInMin,
-            int numBuckets,
-            double sampleRate,
+            boolean isAnalysisMv,
+            boolean isHistogram,
             Map<String, String> properties) {
         this.tableName = tableName;
         this.columnNames = columnNames;
         this.partitionNames = partitionNames;
-        this.isWholeTbl = isWholeTbl;
+        this.isAnalysisMv = isAnalysisMv;
         this.isHistogram = isHistogram;
+        this.properties = properties;
+    }
+
+    public AnalyzeStmt(TableName tableName,
+            List<String> columnNames,
+            PartitionNames partitionNames,
+            boolean isAnalysisMv,
+            boolean isIncrement,
+            boolean isHistogram,
+            int periodInMin,
+            int samplePercent,
+            int numBuckets,
+            Map<String, String> properties) {
+        this.tableName = tableName;
+        this.columnNames = columnNames;
+        this.partitionNames = partitionNames;
+        this.isAnalysisMv = isAnalysisMv;
         this.isIncrement = isIncrement;
+        this.isHistogram = isHistogram;
         this.periodInMin = periodInMin;
+        this.samplePercent = samplePercent;
         this.numBuckets = numBuckets;
-        this.sampleRate = sampleRate;
         this.properties = properties;
     }
 
@@ -142,24 +156,9 @@ public class AnalyzeStmt extends DdlStmt {
             }
         }
 
+        checkParams();
+
         checkPartitionNames();
-
-        if (periodInMin != 0 && periodInMin < 1) {
-            throw new AnalysisException("The period interval should not be less than 1.");
-        }
-
-        if (numBuckets != 0 && numBuckets < 1) {
-            throw new AnalysisException("The num buckets should not be less than 1.");
-        }
-
-        if (sampleRate >= 1 || sampleRate < 0) {
-            throw new AnalysisException("The sample rate should range from greater than 0 to less than 1");
-        }
-
-        // TODO support external table
-        if (sampleRate > 0 && !table.getType().equals(TableType.OLAP)) {
-            throw new AnalysisException("Only OLAP table is supported for sampling to collect statistics");
-        }
 
         checkProperties();
     }
@@ -178,6 +177,22 @@ public class AnalyzeStmt extends DdlStmt {
                     ConnectContext.get().getQualifiedUser(),
                     ConnectContext.get().getRemoteIP(),
                     dbName + ": " + tblName);
+        }
+    }
+
+    private void checkParams() throws AnalysisException {
+        if (periodInMin != 0 && periodInMin < 1) {
+            throw new AnalysisException("The period interval should not be less than 1.");
+        }
+        if (numBuckets != 0 && numBuckets < 1) {
+            throw new AnalysisException("The num buckets should not be less than 1.");
+        }
+        if (samplePercent >= 100 || samplePercent < 0) {
+            throw new AnalysisException("The sample percent should range from greater than 0 to less than 1.");
+        }
+        // TODO support external table
+        if (samplePercent > 0 && !table.getType().equals(TableType.OLAP)) {
+            throw new AnalysisException("Only OLAP table is supported for sampling to collect statistics");
         }
     }
 
@@ -262,8 +277,8 @@ public class AnalyzeStmt extends DdlStmt {
         return numBuckets;
     }
 
-    public double getSampleRate() {
-        return sampleRate;
+    public int getSamplePercent() {
+        return samplePercent;
     }
 
     public Map<String, String> getProperties() {
@@ -312,9 +327,9 @@ public class AnalyzeStmt extends DdlStmt {
             sb.append("WITH BUCKETS ").append(numBuckets);
         }
 
-        if (sampleRate > 0) {
+        if (samplePercent > 0) {
             sb.append(" ");
-            sb.append("WITH SAMPLE ").append(sampleRate);
+            sb.append("WITH SAMPLE PERCENT ").append(samplePercent);
         }
 
         if (properties != null) {

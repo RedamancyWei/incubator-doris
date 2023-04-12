@@ -187,7 +187,7 @@ public class StatisticsRepository {
     }
 
     public static List<ResultRow> queryNeedRunAnalysisTasks() {
-        return StatisticsUtil.execStatisticQuery(FETCH_PARTITIONS_STATISTIC_TEMPLATE);
+        return StatisticsUtil.execStatisticQuery(FETCH_NEED_RUN_ANALYSIS_TASK_SQL);
     }
 
     private static String constructId(Object... params) {
