@@ -18,17 +18,27 @@
 package org.apache.doris.statistics;
 
 import org.apache.doris.statistics.util.InternalQueryResult.ResultRow;
+import org.apache.doris.statistics.util.StatisticsUtil;
 
+import com.google.common.collect.Lists;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
+import java.util.List;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.stream.Collectors;
 
 public class AnalysisTaskInfo {
+
+    private static final String ID_DELIMITER = "-";
+    private static final String VALUES_DELIMITER = ",";
 
     private static final Logger LOG = LogManager.getLogger(AnalysisTaskInfo.class);
 
@@ -97,8 +107,9 @@ public class AnalysisTaskInfo {
 
     public AnalysisTaskInfo(long jobId, long taskId, String catalogName, String dbName, String tblName, String colName,
             Set<String> partitionNames, Long indexId, JobType jobType, AnalysisMethod analysisMethod,
-            AnalysisType analysisType, boolean isIncrement, Long periodIntervalInMs, Integer samplePercent, Integer maxBucketNum,
-            String message, Long lastExecTimeInMs, AnalysisState state, ScheduleType scheduleType) {
+            AnalysisType analysisType, boolean isIncrement, Long periodIntervalInMs, Integer samplePercent,
+            Integer maxBucketNum, String message, Long lastExecTimeInMs, AnalysisState state,
+            ScheduleType scheduleType) {
         this.jobId = jobId;
         this.taskId = taskId;
         this.catalogName = catalogName;
@@ -194,5 +205,56 @@ public class AnalysisTaskInfo {
             LOG.warn("Failed to deserialize analysis task info.", e);
             return null;
         }
+    }
+
+    public String constructId() {
+        String notNullIndexId = getIndexIdInStr();
+        String partitionsInStr = (partitionNames == null || partitionNames.isEmpty()) ? "NULL" :
+                StatisticsUtil.getCommaJoinerStr(Lists.newArrayList(partitionNames), VALUES_DELIMITER);
+        List<String> idElements = Lists.newArrayList(catalogName, dbName, tblName,
+                colName, notNullIndexId, partitionsInStr);
+        return StatisticsUtil.getCommaJoinerStr(Lists.newArrayList(idElements), ID_DELIMITER);
+    }
+
+    public String getPartitionNamesInStr () {
+        return  (partitionNames == null || partitionNames.isEmpty()) ? "NULL" :
+                StatisticsUtil.getCommaJoinerStr(Lists.newArrayList(partitionNames), VALUES_DELIMITER);
+    }
+
+    public String getIndexIdInStr() {
+        return indexId == null ? "-1" : String.valueOf(indexId);
+    }
+
+    public String getPeriodIntervalInMsInStr() {
+        if (scheduleType == ScheduleType.ONCE) {
+            return String.valueOf(Long.MAX_VALUE);
+        } else {
+            return String.valueOf(periodIntervalInMs);
+        }
+    }
+
+    public String getSamplePercentInStr() {
+        if (analysisMethod == AnalysisMethod.FULL) {
+            return "0";
+        } else {
+            return String.valueOf(samplePercent);
+        }
+    }
+
+    public String getMaxBucketNumInStr() {
+        if (analysisType != AnalysisType.HISTOGRAM) {
+            return "0";
+        } else {
+            return String.valueOf(maxBucketNum);
+        }
+    }
+
+    public String getReadableLastExecTime() {
+        if (lastExecTimeInMs > 0) {
+            SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+            return format.format(new Date(lastExecTimeInMs));
+        }
+
+        return "1970-01-01 00:00:00";
     }
 }

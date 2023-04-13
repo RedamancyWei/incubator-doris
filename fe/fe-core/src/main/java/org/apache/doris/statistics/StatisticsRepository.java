@@ -33,7 +33,7 @@ import org.apache.doris.statistics.util.InternalQueryResult.ResultRow;
 import org.apache.doris.statistics.util.StatisticsUtil;
 import org.apache.doris.system.SystemInfoService;
 
-import com.clearspring.analytics.util.Lists;
+import com.google.common.collect.Lists;
 import org.apache.commons.text.StringSubstitutor;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -51,8 +51,6 @@ import java.util.stream.Collectors;
  * All the logic that interacts with internal statistics table should be placed here.
  */
 public class StatisticsRepository {
-
-    private static final String VALUES_DELIMITER = ",";
 
     private static final Logger LOG = LogManager.getLogger(StatisticsRepository.class);
 
@@ -93,10 +91,10 @@ public class StatisticsRepository {
             + " AND (NOW() - last_exec_time_in_ms >= period_interval_in_ms)";
 
     private static final String PERSIST_ANALYSIS_TASK_SQL_TEMPLATE = "INSERT INTO "
-            + FULL_QUALIFIED_ANALYSIS_JOB_TABLE_NAME + " VALUES(${jobId}, ${taskId}, '${catalogName}', '${dbName}',"
-            + "'${tblName}', '${indexId}', '${colName}', '${partitionNames}', '${jobType}', '${analysisType}', "
-            + "'${analysisMethod}', '${isIncrement}',  '${periodIntervalInMs}', '${samplePercent}', '${maxBucketNum}', "
-            + "'${message}', '${lastExecTimeInMs}', '${scheduleType}', '${state}')";
+            + FULL_QUALIFIED_ANALYSIS_JOB_TABLE_NAME + " VALUES('${id}', ${jobId}, ${taskId}, '${catalogName}', "
+            + "'${dbName}', '${tblName}', ${indexId}, '${colName}', '${partitionNames}', '${jobType}', "
+            + "'${analysisType}', '${analysisMethod}', ${isIncrement},  ${periodIntervalInMs}, ${samplePercent}, "
+            + "${maxBucketNum}, '${message}', ${lastExecTimeInMs}, '${scheduleType}', '${state}')";
 
     private static final String INSERT_INTO_COLUMN_STATISTICS = "INSERT INTO "
             + FULL_QUALIFIED_COLUMN_STATISTICS_NAME + " VALUES('${id}', ${catalogId}, ${dbId}, ${tblId}, '${idxId}',"
@@ -257,44 +255,41 @@ public class StatisticsRepository {
 
     public static void createAnalysisTask(AnalysisTaskInfo analysisTaskInfo) throws Exception {
         Map<String, String> params = new HashMap<>();
+        String catalogName = analysisTaskInfo.catalogName;
+        String dbName = analysisTaskInfo.dbName;
+        String tblName = analysisTaskInfo.tblName;
+        String indexId = analysisTaskInfo.getIndexIdInStr();
+        String colName = analysisTaskInfo.colName;
+        String partitionNamesInStr = analysisTaskInfo.getPartitionNamesInStr();
+        String jobType = analysisTaskInfo.jobType.toString();
+        String analysisType = analysisTaskInfo.analysisType.toString();
+        String analysisMethod = analysisTaskInfo.analysisMethod.toString();
+        String isIncrement = String.valueOf(analysisTaskInfo.isIncrement);
+        String periodIntervalInMs = analysisTaskInfo.getPeriodIntervalInMsInStr();
+        String samplePercent = analysisTaskInfo.getSamplePercentInStr();
+        String maxBucketNum = analysisTaskInfo.getMaxBucketNumInStr();
+        String scheduleType = String.valueOf(analysisTaskInfo.scheduleType);
+        String analysisState = AnalysisState.PENDING.toString();
+        params.put("id", analysisTaskInfo.constructId());
         params.put("jobId", String.valueOf(analysisTaskInfo.jobId));
         params.put("taskId", String.valueOf(analysisTaskInfo.taskId));
-        params.put("catalogName", analysisTaskInfo.catalogName);
-        params.put("dbName", analysisTaskInfo.dbName);
-        params.put("tblName", analysisTaskInfo.tblName);
-        params.put("indexId", analysisTaskInfo.indexId == null ? "-1" : String.valueOf(analysisTaskInfo.indexId));
-        params.put("colName", analysisTaskInfo.colName);
-        Set<String> partitionNames = analysisTaskInfo.partitionNames;
-        if (partitionNames == null || partitionNames.isEmpty()) {
-            params.put("partitionNames", "NULL");
-        } else {
-            String names = StatisticsUtil.getCommaJoinerStr(Lists.newArrayList(partitionNames),
-                    VALUES_DELIMITER);
-            params.put("partitionNames", names);
-        }
-        params.put("jobType", analysisTaskInfo.jobType.toString());
-        params.put("analysisType", analysisTaskInfo.analysisType.toString());
-        params.put("analysisMethod", analysisTaskInfo.analysisMethod.toString());
-        params.put("isIncrement", String.valueOf(analysisTaskInfo.isIncrement));
-        if (analysisTaskInfo.scheduleType == ScheduleType.ONCE) {
-            params.put("periodIntervalInMs", String.valueOf(Long.MAX_VALUE));
-        } else {
-            params.put("periodIntervalInMs", String.valueOf(analysisTaskInfo.periodIntervalInMs));
-        }
-        if (analysisTaskInfo.analysisMethod == AnalysisMethod.FULL) {
-            params.put("samplePercent", "0");
-        } else {
-            params.put("samplePercent", String.valueOf(analysisTaskInfo.samplePercent));
-        }
-        if (analysisTaskInfo.analysisType != AnalysisType.HISTOGRAM) {
-            params.put("maxBucketNum", "0");
-        } else {
-            params.put("maxBucketNum", String.valueOf(analysisTaskInfo.maxBucketNum));
-        }
+        params.put("catalogName", catalogName);
+        params.put("dbName", dbName);
+        params.put("tblName", tblName);
+        params.put("indexId", indexId);
+        params.put("colName", colName);
+        params.put("partitionNames", partitionNamesInStr);
+        params.put("jobType", jobType);
+        params.put("analysisType", analysisType);
+        params.put("analysisMethod", analysisMethod);
+        params.put("isIncrement", isIncrement);
+        params.put("periodIntervalInMs", periodIntervalInMs);
+        params.put("samplePercent", samplePercent);
+        params.put("maxBucketNum", maxBucketNum);
         params.put("message", "");
         params.put("lastExecTimeInMs", "0");
-        params.put("scheduleType", String.valueOf(analysisTaskInfo.scheduleType));
-        params.put("state", AnalysisState.PENDING.toString());
+        params.put("scheduleType", scheduleType);
+        params.put("state", analysisState);
         StatisticsUtil.execUpdate(
                 new StringSubstitutor(params).replace(PERSIST_ANALYSIS_TASK_SQL_TEMPLATE));
     }

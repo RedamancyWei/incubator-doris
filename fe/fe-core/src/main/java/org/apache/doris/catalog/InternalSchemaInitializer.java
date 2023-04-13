@@ -114,7 +114,7 @@ public class InternalSchemaInitializer extends Thread {
         columnDefs.add(partId);
         columnDefs.add(new ColumnDef("row_count", TypeDef.create(PrimitiveType.BIGINT)));
         columnDefs.add(new ColumnDef("update_rows", TypeDef.create(PrimitiveType.BIGINT)));
-        columnDefs.add(new ColumnDef("healthy", TypeDef.create(PrimitiveType.INT)));
+        columnDefs.add(new ColumnDef("health", TypeDef.create(PrimitiveType.INT)));
         columnDefs.add(new ColumnDef("data_size_in_bytes", TypeDef.create(PrimitiveType.BIGINT)));
         columnDefs.add(new ColumnDef("update_time", TypeDef.create(PrimitiveType.DATETIME)));
         ColumnDef lastAnalyzeTime = new ColumnDef("last_analyze_time", TypeDef.create(PrimitiveType.DATETIME));
@@ -220,6 +220,7 @@ public class InternalSchemaInitializer extends Thread {
         TableName tableName = new TableName("",
                 FeConstants.INTERNAL_DB_NAME, StatisticConstants.ANALYSIS_JOB_TABLE);
         List<ColumnDef> columnDefs = new ArrayList<>();
+        columnDefs.add(new ColumnDef("id", TypeDef.createVarchar(1024)));
         columnDefs.add(new ColumnDef("job_id", TypeDef.create(PrimitiveType.BIGINT)));
         columnDefs.add(new ColumnDef("task_id", TypeDef.create(PrimitiveType.BIGINT)));
         columnDefs.add(new ColumnDef("catalog_name", TypeDef.createVarchar(1024)));
@@ -244,12 +245,11 @@ public class InternalSchemaInitializer extends Thread {
         columnDefs.add(new ColumnDef("schedule_type", TypeDef.createVarchar(32)));
         columnDefs.add(new ColumnDef("state", TypeDef.createVarchar(32)));
         String engineName = "olap";
-        ArrayList<String> uniqueKeys = Lists.newArrayList("job_id", "task_id", "catalog_name",
-                "db_name", "tbl_name", "index_id", "col_name", "partition_names");
+        ArrayList<String> uniqueKeys = Lists.newArrayList("id", "job_id");
         KeysDesc keysDesc = new KeysDesc(KeysType.UNIQUE_KEYS, uniqueKeys);
         DistributionDesc distributionDesc = new HashDistributionDesc(
                 StatisticConstants.STATISTIC_TABLE_BUCKET_COUNT,
-                Lists.newArrayList("job_id", "task_id"));
+                Lists.newArrayList("job_id"));
         Map<String, String> properties = new HashMap<String, String>() {
             {
                 put("replication_num", String.valueOf(Config.statistic_internal_table_replica_num));

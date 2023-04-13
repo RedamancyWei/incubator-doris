@@ -47,7 +47,7 @@ public class ShowTableStatsStmt extends ShowStmt {
             new ImmutableList.Builder<String>()
                     .add("row_count")
                     .add("update_rows")
-                    .add("healthy")
+                    .add("health")
                     .add("data_size")
                     .add("update_time")
                     .add("last_analyze_time")
@@ -139,7 +139,7 @@ public class ShowTableStatsStmt extends ShowStmt {
         List<String> row = Lists.newArrayList();
         row.add(String.valueOf(tableStatistic.rowCount));
         row.add(String.valueOf(tableStatistic.updateRows));
-        row.add(String.valueOf(tableStatistic.healthy));
+        row.add(String.valueOf(tableStatistic.health));
         row.add(String.valueOf(tableStatistic.dataSizeInBytes));
         row.add(String.valueOf(tableStatistic.updateTime));
         row.add(String.valueOf(tableStatistic.lastAnalyzeTime));

@@ -125,8 +125,7 @@ public class MVAnalysisTask extends BaseAnalysisTask {
                 params.put("colName", colName);
                 params.put("tblName", String.valueOf(info.tblName));
                 params.put("sql", sql);
-                String updateTime = info.isIncrement
-                        ? String.valueOf(info.lastExecTimeInMs) : "0";
+                String updateTime = info.getReadableLastExecTime();
                 params.put("updateTime", updateTime);
                 if (info.analysisMethod == AnalysisMethod.FULL) {
                     StatisticsUtil.execUpdate(ANALYZE_MV_PART, params);

@@ -20,7 +20,7 @@ package org.apache.doris.statistics;
 public class TableStatisticBuilder {
     public long rowCount;
     public long updateRows;
-    public int healthy;
+    public int health;
     public long dataSizeInBytes;
     public String updateTime;
     public String lastAnalyzeTime;
@@ -31,7 +31,7 @@ public class TableStatisticBuilder {
     public TableStatisticBuilder(TableStatistic tableStatistic) {
         this.rowCount = tableStatistic.rowCount;
         this.updateRows = tableStatistic.updateRows;
-        this.healthy = tableStatistic.healthy;
+        this.health = tableStatistic.health;
         this.dataSizeInBytes = tableStatistic.dataSizeInBytes;
         this.updateTime = tableStatistic.updateTime;
         this.lastAnalyzeTime = tableStatistic.lastAnalyzeTime;
@@ -55,12 +55,12 @@ public class TableStatisticBuilder {
         return this;
     }
 
-    public double getHealthy() {
-        return healthy;
+    public double getHealth() {
+        return health;
     }
 
-    public TableStatisticBuilder setHealthy(int healthy) {
-        this.healthy = healthy;
+    public TableStatisticBuilder setHealth(int health) {
+        this.health = health;
         return this;
     }
 
@@ -94,6 +94,6 @@ public class TableStatisticBuilder {
 
     public TableStatistic build() {
         return new TableStatistic(rowCount, updateRows,
-                healthy, dataSizeInBytes, updateTime, lastAnalyzeTime);
+                health, dataSizeInBytes, updateTime, lastAnalyzeTime);
     }
 }

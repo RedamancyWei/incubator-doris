@@ -74,8 +74,7 @@ public class OlapAnalysisTask extends BaseAnalysisTask {
         params.put("dbName", info.dbName);
         params.put("colName", String.valueOf(info.colName));
         params.put("tblName", String.valueOf(info.tblName));
-        String updateTime = info.isIncrement
-                ? String.valueOf(info.lastExecTimeInMs) : "0";
+        String updateTime = info.getReadableLastExecTime();
         params.put("updateTime", updateTime);
         if (info.analysisMethod == AnalysisMethod.SAMPLE) {
             params.put("samplePercent", String.valueOf(info.samplePercent));

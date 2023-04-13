@@ -28,23 +28,23 @@ public class TableStatistic {
     private static final Logger LOG = LogManager.getLogger(TableStatistic.class);
 
     public static TableStatistic UNKNOWN = new TableStatisticBuilder()
-            .setRowCount(0).setUpdateRows(0).setHealthy(0)
+            .setRowCount(0).setUpdateRows(0).setHealth(0)
             .setUpdateTime("NULL").setLastAnalyzeTime("NULL")
             .build();
 
     public final long rowCount;
     public final long updateRows;
-    public final int healthy;
+    public final int health;
     public final long dataSizeInBytes;
     public final String updateTime;
     public final String lastAnalyzeTime;
 
     public TableStatistic(long rowCount, long updateRows,
-            int healthy, long dataSizeInBytes, String updateTime,
+            int health, long dataSizeInBytes, String updateTime,
             String lastAnalyzeTime) {
         this.rowCount = rowCount;
         this.updateRows = updateRows;
-        this.healthy = healthy;
+        this.health = health;
         this.dataSizeInBytes = dataSizeInBytes;
         this.updateTime = updateTime;
         this.lastAnalyzeTime = lastAnalyzeTime;
@@ -58,8 +58,8 @@ public class TableStatistic {
             tableStatisticBuilder.setRowCount(rowCount);
             long updateRows = Long.parseLong(resultRow.getColumnValue("update_rows"));
             tableStatisticBuilder.setUpdateRows(updateRows);
-            int healthy = Integer.parseInt(resultRow.getColumnValue("healthy"));
-            tableStatisticBuilder.setHealthy(healthy);
+            int health = Integer.parseInt(resultRow.getColumnValue("health"));
+            tableStatisticBuilder.setHealth(health);
             long dataSizeInBytes = Long.parseLong(resultRow.getColumnValue("data_size_in_bytes"));
             tableStatisticBuilder.setDataSizeInBytes(dataSizeInBytes);
             String updateTime = resultRow.getColumnValue("update_time");

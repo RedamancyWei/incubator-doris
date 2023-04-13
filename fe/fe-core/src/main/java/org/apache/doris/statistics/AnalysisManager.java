@@ -61,7 +61,7 @@ public class AnalysisManager {
 
     private static final String UPDATE_JOB_STATE_SQL_TEMPLATE = "UPDATE "
             + FeConstants.INTERNAL_DB_NAME + "." + StatisticConstants.ANALYSIS_JOB_TABLE + " "
-            + "SET state = '${jobState}' ${message} ${updateExecTime} WHERE job_id = ${jobId}";
+            + "SET state = '${jobState}' ${message} ${updateExecTime} WHERE id = '${id}'";
 
     private static final String SHOW_JOB_STATE_SQL_TEMPLATE = "SELECT "
             + "job_id, catalog_name, db_name, tbl_name, col_name, job_type, "
@@ -194,24 +194,26 @@ public class AnalysisManager {
         }
     }
 
-    public void updateTaskStatus(AnalysisTaskInfo info, AnalysisState jobState, String message, long time) {
+    // TODO synchronized
+    public synchronized void updateTaskStatus(AnalysisTaskInfo info, AnalysisState jobState, String message, long time) {
         Map<String, String> params = new HashMap<>();
         params.put("jobState", jobState.toString());
         params.put("message", StringUtils.isNotEmpty(message) ? String.format(", message = '%s'", message) : "");
         params.put("updateExecTime", time == -1 ? "" : ", last_exec_time_in_ms=" + time);
-        params.put("jobId", String.valueOf(info.jobId));
+        params.put("id", info.constructId());
         try {
             StatisticsUtil.execUpdate(new StringSubstitutor(params).replace(UPDATE_JOB_STATE_SQL_TEMPLATE));
         } catch (Exception e) {
             LOG.warn(String.format("Failed to update state for job: %s", info.jobId), e);
         } finally {
-            info.state = jobState;
-            if (analysisJobIdToTaskMap.get(info.jobId).values()
-                    .stream().allMatch(i -> i.state != null
-                            && i.state != AnalysisState.PENDING && i.state != AnalysisState.RUNNING)) {
-                analysisJobIdToTaskMap.remove(info.jobId);
+            if (analysisJobIdToTaskMap.containsKey(info.jobId)) {
+                info.state = jobState;
+                if (analysisJobIdToTaskMap.get(info.jobId).values()
+                        .stream().allMatch(i -> i.state != null
+                                && i.state != AnalysisState.PENDING && i.state != AnalysisState.RUNNING)) {
+                    analysisJobIdToTaskMap.remove(info.jobId);
+                }
             }
-
         }
     }
 

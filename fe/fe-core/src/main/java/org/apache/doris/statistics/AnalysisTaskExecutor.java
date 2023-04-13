@@ -102,12 +102,14 @@ public class AnalysisTaskExecutor extends Thread {
 
     private void doFetchAndExecute() {
         BaseAnalysisTask task = taskScheduler.getPendingTasks();
-        AnalysisTaskWrapper taskWrapper = new AnalysisTaskWrapper(this, task);
-        incr();
-        executors.submit(taskWrapper);
-        Env.getCurrentEnv().getAnalysisManager()
-                .updateTaskStatus(task.info,
-                        AnalysisState.RUNNING, "", System.currentTimeMillis());
+        if (task != null) {
+            AnalysisTaskWrapper taskWrapper = new AnalysisTaskWrapper(this, task);
+            incr();
+            executors.submit(taskWrapper);
+            Env.getCurrentEnv().getAnalysisManager()
+                    .updateTaskStatus(task.info,
+                            AnalysisState.RUNNING, "", System.currentTimeMillis());
+        }
     }
 
     public void decr() {
