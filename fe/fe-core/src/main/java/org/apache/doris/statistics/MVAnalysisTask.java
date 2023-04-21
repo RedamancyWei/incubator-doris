@@ -97,7 +97,7 @@ public class MVAnalysisTask extends BaseAnalysisTask {
                     .get();
             selectItem.setAlias(column.getName());
             Map<String, String> params = new HashMap<>();
-            for (String partName : tbl.getPartitionNames()) {
+            for (String partName : info.partitionNames) {
                 PartitionNames partitionName = new PartitionNames(false,
                         Collections.singletonList(partName));
                 tableRef.setPartitionNames(partitionName);

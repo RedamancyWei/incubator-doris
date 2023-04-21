@@ -24,10 +24,12 @@ import org.apache.doris.analysis.TableName;
 import org.apache.doris.catalog.Env;
 import org.apache.doris.catalog.MaterializedIndexMeta;
 import org.apache.doris.catalog.OlapTable;
+import org.apache.doris.catalog.Partition;
 import org.apache.doris.catalog.TableIf;
 import org.apache.doris.catalog.TableIf.TableType;
 import org.apache.doris.common.DdlException;
 import org.apache.doris.common.FeConstants;
+import org.apache.doris.common.Pair;
 import org.apache.doris.statistics.AnalysisTaskInfo.AnalysisMethod;
 import org.apache.doris.statistics.AnalysisTaskInfo.AnalysisType;
 import org.apache.doris.statistics.AnalysisTaskInfo.JobType;
@@ -52,6 +54,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.stream.Collectors;
 
 public class AnalysisManager {
 
@@ -91,8 +94,16 @@ public class AnalysisManager {
 
     // Each analyze stmt corresponding to an analysis job.
     public void createAnalysisJob(AnalyzeStmt stmt) throws DdlException {
+        Pair<Boolean, Set<String>> checkStatus = checkBeforeCreate(stmt);
+        if (!checkStatus.first) {
+            return;
+        }
+
         long jobId = Env.getCurrentEnv().getNextId();
         AnalysisTaskInfoBuilder taskInfoBuilder = buildCommonTaskInfo(stmt, jobId);
+        Set<String> partitionNames = checkStatus.second;
+        taskInfoBuilder.setPartitionNames(partitionNames);
+
         Map<Long, AnalysisTaskInfo> analysisTaskInfos = new HashMap<>();
 
         // start build analysis tasks
@@ -107,6 +118,50 @@ public class AnalysisManager {
 
         analysisJobIdToTaskMap.put(jobId, analysisTaskInfos);
         analysisTaskInfos.values().forEach(taskScheduler::schedule);
+    }
+
+    /**
+     * Check the current system statistics, and return the check status Pair,
+     * the first element indicates whether to continue to analyze,
+     * if necessary, the second element indicates the partition to be analyzed.
+     */
+    private Pair<Boolean, Set<String>> checkBeforeCreate(AnalyzeStmt stmt) throws DdlException {
+        TableIf table = stmt.getTable();
+        long tableId = table.getId();
+        Set<String> columnNames = stmt.getColumnNames();
+        Set<String> partitionNames = table.getPartitionNames();
+
+        // Get the partition granularity statistics that have been collected
+        Set<Long> existStatsPartIds = StatisticsRepository.fetchPartStatsId(tableId);
+
+        if (!existStatsPartIds.isEmpty()) {
+            Map<Long, Partition> idToPartition = StatisticsUtil.getIdToPartition(table);
+            // Get an invalid set of partitions (those partitions were deleted)
+            Set<Long> invalidPartIds = existStatsPartIds.stream()
+                    .filter(id -> !idToPartition.containsKey(id)).collect(Collectors.toSet());
+
+            if (!invalidPartIds.isEmpty()) {
+                // Delete invalid partition statistics to avoid affecting table statistics
+                StatisticsRepository.dropStatistics(tableId, invalidPartIds,
+                        columnNames, StatisticConstants.STATISTIC_TBL_NAME);
+            }
+
+            if (stmt.isIncremental()) {
+                existStatsPartIds.removeAll(invalidPartIds);
+                // For incremental analysis, just collect the uncollected partition stats
+                partitionNames = idToPartition.entrySet().stream()
+                        .filter(id -> !existStatsPartIds.contains(id.getKey()))
+                        .map(idPartition -> idPartition.getValue().getName())
+                        .collect(Collectors.toSet());
+
+                if (invalidPartIds.isEmpty() && partitionNames.isEmpty()) {
+                    // All statistics are valid, and there are no partition stats to be collected
+                    return Pair.of(false, null);
+                }
+            }
+        }
+
+        return Pair.of(true, partitionNames);
     }
 
     private AnalysisTaskInfoBuilder buildCommonTaskInfo(AnalyzeStmt stmt, long jobId) {
