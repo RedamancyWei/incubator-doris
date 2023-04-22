@@ -47,6 +47,7 @@ import org.apache.logging.log4j.Logger;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -95,7 +96,9 @@ public class AnalysisManager {
     // Each analyze stmt corresponding to an analysis job.
     public void createAnalysisJob(AnalyzeStmt stmt) throws DdlException {
         Pair<Boolean, Set<String>> checkStatus = checkBeforeCreate(stmt);
+
         if (!checkStatus.first) {
+            // No statistics need to be collected or updated
             return;
         }
 
@@ -123,12 +126,21 @@ public class AnalysisManager {
     /**
      * Check the current system statistics, and return the check status Pair,
      * the first element indicates whether to continue to analyze,
-     * if necessary, the second element indicates the partition to be analyzed.
+     * if necessary, the second element indicates the partitions to be analyzed.
+     * <p>
+     * note:
+     * If there is no invalid statistics, it does not need to
+     * collect/update statistics if the following conditions are met:
+     * - in full collection mode, the partitioned table does not have partitions
+     * - in incremental collection mode, partition statistics already exist
      */
     private Pair<Boolean, Set<String>> checkBeforeCreate(AnalyzeStmt stmt) throws DdlException {
         TableIf table = stmt.getTable();
         long tableId = table.getId();
         Set<String> columnNames = stmt.getColumnNames();
+
+        boolean isNeedAnalyze = true;
+        Set<Long> invalidPartIds = Collections.emptySet();
         Set<String> partitionNames = table.getPartitionNames();
 
         // Get the partition granularity statistics that have been collected
@@ -137,7 +149,7 @@ public class AnalysisManager {
         if (!existStatsPartIds.isEmpty()) {
             Map<Long, Partition> idToPartition = StatisticsUtil.getIdToPartition(table);
             // Get an invalid set of partitions (those partitions were deleted)
-            Set<Long> invalidPartIds = existStatsPartIds.stream()
+            invalidPartIds = existStatsPartIds.stream()
                     .filter(id -> !idToPartition.containsKey(id)).collect(Collectors.toSet());
 
             if (!invalidPartIds.isEmpty()) {
@@ -148,20 +160,20 @@ public class AnalysisManager {
 
             if (stmt.isIncremental()) {
                 existStatsPartIds.removeAll(invalidPartIds);
-                // For incremental analysis, just collect the uncollected partition stats
+                // For incremental analysis, just collect the uncollected partition statistics
                 partitionNames = idToPartition.entrySet().stream()
                         .filter(id -> !existStatsPartIds.contains(id.getKey()))
                         .map(idPartition -> idPartition.getValue().getName())
                         .collect(Collectors.toSet());
-
-                if (invalidPartIds.isEmpty() && partitionNames.isEmpty()) {
-                    // All statistics are valid, and there are no partition stats to be collected
-                    return Pair.of(false, null);
-                }
             }
         }
 
-        return Pair.of(true, partitionNames);
+        if (invalidPartIds.isEmpty() && partitionNames.isEmpty()) {
+            // There is no invalid statistics, and there are no partition stats to be collected
+            isNeedAnalyze = false;
+        }
+
+        return Pair.of(isNeedAnalyze, partitionNames);
     }
 
     private AnalysisTaskInfoBuilder buildCommonTaskInfo(AnalyzeStmt stmt, long jobId) {
