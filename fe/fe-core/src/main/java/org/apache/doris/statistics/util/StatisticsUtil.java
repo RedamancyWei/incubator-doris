@@ -312,12 +312,12 @@ public class StatisticsUtil {
                 .orElse(true);
     }
 
-    public static Map<Long, Partition> getIdToPartition(TableIf table) {
+    public static Map<Long, String> getPartitionIdToName(TableIf table) {
         return table.getPartitionNames().stream()
                 .map(table::getPartition)
                 .collect(Collectors.toMap(
                         Partition::getId,
-                        partition -> partition
+                        Partition::getName
                 ));
     }
 

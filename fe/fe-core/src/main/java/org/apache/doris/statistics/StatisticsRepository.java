@@ -40,7 +40,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.stream.Collectors;
@@ -102,7 +101,7 @@ public class StatisticsRepository {
                     + " ORDER BY update_time "
                     + "LIMIT ${limit} OFFSET ${offset}";
 
-    private static final String FETCH_STATS_PART_ID = "SELECT DISTINCT part_id FROM "
+    private static final String FETCH_STATS_PART_ID = "SELECT DISTINCT col_id, part_id FROM "
             + FeConstants.INTERNAL_DB_NAME + "." + StatisticConstants.STATISTIC_TBL_NAME
             + " WHERE tbl_id = ${tblId}"
             + " AND part_id IS NOT NULL";
@@ -291,23 +290,27 @@ public class StatisticsRepository {
         return StatisticsUtil.execStatisticQuery(new StringSubstitutor(params).replace(FETCH_STATS_FULL_NAME));
     }
 
-    public static Set<Long> fetchPartStatsId(long tblId) {
+    public static Map<String, Set<Long>> fetchColAndPartsForStats(long tblId) {
         Map<String, String> params = Maps.newHashMap();
         params.put("tblId", String.valueOf(tblId));
         StringSubstitutor stringSubstitutor = new StringSubstitutor(params);
         String partSql = stringSubstitutor.replace(FETCH_STATS_PART_ID);
         List<ResultRow> resultRows = StatisticsUtil.execStatisticQuery(partSql);
 
-        return resultRows.stream()
-                .map(row -> {
-                    try {
-                        return row.getColumnValue("part_id");
-                    } catch (DdlException ignored) {
-                        return null;
-                    }
-                })
-                .filter(Objects::nonNull)
-                .map(Long::valueOf)
-                .collect(Collectors.toSet());
+        Map<String, Set<Long>> columnToPartitions = Maps.newHashMap();
+
+        resultRows.forEach(row -> {
+            try {
+                String colId = row.getColumnValue("col_id");
+                String partId = row.getColumnValue("part_id");
+                columnToPartitions.computeIfAbsent(colId,
+                        k -> new HashSet<>()).add(Long.valueOf(partId));
+            } catch (NumberFormatException | DdlException e) {
+                LOG.warn("Failed to obtain the column and partition for statistics.{}",
+                        e.getMessage());
+            }
+        });
+
+        return columnToPartitions;
     }
 }

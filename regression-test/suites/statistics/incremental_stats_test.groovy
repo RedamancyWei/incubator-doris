@@ -18,10 +18,27 @@
 suite("test_incremental_stats") {
     def dbName = "test_incremental_stats"
     def tblName = "${dbName}.example_tbl"
-    
+
     def colStatisticsTblName = "__internal_schema.column_statistics"
     def analysisJobsTblName = "__internal_schema.analysis_jobs"
-    
+
+    def columnNames = """
+        (
+            `t_1682176142000_user_id`, `t_1682176142000_date`, 
+            `t_1682176142000_city`, `t_1682176142000_age`, `t_1682176142000_sex`, 
+            `t_1682176142000_last_visit_date`, `t_1682176142000_cost`, 
+            `t_1682176142000_max_dwell_time`, `t_1682176142000_min_dwell_time`
+        )
+        """
+
+    def columnNameValues = """
+        (
+            't_1682176142000_user_id', 't_1682176142000_date', 't_1682176142000_city', 
+            't_1682176142000_age', 't_1682176142000_sex', 't_1682176142000_last_visit_date', 
+            't_1682176142000_cost', 't_1682176142000_max_dwell_time', 't_1682176142000_min_dwell_time'
+        ) 
+        """
+
     def query_col_statistics_with_order_sql = """
         SELECT 
             count, 
@@ -33,14 +50,15 @@ suite("test_incremental_stats") {
         FROM 
             ${colStatisticsTblName} 
         WHERE 
-            col_id in (
-              'user_id', 'date', 'city', 
-              'age', 'sex', 'last_visit_date', 
-              'cost', 'max_dwell_time', 'min_dwell_time'
-            ) 
+            col_id IN ${columnNameValues}
         ORDER BY 
-            part_id,
-            user_id;
+            col_id,
+            min, 
+            max,
+            count, 
+            ndv, 
+            null_count, 
+            data_size_in_bytes;
         """
 
     def query_analysis_jobs_with_order_sql = """
@@ -60,11 +78,7 @@ suite("test_incremental_stats") {
         WHERE 
             db_name = '${dbName}'
             AND tbl_name = '${tblName}'
-            AND col_name IN (
-              'user_id', 'date', 'city', 
-              'age', 'sex', 'last_visit_date', 
-              'cost', 'max_dwell_time', 'min_dwell_time'
-            ) 
+            AND col_name IN ${columnNameValues}
         ORDER BY 
             index_id, col_name;
         """
@@ -77,34 +91,33 @@ suite("test_incremental_stats") {
 
     sql """
         CREATE TABLE IF NOT EXISTS ${tblName} (
-            `user_id` LARGEINT NOT NULL,
-            `date` DATE NOT NULL,
-            `city` VARCHAR(20),
-            `age` SMALLINT,
-            `sex` TINYINT,
-            `last_visit_date` DATETIME REPLACE,
-            `cost` BIGINT SUM,
-            `max_dwell_time` INT MAX,
-            `min_dwell_time` INT MIN
+            `t_1682176142000_user_id` LARGEINT NOT NULL,
+            `t_1682176142000_date` DATE NOT NULL,
+            `t_1682176142000_city` VARCHAR(20),
+            `t_1682176142000_age` SMALLINT,
+            `t_1682176142000_sex` TINYINT,
+            `t_1682176142000_last_visit_date` DATETIME REPLACE,
+            `t_1682176142000_cost` BIGINT SUM,
+            `t_1682176142000_max_dwell_time` INT MAX,
+            `t_1682176142000_min_dwell_time` INT MIN
         ) ENGINE=OLAP
-        AGGREGATE KEY(`user_id`, `date`, `city`, `age`, `sex`)
-        PARTITION BY LIST(`date`)
+        AGGREGATE KEY(`t_1682176142000_user_id`, `t_1682176142000_date`,
+         `t_1682176142000_city`, `t_1682176142000_age`, `t_1682176142000_sex`)
+        PARTITION BY LIST(`t_1682176142000_date`)
         (
             PARTITION `p_201701` VALUES IN ("2017-10-01"),
             PARTITION `p_201702` VALUES IN ("2017-10-02"),
             PARTITION `p_201703` VALUES IN ("2017-10-03"),
             PARTITION `default`
         )
-        DISTRIBUTED BY HASH(`user_id`) BUCKETS 1
+        DISTRIBUTED BY HASH(`t_1682176142000_user_id`) BUCKETS 1
         PROPERTIES (
             "replication_num" = "1"
         );
     """
 
     sql """
-        INSERT INTO ${tblName} (`user_id`, `date`, `city`, `age`,
-                                            `sex`, `last_visit_date`, `cost`,
-                                            `max_dwell_time`, `min_dwell_time`)
+        INSERT INTO ${tblName} ${columnNames}
         VALUES (10000, "2017-10-01", "北京", 20, 0, "2017-10-01 07:00:00", 15, 2, 2),
             (10000, "2017-10-01", "北京", 20, 0, "2017-10-01 06:00:00", 20, 10, 10),
             (10001, "2017-10-01", "北京", 30, 1, "2017-10-01 17:05:45", 2, 22, 22),
@@ -115,12 +128,12 @@ suite("test_incremental_stats") {
     """
 
     // Firstly do a full collection of statistics
-    sql "ANALYZE TABLE ${tblName} WITH sync;"
+    sql "ANALYZE TABLE ${tblName} ${columnNames} WITH sync;"
 
     qt_sql query_col_statistics_with_order_sql
 
     // Incrementally collect statistics
-    sql "ANALYZE TABLE ${tblName} WITH sync WITH incremental;"
+    sql "ANALYZE TABLE ${tblName} ${columnNames} WITH sync WITH incremental;"
 
     // The table data has not changed, and no new tasks should be generated
     qt_sql query_analysis_jobs_with_order_sql
@@ -132,7 +145,7 @@ suite("test_incremental_stats") {
     sql "ALTER TABLE ${tblName} DROP PARTITION `p_201701`;"
 
     // Incrementally collect statistics
-    sql "ANALYZE TABLE ${tblName} WITH sync WITH incremental;"
+    sql "ANALYZE TABLE ${tblName} ${columnNames} WITH sync WITH incremental;"
 
     // Although the partition is deleted, no new partition collection task will be generated,
     // but tasks to refresh table-level statistics will be generated
@@ -145,9 +158,7 @@ suite("test_incremental_stats") {
     sql "ALTER TABLE ${tblName} ADD PARTITION `p_201701` VALUES IN ('2017-10-01');"
 
     sql """
-        INSERT INTO ${tblName} (`user_id`, `date`, `city`, `age`,
-                                            `sex`, `last_visit_date`, `cost`,
-                                            `max_dwell_time`, `min_dwell_time`)
+        INSERT INTO ${tblName} ${columnNames}
         VALUES (10000, "2017-10-01", "北京", 20, 0, "2017-10-01 07:00:00", 15, 2, 2),
             (10000, "2017-10-01", "北京", 20, 0, "2017-10-01 06:00:00", 20, 10, 10),
             (10001, "2017-10-01", "北京", 30, 1, "2017-10-01 17:05:45", 2, 22, 22),
@@ -155,7 +166,7 @@ suite("test_incremental_stats") {
     """
 
     // Incrementally collect statistics
-    sql "ANALYZE TABLE ${tblName} WITH sync WITH incremental;"
+    sql "ANALYZE TABLE ${tblName} ${columnNames} WITH sync WITH incremental;"
 
     // Adding a new partition will generate new tasks to incrementally
     // collect the corresponding partition information,
@@ -166,7 +177,7 @@ suite("test_incremental_stats") {
     qt_sql query_col_statistics_with_order_sql
 
     // Finally, collect statistics in full
-    sql "ANALYZE TABLE ${tblName} WITH sync;"
+    sql "ANALYZE TABLE ${tblName} ${columnNames} WITH sync;"
 
     // Will generate tasks to collect all partition statistics and update table statistics
     qt_sql query_analysis_jobs_with_order_sql
@@ -174,5 +185,13 @@ suite("test_incremental_stats") {
     // Compare statistics again
     qt_sql query_col_statistics_with_order_sql
 
+    // TODO delete by database name and table name
+    sql "DELETE FROM __internal_schema.analysis_jobs WHERE job_id IS NOT NULL;"
+
+    // TODO use drop stats
+    sql """
+        DELETE FROM __internal_schema.column_statistics
+        WHERE col_id IN ${columnNameValues}
+        """
     sql "DROP DATABASE IF EXISTS ${dbName}"
 }
