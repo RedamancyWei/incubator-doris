@@ -59,6 +59,8 @@ import org.apache.doris.system.SystemInfoService;
 import org.apache.doris.thrift.TUniqueId;
 
 import com.google.common.base.Preconditions;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringSubstitutor;
@@ -74,6 +76,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.StringJoiner;
 import java.util.UUID;
 import java.util.function.Function;
@@ -460,5 +463,22 @@ public class StatisticsUtil {
             double healthCoefficient = (double) (totalRows - updatedRows) / (double) totalRows;
             return (int) (healthCoefficient * 100.0);
         }
+    }
+
+    public static Map<String, Set<Long>> getColToPartition(String colToPartitionStr) {
+        if (isNullOrEmpty(colToPartitionStr)) {
+            return null;
+        }
+        Gson gson = new Gson();
+        java.lang.reflect.Type type = new TypeToken<Map<String, Set<Long>>>() {}.getType();
+        return gson.fromJson(colToPartitionStr, type);
+    }
+
+    public static <T> String getColToPartitionStr(Map<String, Set<T>> colToPartitions) {
+        if (colToPartitions == null || colToPartitions.isEmpty()) {
+            return "";
+        }
+        Gson gson = new Gson();
+        return gson.toJson(colToPartitions);
     }
 }
